@@ -48,9 +48,17 @@ This document outlines the steps to create the React-based administration panel.
     }
     ```
 
-3.  **`IPWhitelist` Component:**
+3.  **Authentication (Planning):**
 
-    *Task Description:* Create the `IPWhitelist` component to manage the IP whitelist. This component will allow administrators to add and remove IP addresses from the whitelist. It will interact with a backend API endpoint (to be defined in the API Gateway implementation).
+    *Task Description:* Implement basic authentication for the admin panel. This will likely involve using JWT tokens and a login form. The specifics of the authentication implementation are detailed in `03_authentication.md`. The admin panel should be designed to require authentication before displaying any sensitive information or allowing any administrative actions.
+
+4.  **API Integration (Planning):**
+
+    *Task Description:*  This step involves creating the necessary API endpoints in the backend (FastAPI) to support the functionality of the admin panel components. These endpoints will handle adding/removing IPs from the whitelist, generating/revoking registration tokens, managing API keys, and providing system statistics. This is detailed in the `04_api_gateway.md` implementation plan. The frontend components should be designed with these API interactions in mind.
+
+5.  **`IPWhitelist` Component:**
+
+    *Task Description:* Create the `IPWhitelist` component to manage the IP whitelist. This component will allow administrators to add and remove IP addresses from the whitelist. It will interact with a backend API endpoint (defined in the API Gateway implementation).
 
     ```typescript
     // frontend/src/pages/components/IPWhitelist.tsx
@@ -102,7 +110,7 @@ This document outlines the steps to create the React-based administration panel.
 
     ```
 
-4.  **`RegistrationTokens` Component:**
+6.  **`RegistrationTokens` Component:**
 
     *Task Description:* Create the `RegistrationTokens` component to manage registration tokens. This component will allow administrators to generate new tokens and see a list of existing tokens (with their usage status). It will interact with a backend API endpoint.
 
@@ -147,7 +155,7 @@ This document outlines the steps to create the React-based administration panel.
     }
     ```
 
-5.  **`APIKeys` Component:**
+7.  **`APIKeys` Component:**
 
      *Task Description:* Create the `APIKeys` component to manage API keys.  This will allow admins to create, view, and revoke API keys, as well as see their associated priorities and usage statistics.  It will interact with backend API endpoints.
 
@@ -190,7 +198,7 @@ This document outlines the steps to create the React-based administration panel.
     }
     ```
 
-6.  **`SystemStats` Component:**
+8.  **`SystemStats` Component:**
 
     *Task Description:* Create a placeholder `SystemStats` component that will eventually display system statistics and monitoring data.  This will be fleshed out in the "Monitoring" implementation phase.
 
@@ -208,5 +216,6 @@ This document outlines the steps to create the React-based administration panel.
     }
     ```
 
-7. **API Integration:**
+9. **Styling:**
 
+    *Task Description:* Apply Tailwind CSS classes to style the admin panel components, ensuring a consistent and user-friendly interface.
