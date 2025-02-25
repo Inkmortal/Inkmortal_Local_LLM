@@ -1,0 +1,49 @@
+# Seadragon LLM Server Project Rules
+
+## Project Overview
+- Personal hobby project for hosting local LLM capabilities on a Mac Mini M4 Pro
+- Educational assistant focus with "tutor-like" capabilities for math, coding, and textbook help
+- Beautiful, fun interface with a cozy aesthetic using multiple theme options
+
+## Technology Stack
+- Backend: Python with FastAPI
+- Frontend: React with TypeScript and Tailwind CSS
+- LLM Server: Ollama running Llama 3 70B model
+- Database: PostgreSQL
+- Proxy: Nginx
+- Network: Cloudflare Tunnel
+
+## Coding Standards
+- All files must stay under 400 lines of code
+- Component-based architecture in the frontend
+- API Gateway pattern in the backend
+- Consistent theme variables across the application
+- Follow microservices architecture principles
+
+## Theme Structure
+- Three themes available: 
+  1. Catppuccin Macchiato (default)
+  2. Dracula
+  3. Japanese Matcha Cafe
+- Theme variables defined in CSS and accessible via `var(--variable)` syntax
+- Theme switching functionality should be consistent across components
+
+## User Experience
+- Interface must be cozy, beautiful, and functional
+- Focus on educational features (math rendering, code highlighting, image uploads)
+- Responsive design for all screen sizes
+- Fast response times with streaming for LLM responses
+
+## Implementation Priority
+1. Core infrastructure and project structure
+2. Authentication and admin panel for token generation
+3. API Gateway for request management
+4. Ollama integration and queue system
+5. Web interface with educational features
+6. Monitoring and maintenance tools
+
+## Development Workflow
+- Use the setup.ps1 script for initial environment setup
+- Backend runs on port 8000, frontend on port 3000
+- Proxy routes via Nginx for domain management
+- Keep documentation updated as development progresses

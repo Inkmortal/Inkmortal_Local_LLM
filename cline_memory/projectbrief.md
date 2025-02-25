@@ -3,6 +3,15 @@
 ## Project Overview
 A self-hosted LLM server system running on a Mac Mini M4 Pro, designed to provide controlled access to local LLM capabilities through a priority-based queue system. The system serves multiple user types through different interfaces while maintaining control over resource allocation and access.
 
+## Project Context
+This is a personal hobby project designed to provide LLM capabilities primarily for:
+- Educational assistance (solving math problems, answering textbook questions)
+- Coding help for personal projects
+- Creating a "tutor-like" experience in the chat interface
+- Future integration with Chaycards (a unified study platform combining Anki, Quizlet, Notion, and Obsidian capabilities)
+
+The web interface is designed to be fun, beautiful, and functional, allowing friends and family to upload images of textbooks, get help with math problems, receive coding assistance, and more. While not designed as an enterprise-level system, the architecture ensures efficient resource usage and provides a solid foundation for personal educational needs.
+
 ## Hardware Specifications
 - Mac Mini M4 Pro
 - 12-core CPU (8 performance cores, 4 efficiency cores)

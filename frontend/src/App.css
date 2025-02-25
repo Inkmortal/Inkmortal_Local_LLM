@@ -1,0 +1,91 @@
+/* App-specific styles */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.app-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: var(--accent-primary);
+  margin-bottom: 1rem;
+  position: relative;
+  display: inline-block;
+}
+
+.app-title::after {
+  content: "";
+  position: absolute;
+  bottom: -0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50%;
+  height: 3px;
+  background-color: var(--accent-secondary);
+  border-radius: 3px;
+}
+
+.app-subtitle {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  max-width: 36rem;
+  margin-bottom: 2rem;
+}
+
+.app-card {
+  background-color: var(--bg-secondary);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  max-width: 36rem;
+  border: 1px solid var(--border-color);
+}
+
+.app-card p {
+  color: var(--text-secondary);
+}
+
+/* Theme switcher container */
+.theme-switcher {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.theme-button {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.theme-button:hover {
+  transform: scale(1.1);
+}
+
+.theme-button.catppuccin {
+  background-color: #8aadf4;
+}
+
+.theme-button.dracula {
+  background-color: #bd93f9;
+}
+
+.theme-button.matcha-cafe {
+  background-color: #88b06a;
+}
+
+/* Active theme indicator */
+.theme-button.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}

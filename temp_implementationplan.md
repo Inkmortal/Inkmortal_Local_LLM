@@ -361,7 +361,7 @@ ingress:
 ## Usage Instructions
 
 1. **For Cline/Roo:**
-   - Set server URL to: `https://local-llm.seadragoninkmortal.com`
+   - Set server URL to: `https://local-llm.seadragoninkmortal.com/api/code`
    - Ensure IP is whitelisted in admin panel
 
 2. **For Custom Applications:**
