@@ -91,46 +91,72 @@ class RequestProcessor:
         self,
         request: QueuedRequest
     ) -> AsyncGenerator[str, None]:
-        """Process a streaming request"""
+        """Process a streaming request with timeout handling"""
 
-        async with self.processing_lock: # Use the lock
+        async with self.processing_lock:
             self.current_request = request
             self.current_request.status = "processing"
             self.current_request.processing_start = datetime.utcnow()
+            
+            timeout_seconds = 600.0  # 10 minutes max for streaming
             
             try:
                 endpoint = request.endpoint.replace("/api", "")
                 url = f"{self.ollama_url}{endpoint}"
                 
+                # Use a manual timeout approach for streaming
+                start_time = asyncio.get_event_loop().time()
+                
                 async with httpx.AsyncClient() as client:
-                    async with client.stream(
-                        "POST",
-                        url,
-                        json=request.body,
-                        timeout=300.0
-                    ) as response:
-                        async for chunk in response.aiter_text():
-                            yield chunk
-                    
+                    try:
+                        async with client.stream(
+                            "POST",
+                            url,
+                            json=request.body,
+                            timeout=300.0
+                        ) as response:
+                            async for chunk in response.aiter_text():
+                                # Check if we've exceeded our timeout
+                                current_time = asyncio.get_event_loop().time()
+                                if current_time - start_time > timeout_seconds:
+                                    logger.warning(f"Streaming request timed out after {timeout_seconds}s: {request.endpoint}")
+                                    yield json.dumps({"error": f"Stream timed out after {timeout_seconds}s"})
+                                    break
+                                    
+                                yield chunk
+                                
+                                # Reset timeout timer on each chunk
+                                start_time = current_time
+                    except httpx.ReadTimeout:
+                        logger.warning(f"HTTPX timeout for streaming request: {request.endpoint}")
+                        yield json.dumps({"error": "Connection timeout"})
+                
+                # Only complete if we didn't break out early due to timeout
+                if asyncio.get_event_loop().time() - start_time <= timeout_seconds:
                     # Update request status
                     self.current_request.status = "completed"
                     self.current_request.processing_end = datetime.utcnow()
-                    
-                    # Update statistics
                     self._update_stats(self.current_request)
-                    
-                    # Clear current request
-                    self.current_request = None
+                else:
+                    # Mark as failed if we timed out
+                    self.current_request.status = "failed"
+                    self.current_request.error = f"Stream timed out after {timeout_seconds}s"
+                    self.current_request.processing_end = datetime.utcnow()
+                    self.stats.failed_requests += 1
             
             except Exception as e:
+                logger.error(f"Error in streaming request: {str(e)}")
                 if self.current_request:
                     self.current_request.status = "failed"
                     self.current_request.error = str(e)
                     self.current_request.processing_end = datetime.utcnow()
                     self.stats.failed_requests += 1
-                    self.current_request = None
                 
                 yield json.dumps({"error": str(e)})
+            
+            finally:
+                # Always clear the current request
+                self.current_request = None
     
     def _update_stats(self, request: QueuedRequest) -> None:
         """Update statistics from completed request"""

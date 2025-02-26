@@ -1,6 +1,10 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import logging
+import asyncio
+import os
+from dotenv import load_dotenv
 
 # Import local modules
 from .auth.router import router as auth_router
@@ -8,7 +12,10 @@ from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
 from .db import engine, Base, get_db
-from .queue.rabbitmq.manager import RabbitMQManager  # Import RabbitMQManager
+from .queue import RabbitMQManager  # Import from __init__.py
+
+# Configure logging
+logger = logging.getLogger("app.main")
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -33,18 +40,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Load environment variables
+load_dotenv()
+
+# Ensure required environment variables
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost/")
+
 # Initialize RabbitMQManager (ensure it's a singleton)
 queue_manager = RabbitMQManager()
 
 @app.on_event("startup")
 async def startup_event():
     """Connect to RabbitMQ on startup"""
-    await queue_manager.connect()
+    # Connect with retry logic
+    max_retries = 5
+    retry_count = 0
+    connected = False
+    
+    while not connected and retry_count < max_retries:
+        try:
+            await queue_manager.connect()
+            connected = True
+            logger.info("Successfully connected to RabbitMQ")
+        except Exception as e:
+            retry_count += 1
+            wait_time = retry_count * 2  # Exponential backoff
+            logger.warning(f"Failed to connect to RabbitMQ (attempt {retry_count}/{max_retries}): {str(e)}")
+            logger.warning(f"Retrying in {wait_time} seconds...")
+            await asyncio.sleep(wait_time)
+    
+    if not connected:
+        logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts")
+        # Don't crash the app, but log the error
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Close RabbitMQ connection on shutdown"""
-    await queue_manager.close()
+    try:
+        await queue_manager.close()
+        logger.info("RabbitMQ connection closed")
+    except Exception as e:
+        logger.error(f"Error closing RabbitMQ connection: {str(e)}")
 
 
 # Include routers

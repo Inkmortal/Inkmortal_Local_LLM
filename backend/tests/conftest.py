@@ -35,6 +35,37 @@ def event_loop():
     yield loop
     loop.close()
 
+@pytest_asyncio.fixture(scope="function")
+async def queue_manager(event_loop):
+    """Get a RabbitMQ manager instance for testing"""
+    # Import here to avoid circular imports
+    from app.queue import RabbitMQManager
+    
+    # Use a test configuration for RabbitMQ
+    os.environ["RABBITMQ_URL"] = os.getenv("TEST_RABBITMQ_URL", "amqp://guest:guest@localhost/")
+    os.environ["OLLAMA_API_URL"] = os.getenv("TEST_OLLAMA_URL", "http://localhost:11434")
+    
+    # Create manager
+    manager = RabbitMQManager()
+    
+    # Close any existing connection and clean up
+    try:
+        await manager.close()
+    except:
+        pass
+    
+    # Start fresh connection
+    await manager.connect()
+    
+    yield manager
+    
+    # Cleanup
+    try:
+        await manager.clear_queue()
+        await manager.close()
+    except:
+        pass
+
 @pytest.fixture
 def db_session():
     """Create a fresh database session for each test"""
@@ -47,7 +78,7 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture
-def client(db_session):
+def client(db_session, monkeypatch):
     """Create a test client using the test database"""
     def override_get_db():
         try:
@@ -55,8 +86,15 @@ def client(db_session):
         finally:
             db_session.close()
     
+    # Override dependencies
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    
+    # Create test client
+    test_client = TestClient(app)
+    
+    yield test_client
+    
+    # Clean up
     del app.dependency_overrides[get_db]
 
 @pytest.fixture
