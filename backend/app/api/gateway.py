@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any
 import httpx
 import json
 import os
@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 from ..db import get_db
 from ..auth.utils import get_current_user, validate_api_key, get_current_admin_user
 from ..auth.models import User
-from ..queue.rabbitmq_manager import RabbitMQManager, RequestPriority
+from ..queue.rabbitmq.manager import RabbitMQManager  # Import the refactored manager
+from ..queue.models import QueuedRequest, RequestPriority
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +22,7 @@ OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 # Create router
 router = APIRouter(prefix="/api", tags=["api"])
 
-# Create queue manager instance
+# Get queue manager instance (should be a singleton)
 queue_manager = RabbitMQManager()
 
 # Helper function to determine request priority
@@ -57,7 +58,7 @@ async def get_request_priority(
             # This will raise an exception if token is invalid
             user = await get_current_user(auth_header.replace("Bearer ", ""), db)
             return {
-                "priority": 3,  # Web interface priority
+                "priority": RequestPriority.WEB_INTERFACE,  # Use enum
                 "user": user,
                 "auth_type": "jwt"
             }
@@ -66,13 +67,13 @@ async def get_request_priority(
     
     # Check IP whitelist (for direct API access)
     client_ip = request.client.host
-    # TODO: Implement proper IP whitelist check from database
+    # TODO: Implement proper IP whitelist check from database (using a model)
     whitelisted_ips = os.getenv("WHITELISTED_IPS", "127.0.0.1").split(",")
     
     if client_ip in whitelisted_ips:
         return {
-            "priority": 1,  # Direct API priority
-            "user": None,
+            "priority": RequestPriority.DIRECT_API,  # Use enum
+            "user": None,  # No user associated with IP whitelist
             "auth_type": "ip_whitelist"
         }
     
@@ -98,18 +99,16 @@ async def chat_completions(
     body = await request.json()
     
     # Extract model from request
-    model = body.get("model", "llama3:70b")
+    model = body.get("model", "llama3.3:70b")
     
     # Create a request object for the queue
-    request_obj = {
-        "endpoint": "/api/chat/completions",
-        "method": "POST",
-        "body": body,
-        "headers": dict(request.headers),
-        "priority": priority_data["priority"],
-        "user": priority_data["user"].id if priority_data["user"] else None,
-        "auth_type": priority_data["auth_type"]
-    }
+    request_obj = QueuedRequest(
+        priority=priority_data["priority"],
+        endpoint="/api/chat/completions",
+        body=body,
+        user_id=priority_data["user"].id if priority_data["user"] else None,
+        auth_type=priority_data["auth_type"]
+    )
     
     # Add request to queue and get position
     position = await queue_manager.add_request(request_obj)
@@ -117,12 +116,12 @@ async def chat_completions(
     # If streaming is requested
     if body.get("stream", False):
         return StreamingResponse(
-            queue_manager.process_streaming_request(request_obj),
+            queue_manager.processor.process_streaming_request(request_obj),
             media_type="text/event-stream"
         )
     
     # For non-streaming requests
-    response = await queue_manager.process_request(request_obj)
+    response = await queue_manager.processor.process_request(request_obj)
     return response
 
 # Ollama API proxy endpoint for completions
@@ -140,18 +139,16 @@ async def completions(
     body = await request.json()
     
     # Extract model from request
-    model = body.get("model", "llama3:70b")
+    model = body.get("model", "llama3.3:70b")
     
     # Create a request object for the queue
-    request_obj = {
-        "endpoint": "/api/completions",
-        "method": "POST",
-        "body": body,
-        "headers": dict(request.headers),
-        "priority": priority_data["priority"],
-        "user": priority_data["user"].id if priority_data["user"] else None,
-        "auth_type": priority_data["auth_type"]
-    }
+    request_obj = QueuedRequest(
+        priority=priority_data["priority"],
+        endpoint="/api/completions",
+        body=body,
+        user_id=priority_data["user"].id if priority_data["user"] else None,
+        auth_type=priority_data["auth_type"]
+    )
     
     # Add request to queue and get position
     position = await queue_manager.add_request(request_obj)
@@ -159,12 +156,12 @@ async def completions(
     # If streaming is requested
     if body.get("stream", False):
         return StreamingResponse(
-            queue_manager.process_streaming_request(request_obj),
+            queue_manager.processor.process_streaming_request(request_obj),
             media_type="text/event-stream"
         )
     
     # For non-streaming requests
-    response = await queue_manager.process_request(request_obj)
+    response = await queue_manager.processor.process_request(request_obj)
     return response
 
 # Get available models
@@ -197,7 +194,7 @@ async def list_models(
         
         return {"data": openai_format_models}
 
-# Queue status endpoint
+# Queue status endpoint (now uses RabbitMQManager)
 @router.get("/queue/status")
 async def queue_status(
     current_user: User = Depends(get_current_user)

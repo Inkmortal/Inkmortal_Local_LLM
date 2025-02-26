@@ -8,6 +8,7 @@ from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
 from .db import engine, Base, get_db
+from .queue.rabbitmq.manager import RabbitMQManager  # Import RabbitMQManager
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -31,6 +32,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize RabbitMQManager (ensure it's a singleton)
+queue_manager = RabbitMQManager()
+
+@app.on_event("startup")
+async def startup_event():
+    """Connect to RabbitMQ on startup"""
+    await queue_manager.connect()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close RabbitMQ connection on shutdown"""
+    await queue_manager.close()
+
 
 # Include routers
 app.include_router(auth_router)
@@ -65,23 +80,3 @@ async def admin_route(current_user: User = Depends(get_current_admin_user)):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
-
-# Note on dependencies
-"""
-Required packages for this implementation:
-- fastapi
-- uvicorn
-- sqlalchemy
-- psycopg2-binary
-- passlib[bcrypt]
-- python-jose[cryptography]
-- python-multipart
-- python-dotenv
-- httpx
-
-Install using:
-pip install fastapi uvicorn sqlalchemy psycopg2-binary passlib[bcrypt] python-jose[cryptography] python-multipart python-dotenv httpx
-"""
-
-# Run the application with:
-# uvicorn app.main:app --reload

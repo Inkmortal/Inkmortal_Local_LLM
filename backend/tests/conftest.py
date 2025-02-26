@@ -15,7 +15,7 @@ from app.db import Base, get_db
 from app.main import app
 from app.auth.models import User, RegistrationToken, APIKey
 from app.auth.utils import get_password_hash
-from app.queue import RabbitMQManager
+from app.queue.rabbitmq.manager import RabbitMQManager
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -34,25 +34,6 @@ def event_loop():
     asyncio.set_event_loop(loop)
     yield loop
     loop.close()
-
-@pytest_asyncio.fixture(scope="function")
-async def queue_manager(event_loop):
-    """Get a RabbitMQ manager instance"""
-    manager = RabbitMQManager()
-    
-    # Close any existing connection and clean up
-    try:
-        await manager.close()
-    except:
-        pass
-    
-    # Start fresh
-    await manager.connect()
-    
-    yield manager
-    
-    # Cleanup
-    await manager.close()
 
 @pytest.fixture
 def db_session():

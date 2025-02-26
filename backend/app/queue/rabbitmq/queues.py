@@ -3,7 +3,7 @@ from typing import Dict, Optional, List
 import aio_pika
 from aio_pika import Message, DeliveryMode
 
-from ..models import RequestPriority
+from ..models import RequestPriority, QueuedRequest
 
 # Configure logging
 logger = logging.getLogger("rabbitmq_queues")
@@ -45,7 +45,9 @@ class QueueManager:
                 arguments={
                     "x-max-priority": 10,
                     "x-message-ttl": aging_threshold_seconds * 1000,
-                    "x-queue-mode": "lazy"  # Better for long-lived messages
+                    "x-dead-letter-exchange": "llm_requests_dlx",  # Add DLX
+                    "x-dead-letter-routing-key": f"dl_priority_{priority}",  # Add DL routing key
+                    "x-queue-mode": "lazy"
                 }
             )
     
@@ -128,14 +130,14 @@ class QueueManager:
             message,
             routing_key=routing_key
         )
-        logger.info(f"Published message to exchange {exchange.name}")
+        logger.info(f"Published message to exchange {exchange.name} with routing key {routing_key}")
     
     async def get_next_message(
         self,
         queue_name: str,
         no_ack: bool = False
     ) -> Optional[aio_pika.IncomingMessage]:
-        """Get the next message from a queue"""
+        """Get the next message from a queue, with manual ack"""
         queue = await self.get_queue(queue_name)
         if queue:
             try:

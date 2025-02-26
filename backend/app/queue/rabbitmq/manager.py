@@ -1,12 +1,12 @@
 import logging
 import json
-from typing import Dict, Any, Optional, AsyncGenerator, List
+from typing import Dict, Any, Optional, List
 import asyncio
 import os
 from dotenv import load_dotenv
 
 from ..base import QueueManager as BaseQueueManager
-from ..models import QueuedRequest, QueueStats, RequestPriority
+from ..models import QueuedRequest, RequestPriority
 from .connection import RabbitMQConnection
 from .exchanges import ExchangeManager
 from .queues import QueueManager as QueueHandler
@@ -51,7 +51,7 @@ class RabbitMQManager(BaseQueueManager):
         self.max_history_size = 100
         
         # Aging configuration
-        self._aging_threshold_seconds = 30
+        self._aging_threshold_seconds = int(os.getenv("AGING_THRESHOLD_SECONDS", "30"))
         
         self._initialized = True
         logger.info("RabbitMQ Manager initialized")
@@ -117,7 +117,7 @@ class RabbitMQManager(BaseQueueManager):
         await self.ensure_connected()
         
         # Update statistics
-        self.processor.stats.total_requests += 1
+        await self.processor.stats.total_requests += 1
         
         # Publish request
         exchange = await self.exchange_manager.get_exchange("llm_requests_exchange")
@@ -135,14 +135,14 @@ class RabbitMQManager(BaseQueueManager):
         # Small delay to ensure message is queued
         await asyncio.sleep(0.1)
         
-        # Get queue position
+        # Get queue position (approximate)
         sizes = await self.get_queue_size()
         position = 0
         for p in sorted(RequestPriority):
             if p < request.priority:
                 position += sizes.get(p, 0)
             elif p == request.priority:
-                position += sizes.get(p, 0) - 1
+                position += sizes.get(p, 0) - 1 # Decrement to account for this new message
         
         return position
     
@@ -156,32 +156,11 @@ class RabbitMQManager(BaseQueueManager):
             
             if message:
                 request_dict = json.loads(message.body.decode())
+                # Acknowledge message
+                await message.ack()
                 return QueuedRequest.from_dict(request_dict)
         
         return None
-    
-    async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
-        """Process a request synchronously"""
-        while True:
-            if not self.processor.current_request:
-                next_request = await self.get_next_request()
-                if next_request and next_request.timestamp == request.timestamp:
-                    return await self.processor.process_request(next_request)
-            await asyncio.sleep(0.1)
-    
-    async def process_streaming_request(
-        self,
-        request: QueuedRequest
-    ) -> AsyncGenerator[str, None]:
-        """Process a streaming request"""
-        while True:
-            if not self.processor.current_request:
-                next_request = await self.get_next_request()
-                if next_request and next_request.timestamp == request.timestamp:
-                    async for chunk in self.processor.process_streaming_request(next_request):
-                        yield chunk
-                    return
-            await asyncio.sleep(0.1)
     
     async def clear_queue(self) -> None:
         """Clear all queues"""
@@ -204,11 +183,8 @@ class RabbitMQManager(BaseQueueManager):
     
     async def get_status(self) -> Dict[str, Any]:
         """Get current queue status"""
-        try:
-            await self.ensure_connected()
-            sizes = await self.get_queue_size()
-        except:
-            sizes = {p: 0 for p in RequestPriority}
+        await self.ensure_connected()
+        sizes = await self.get_queue_size()
         
         return {
             "queue_size": sum(sizes.values()),
@@ -227,10 +203,25 @@ class RabbitMQManager(BaseQueueManager):
         if new_priority >= request.priority:
             raise ValueError("New priority must be higher (lower number)")
         
-        request.priority = new_priority
-        request.promoted = True
-        
-        await self.add_request(request)
+        # Get the original message
+        queue_name = self.queue_handler.queue_names[request.priority]
+        message = await self.queue_handler.get_next_message(queue_name, no_ack=False)
+
+        if message:
+            # Update priority in message body
+            request_dict = json.loads(message.body.decode())
+            request_dict["priority"] = new_priority
+            request_dict["promoted"] = True
+
+            # Republish with new priority
+            await self.add_request(QueuedRequest.from_dict(request_dict))
+
+            # Acknowledge original message
+            await message.ack()
+            logger.info(f"Promoted request from {request.priority} to {new_priority}")
+        else:
+            logger.warning(f"Could not find message to promote in queue {queue_name}")
+
     
     async def handle_request_aging(self) -> None:
         """Handle request aging (managed by aging system)"""
@@ -238,11 +229,11 @@ class RabbitMQManager(BaseQueueManager):
     
     async def get_stats(self) -> QueueStats:
         """Get queue statistics"""
-        return self.processor.stats
+        return await self.processor.get_stats()
     
     async def reset_stats(self) -> None:
         """Reset queue statistics"""
-        self.processor.stats = QueueStats()
+        await self.processor.reset_stats()
     
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""
