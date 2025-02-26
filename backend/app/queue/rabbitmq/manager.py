@@ -117,7 +117,7 @@ class RabbitMQManager(BaseQueueManager):
         await self.ensure_connected()
         
         # Update statistics
-        await self.processor.stats.total_requests += 1
+        self.processor.stats.total_requests += 1
         
         # Publish request
         exchange = await self.exchange_manager.get_exchange("llm_requests_exchange")

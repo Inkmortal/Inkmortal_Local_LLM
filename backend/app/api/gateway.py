@@ -5,13 +5,14 @@ from typing import Dict, Any
 import httpx
 import json
 import os
+import asyncio
 from dotenv import load_dotenv
 
 from ..db import get_db
 from ..auth.utils import get_current_user, validate_api_key, get_current_admin_user
 from ..auth.models import User
-from ..queue.rabbitmq.manager import RabbitMQManager  # Import the refactored manager
-from ..queue.models import QueuedRequest, RequestPriority
+from ..queue import RabbitMQManager, QueuedRequest, RequestPriority  # Use the __init__.py exports
+from ..main import queue_manager  # Import the singleton instance from main.py
 
 # Load environment variables
 load_dotenv()
@@ -22,8 +23,7 @@ OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 # Create router
 router = APIRouter(prefix="/api", tags=["api"])
 
-# Get queue manager instance (should be a singleton)
-queue_manager = RabbitMQManager()
+# Queue manager is now imported from main.py
 
 # Helper function to determine request priority
 async def get_request_priority(
@@ -113,16 +113,32 @@ async def chat_completions(
     # Add request to queue and get position
     position = await queue_manager.add_request(request_obj)
     
+    # Add request to queue
+    position = await queue_manager.add_request(request_obj)
+    
     # If streaming is requested
     if body.get("stream", False):
-        return StreamingResponse(
-            queue_manager.processor.process_streaming_request(request_obj),
-            media_type="text/event-stream"
-        )
+        # Get the next request from the queue and process it
+        next_request = await queue_manager.get_next_request()
+        if next_request and next_request.timestamp == request_obj.timestamp:
+            return StreamingResponse(
+                queue_manager.processor.process_streaming_request(next_request),
+                media_type="text/event-stream"
+            )
+        else:
+            # If request wasn't found in queue, return error
+            return StreamingResponse(
+                (yield json.dumps({"error": "Request not found in queue"}).encode()),
+                media_type="text/event-stream"
+            )
     
     # For non-streaming requests
-    response = await queue_manager.processor.process_request(request_obj)
-    return response
+    while True:
+        if not queue_manager.processor.current_request:
+            next_request = await queue_manager.get_next_request()
+            if next_request and next_request.timestamp == request_obj.timestamp:
+                return await queue_manager.processor.process_request(next_request)
+        await asyncio.sleep(0.1)
 
 # Ollama API proxy endpoint for completions
 @router.post("/completions")
@@ -153,16 +169,32 @@ async def completions(
     # Add request to queue and get position
     position = await queue_manager.add_request(request_obj)
     
+    # Add request to queue
+    position = await queue_manager.add_request(request_obj)
+    
     # If streaming is requested
     if body.get("stream", False):
-        return StreamingResponse(
-            queue_manager.processor.process_streaming_request(request_obj),
-            media_type="text/event-stream"
-        )
+        # Get the next request from the queue and process it
+        next_request = await queue_manager.get_next_request()
+        if next_request and next_request.timestamp == request_obj.timestamp:
+            return StreamingResponse(
+                queue_manager.processor.process_streaming_request(next_request),
+                media_type="text/event-stream"
+            )
+        else:
+            # If request wasn't found in queue, return error
+            return StreamingResponse(
+                (yield json.dumps({"error": "Request not found in queue"}).encode()),
+                media_type="text/event-stream"
+            )
     
     # For non-streaming requests
-    response = await queue_manager.processor.process_request(request_obj)
-    return response
+    while True:
+        if not queue_manager.processor.current_request:
+            next_request = await queue_manager.get_next_request()
+            if next_request and next_request.timestamp == request_obj.timestamp:
+                return await queue_manager.processor.process_request(next_request)
+        await asyncio.sleep(0.1)
 
 # Get available models
 @router.get("/models")

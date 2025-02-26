@@ -21,14 +21,14 @@ class AgingManager:
         self.channel = channel
         self.exchange_manager = exchange_manager
         self.queue_manager = queue_manager
-        self.dlx_name = "llm_requests_dlx"  # Name of the dead-letter exchange
+        self.dlx = None  # Exchange object, not just the name
         self.dl_queues: Dict[str, aio_pika.RobustQueue] = {}
     
     async def setup_aging(self) -> None:
         """Set up dead letter exchanges and queues for aging"""
         # Set up dead letter exchange
-        await self.exchange_manager.declare_exchange(
-            self.dlx_name,
+        self.dlx = await self.exchange_manager.declare_exchange(
+            "llm_requests_dlx",
             type=aio_pika.ExchangeType.DIRECT,
             durable=True
         )
@@ -38,13 +38,13 @@ class AgingManager:
             "llm_requests_dl_3to2",
             durable=True
         )
-        await self.dl_queues["3to2"].bind(self.dlx_name, routing_key="dl_priority_3")
+        await self.dl_queues["3to2"].bind(self.dlx, routing_key="dl_priority_3")
         
         self.dl_queues["2to1"] = await self.queue_manager.declare_queue(
             "llm_requests_dl_2to1",
             durable=True
         )
-        await self.dl_queues["2to1"].bind(self.dlx_name, routing_key="dl_priority_2")
+        await self.dl_queues["2to1"].bind(self.dlx, routing_key="dl_priority_2")
         
         # Start consumers
         await self.start_aging_consumers()

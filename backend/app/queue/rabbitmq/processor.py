@@ -20,7 +20,7 @@ class RequestProcessor:
         self.processing_lock = asyncio.Lock() # Add a lock
     
     async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
-        """Process a request synchronously"""
+        """Process a request synchronously with timeout handling"""
 
         async with self.processing_lock: # Use the lock
             self.current_request = request
@@ -32,29 +32,51 @@ class RequestProcessor:
                 endpoint = request.endpoint.replace("/api", "")
                 url = f"{self.ollama_url}{endpoint}"
                 
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        url,
-                        json=request.body,
-                        timeout=60.0
-                    )
+                # Create a timeout task
+                timeout_seconds = 120.0  # 2 minutes max processing time
+                
+                try:
+                    async with httpx.AsyncClient() as client:
+                        # Use asyncio.wait_for to add a timeout
+                        response = await asyncio.wait_for(
+                            client.post(
+                                url,
+                                json=request.body,
+                                timeout=60.0  # HTTPX timeout
+                            ),
+                            timeout=timeout_seconds  # Overall timeout
+                        )
+                        
+                        # Update request status
+                        self.current_request.status = "completed"
+                        self.current_request.processing_end = datetime.utcnow()
+                        
+                        # Update statistics
+                        self._update_stats(self.current_request)
+                        
+                        # Get response data
+                        response_data = response.json()
+                        
+                        # Clear current request
+                        self.current_request = None
+                        
+                        return response_data
+                
+                except asyncio.TimeoutError:
+                    # Handle timeout specifically
+                    logger.warning(f"Request timed out after {timeout_seconds} seconds: {request.endpoint}")
+                    if self.current_request:
+                        self.current_request.status = "failed"
+                        self.current_request.error = f"Request timed out after {timeout_seconds} seconds"
+                        self.current_request.processing_end = datetime.utcnow()
+                        self.stats.failed_requests += 1
+                        self.current_request = None
                     
-                    # Update request status
-                    self.current_request.status = "completed"
-                    self.current_request.processing_end = datetime.utcnow()
-                    
-                    # Update statistics
-                    self._update_stats(self.current_request)
-                    
-                    # Get response data
-                    response_data = response.json()
-                    
-                    # Clear current request
-                    self.current_request = None
-                    
-                    return response_data
+                    return {"error": f"Request timed out after {timeout_seconds} seconds"}
             
             except Exception as e:
+                # Log the error
+                logger.error(f"Error processing request: {str(e)}")
                 if self.current_request:
                     self.current_request.status = "failed"
                     self.current_request.error = str(e)
@@ -62,7 +84,8 @@ class RequestProcessor:
                     self.stats.failed_requests += 1
                     self.current_request = None
                 
-                raise
+                # Return error instead of raising to avoid crashing
+                return {"error": str(e)}
     
     async def process_streaming_request(
         self,
