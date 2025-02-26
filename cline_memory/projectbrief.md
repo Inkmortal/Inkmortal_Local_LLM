@@ -8,7 +8,6 @@ This is a personal hobby project designed to provide LLM capabilities primarily 
 - Educational assistance (solving math problems, answering textbook questions)
 - Coding help for personal projects
 - Creating a "tutor-like" experience in the chat interface
-- Future integration with Chaycards (a unified study platform combining Anki, Quizlet, Notion, and Obsidian capabilities)
 
 The web interface is designed to be fun, beautiful, and functional, allowing friends and family to upload images of textbooks, get help with math problems, receive coding assistance, and more. While not designed as an enterprise-level system, the architecture ensures efficient resource usage and provides a solid foundation for personal educational needs.
 
@@ -44,28 +43,28 @@ The web interface is designed to be fun, beautiful, and functional, allowing fri
 
 ### User Interfaces
 1. Direct API Access (Priority 1)
-   - Support for coding tools (Cline, Roo)
-   - IP whitelist controlled
-   - Transparent Ollama API compatibility
+    - Support for coding tools (Cline, Roo)
+    - IP whitelist controlled
+    - Transparent Ollama API compatibility
 
 2. Custom Applications (Priority 2)
-   - API key-based access
-   - Configurable priority levels
-   - Usage tracking and monitoring
+    - API key-based access
+    - Configurable priority levels
+    - Usage tracking and monitoring
 
 3. Web Interface (Priority 3)
-   - Chat interface for friends and family
-   - Token-based registration system
-   - User authentication
+    - Chat interface for friends and family
+    - Token-based registration system
+    - User authentication
 
 ### Queue Management
 - Priority-based request processing
 - Request source identification
 - Request aging to prevent starvation
 - Multiple priority levels
-  - Level 1: Direct API (coding tools)
-  - Level 2: Custom applications (configurable)
-  - Level 3: Web interface users
+    - Level 1: Direct API (coding tools)
+    - Level 2: Custom applications (configurable)
+    - Level 3: Web interface users
 
 ### Administration
 - Admin panel for system management
@@ -80,9 +79,9 @@ The web interface is designed to be fun, beautiful, and functional, allowing fri
 ### Domain Structure
 - Main domain: seadragoninkmortal.com
 - Subdomains:
-  - local-llm.seadragoninkmortal.com (API access)
-  - chat.seadragoninkmortal.com (Web interface)
-  - admin.seadragoninkmortal.com (Admin panel)
+    - local-llm.seadragoninkmortal.com (API access)
+    - chat.seadragoninkmortal.com (Web interface)
+    - admin.seadragoninkmortal.com (Admin panel)
 
 ### Network Architecture
 - Cloudflare tunnel for secure remote access
