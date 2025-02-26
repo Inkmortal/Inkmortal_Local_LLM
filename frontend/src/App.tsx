@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import { ThemeProvider } from './context/ThemeContext';
 import AdminDashboard from './pages/admin/Admin';
@@ -6,14 +6,52 @@ import IPWhitelist from './pages/admin/IPWhitelist';
 import RegistrationTokens from './pages/admin/RegistrationTokens';
 import APIKeys from './pages/admin/APIKeys';
 import QueueMonitor from './pages/admin/QueueMonitor';
+import ThemeCustomizer from './pages/admin/ThemeCustomizer';
 
 // Simple routing mechanism (to be replaced with React Router in a real app)
-type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys' | 'admin/queue' | 'home';
+type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys' | 'admin/queue' | 'admin/themes' | 'home';
 
 function App() {
-  const [currentRoute, setCurrentRoute] = useState<Route>('admin');
+  const [currentRoute, setCurrentRoute] = useState<Route>('home');
 
-  // Mock routing function (would use React Router in a real app)
+  // Set up navigation handling
+  useEffect(() => {
+    // Define the global navigation handler
+    window.navigateTo = (path: string) => {
+      console.log('Navigating to:', path);
+      
+      // Remove leading slash if present
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      
+      // Set the route
+      setCurrentRoute(cleanPath as Route);
+      
+      // Update window URL without full navigation (for visual feedback)
+      window.history.pushState(null, '', path);
+      
+      return false; // Prevent default navigation
+    };
+    
+    // Listen for popstate to handle browser back/forward
+    const handlePopState = () => {
+      const path = window.location.pathname.slice(1); // Remove leading slash
+      setCurrentRoute((path || 'home') as Route);
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    // Check initial URL on load
+    const initialPath = window.location.pathname.slice(1);
+    if (initialPath) {
+      setCurrentRoute(initialPath as Route);
+    }
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Render the current route
   const renderRoute = () => {
     switch (currentRoute) {
       case 'admin':
@@ -26,6 +64,8 @@ function App() {
         return <APIKeys />;
       case 'admin/queue':
         return <QueueMonitor />;
+      case 'admin/themes':
+        return <ThemeCustomizer />;
       case 'home':
       default:
         return (
@@ -43,8 +83,8 @@ function App() {
                 assistance with math problems, coding questions, and textbook content.
               </p>
               <button 
-                className="mt-4 bg-themed-tertiary hover:opacity-90 px-4 py-2 rounded"
-                onClick={() => setCurrentRoute('admin')}
+                className="mt-4 bg-themed-tertiary hover:opacity-90 px-4 py-2 rounded text-themed"
+                onClick={() => window.navigateTo('/admin')}
               >
                 Go to Admin Panel
               </button>
@@ -52,13 +92,6 @@ function App() {
           </div>
         );
     }
-  };
-
-  // Navigation events are captured and intercepted by Layout components
-  // This allows us to navigate without a full router implementation
-  window.onNavigate = (path: string) => {
-    setCurrentRoute(path.replace('/', '') as Route);
-    return false; // Prevent default navigation
   };
   
   return (
@@ -71,7 +104,7 @@ function App() {
 // Extend Window interface to include our navigation function
 declare global {
   interface Window {
-    onNavigate: (path: string) => boolean;
+    navigateTo: (path: string) => boolean;
   }
 }
 

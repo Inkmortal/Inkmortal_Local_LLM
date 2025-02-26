@@ -87,6 +87,15 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) => {
   const { currentTheme } = useTheme();
   
+  // Handle navigation
+  const handleNavigate = (path: string) => {
+    // Use the global navigation function
+    window.navigateTo(path);
+    
+    // Call the provided onNavigate for sidebar state management
+    onNavigate(path);
+  };
+  
   return (
     <>
       {/* Mobile backdrop */}
@@ -119,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
             {navItems.map((item) => (
               <li key={item.id}>
                 <button
-                  onClick={() => onNavigate(item.path)}
+                  onClick={() => handleNavigate(item.path)}
                   className={`flex items-center w-full px-3 py-2.5 rounded-md transition-colors ${
                     currentPath === item.path ? 'bg-opacity-20' : 'bg-opacity-0 hover:bg-opacity-10'
                   }`}

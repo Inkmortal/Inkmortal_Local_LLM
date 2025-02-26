@@ -31,43 +31,99 @@ const Button: React.FC<ButtonProps> = ({
     lg: 'px-6 py-3 text-lg',
   };
 
-  // Variant styles
+  // Get text color based on background to ensure good contrast
+  const getTextColor = (bgColor: string) => {
+    // Simple function to determine if text should be light or dark based on background
+    // This is a simplified version - in a production app, you'd want a more sophisticated calculation
+    const isHex = bgColor.startsWith('#');
+    if (!isHex) return currentTheme.isDark ? 'white' : 'black';
+    
+    const hex = bgColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    return brightness > 155 ? '#000000' : '#FFFFFF';
+  };
+
+  // Get styles for the variant
   const getVariantStyles = () => {
+    const primaryColor = currentTheme.colors.accentPrimary;
+    const secondaryColor = currentTheme.colors.accentSecondary;
+    const errorColor = currentTheme.colors.error;
+    const successColor = currentTheme.colors.success;
+    const borderColor = currentTheme.colors.borderColor;
+    const textColor = currentTheme.colors.textPrimary;
+    const bgTertiaryColor = currentTheme.colors.bgTertiary;
+    
     switch (variant) {
       case 'primary':
-        return `bg-[${currentTheme.colors.accentPrimary}] text-white hover:opacity-90 focus:ring-[${currentTheme.colors.accentPrimary}] focus:ring-opacity-50`;
+        return {
+          backgroundColor: primaryColor,
+          color: getTextColor(primaryColor),
+          borderColor: 'transparent'
+        };
       case 'secondary':
-        return `bg-[${currentTheme.colors.accentSecondary}] text-white hover:opacity-90 focus:ring-[${currentTheme.colors.accentSecondary}] focus:ring-opacity-50`;
+        return {
+          backgroundColor: secondaryColor,
+          color: getTextColor(secondaryColor),
+          borderColor: 'transparent'
+        };
       case 'outline':
-        return `border border-[${currentTheme.colors.borderColor}] bg-transparent text-[${currentTheme.colors.textPrimary}] hover:bg-[${currentTheme.colors.bgTertiary}] focus:ring-[${currentTheme.colors.accentPrimary}] focus:ring-opacity-50`;
+        return {
+          backgroundColor: 'transparent',
+          color: textColor,
+          borderColor: borderColor,
+          borderWidth: '1px',
+          hoverBg: bgTertiaryColor
+        };
       case 'danger':
-        return `bg-[${currentTheme.colors.error}] text-white hover:opacity-90 focus:ring-[${currentTheme.colors.error}] focus:ring-opacity-50`;
+        return {
+          backgroundColor: errorColor,
+          color: getTextColor(errorColor),
+          borderColor: 'transparent'
+        };
       case 'success':
-        return `bg-[${currentTheme.colors.success}] text-white hover:opacity-90 focus:ring-[${currentTheme.colors.success}] focus:ring-opacity-50`;
+        return {
+          backgroundColor: successColor,
+          color: getTextColor(successColor),
+          borderColor: 'transparent'
+        };
       default:
-        return `bg-[${currentTheme.colors.accentPrimary}] text-white hover:opacity-90 focus:ring-[${currentTheme.colors.accentPrimary}] focus:ring-opacity-50`;
+        return {
+          backgroundColor: primaryColor,
+          color: getTextColor(primaryColor),
+          borderColor: 'transparent'
+        };
     }
   };
 
-  // Width styles
-  const widthStyles = fullWidth ? 'w-full' : '';
+  const variantStyles = getVariantStyles();
 
   // Combined styles
-  const combinedStyles = `${baseStyles} ${sizeStyles[size]} ${getVariantStyles()} ${widthStyles} ${className}`;
+  const combinedStyles = `${baseStyles} ${sizeStyles[size]} ${className}`;
 
   return (
     <button 
       className={combinedStyles}
       style={{
-        // Inline styles for dynamic theme colors that can't be handled with Tailwind
-        backgroundColor: variant === 'primary' ? currentTheme.colors.accentPrimary :
-                         variant === 'secondary' ? currentTheme.colors.accentSecondary :
-                         variant === 'danger' ? currentTheme.colors.error :
-                         variant === 'success' ? currentTheme.colors.success : 'transparent',
-        color: variant === 'outline' ? currentTheme.colors.textPrimary : 'white',
-        borderColor: variant === 'outline' ? currentTheme.colors.borderColor : 'transparent',
+        backgroundColor: variantStyles.backgroundColor,
+        color: variantStyles.color,
+        borderColor: variantStyles.borderColor,
+        borderWidth: variantStyles.borderWidth,
+        width: fullWidth ? '100%' : 'auto',
+        opacity: props.disabled ? 0.6 : 1,
+        cursor: props.disabled ? 'not-allowed' : 'pointer'
       }}
       {...props}
+      onClick={(e) => {
+        if (props.disabled) {
+          e.preventDefault();
+          return;
+        }
+        props.onClick?.(e);
+      }}
     >
       {children}
     </button>

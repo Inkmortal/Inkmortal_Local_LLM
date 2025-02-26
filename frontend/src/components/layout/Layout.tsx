@@ -16,6 +16,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     const path = window.location.pathname;
     setCurrentPath(path);
+    
+    // Listen for URL changes
+    const handleUrlChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    
+    window.addEventListener('popstate', handleUrlChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+    };
   }, []);
 
   const handleNavigate = (path: string) => {
@@ -25,9 +36,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
-    
-    // In a real application, this would use router navigation
-    // history.push(path);
   };
 
   return (

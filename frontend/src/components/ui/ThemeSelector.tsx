@@ -36,6 +36,12 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
     setIsOpen(false);
   };
 
+  const navigateToThemeCustomizer = (e: React.MouseEvent) => {
+    e.preventDefault();
+    window.navigateTo('/admin/themes');
+    setIsOpen(false);
+  };
+
   const renderThemeButton = (name: keyof typeof themes) => {
     const theme = themes[name];
     const isActive = themeName === name || (name === 'custom' && isCustomThemeActive);
@@ -118,13 +124,13 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
 
             <div className="px-3 py-2 mt-1 border-t" style={{ borderColor: currentTheme.colors.borderColor }}>
               <a
-                href="/themes/customize"
+                href="/admin/themes"
                 className="block text-center py-2 rounded-md"
                 style={{
                   backgroundColor: currentTheme.colors.accentSecondary,
                   color: currentTheme.isDark ? 'white' : 'black'
                 }}
-                onClick={() => setIsOpen(false)}
+                onClick={navigateToThemeCustomizer}
               >
                 Customize Theme
               </a>
