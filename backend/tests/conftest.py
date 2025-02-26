@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -6,7 +7,6 @@ from sqlalchemy.pool import StaticPool
 import os
 import sys
 import asyncio
-from unittest.mock import patch
 
 # Add the parent directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,7 +15,7 @@ from app.db import Base, get_db
 from app.main import app
 from app.auth.models import User, RegistrationToken, APIKey
 from app.auth.utils import get_password_hash
-from .mock_rabbitmq import patch_rabbitmq
+from app.queue.rabbitmq_manager import RabbitMQManager
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -34,11 +34,20 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest.fixture
-async def mock_rabbitmq():
-    """Set up mock RabbitMQ for testing"""
-    with patch_rabbitmq():
-        yield
+@pytest_asyncio.fixture(scope="session")
+async def queue_manager():
+    """Get a RabbitMQ manager instance"""
+    manager = RabbitMQManager()
+    await manager.ensure_connected()
+    
+    # Clear any existing queues
+    await manager.clear_queue()
+    
+    yield manager
+    
+    # Cleanup
+    await manager.clear_queue()
+    await manager.close()
 
 @pytest.fixture
 def db_session():
