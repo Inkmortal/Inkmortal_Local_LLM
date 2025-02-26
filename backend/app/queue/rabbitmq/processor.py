@@ -16,13 +16,13 @@ class RequestProcessor:
     def __init__(self, ollama_url: str):
         self.ollama_url = ollama_url
         self.current_request: Optional[QueuedRequest] = None
-        self.stats = QueueStats()
-        self.processing_lock = asyncio.Lock() # Add a lock
+        self.stats = QueueStats()  # Initialize stats here
+        self.processing_lock = asyncio.Lock()  # Add a lock
     
     async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
         """Process a request synchronously with timeout handling"""
 
-        async with self.processing_lock: # Use the lock
+        async with self.processing_lock:  # Use the lock
             self.current_request = request
             self.current_request.status = "processing"
             self.current_request.processing_start = datetime.utcnow()
@@ -167,6 +167,7 @@ class RequestProcessor:
         processing_time = (request.processing_end - request.processing_start).total_seconds()
         
         self.stats.update_timing(wait_time, processing_time)
+        self.stats.completed_requests += 1
 
     async def get_stats(self) -> QueueStats:
         """Get queue statistics"""

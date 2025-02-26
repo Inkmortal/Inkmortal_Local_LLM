@@ -27,9 +27,10 @@ class QueueManager:
         arguments: Optional[Dict] = None
     ) -> aio_pika.RobustQueue:
         """Declare a queue"""
+        # Always use durable=True for consistency
         queue = await self.channel.declare_queue(
             name,
-            durable=durable,
+            durable=True,
             arguments=arguments or {}
         )
         self.queues[name] = queue
@@ -39,6 +40,14 @@ class QueueManager:
     async def setup_priority_queues(self, aging_threshold_seconds: int = 30) -> None:
         """Set up priority queues with aging"""
         for priority, queue_name in self.queue_names.items():
+            # Delete queue if it exists to avoid inconsistency errors
+            try:
+                await self.channel.queue_delete(queue_name)
+                logger.info(f"Deleted existing queue: {queue_name}")
+            except Exception as e:
+                logger.debug(f"Queue {queue_name} may not exist: {str(e)}")
+                
+            # Create a fresh queue
             await self.declare_queue(
                 queue_name,
                 durable=True,
@@ -70,6 +79,14 @@ class QueueManager:
     
     async def get_queue(self, name: str) -> Optional[aio_pika.RobustQueue]:
         """Get a queue by name"""
+        if name not in self.queues:
+            try:
+                # Try to get existing queue
+                queue = await self.channel.get_queue(name, passive=True)
+                self.queues[name] = queue
+            except Exception:
+                return None
+                
         return self.queues.get(name)
     
     async def get_queue_size(self) -> Dict[int, int]:
@@ -100,15 +117,17 @@ class QueueManager:
     
     async def delete_queue(self, name: str) -> None:
         """Delete a queue"""
-        queue = await self.get_queue(name)
-        if queue:
-            await queue.delete(if_unused=False, if_empty=False)
-            del self.queues[name]
+        try:
+            await self.channel.queue_delete(name)
+            if name in self.queues:
+                del self.queues[name]
             logger.info(f"Deleted queue: {name}")
+        except Exception as e:
+            logger.warning(f"Error deleting queue {name}: {str(e)}")
     
     async def delete_all_queues(self) -> None:
         """Delete all queues"""
-        for queue_name in list(self.queues.keys()):
+        for queue_name in list(self.queue_names.values()):
             await self.delete_queue(queue_name)
         logger.info("Deleted all queues")
     

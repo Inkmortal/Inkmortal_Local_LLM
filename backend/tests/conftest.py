@@ -42,10 +42,10 @@ async def queue_manager(event_loop):
     os.environ["RABBITMQ_URL"] = os.getenv("TEST_RABBITMQ_URL", "amqp://guest:guest@localhost/")
     os.environ["OLLAMA_API_URL"] = os.getenv("TEST_OLLAMA_URL", "http://localhost:11434")
     
-    # Get the manager instance
+    # Get the manager instance using the global singleton getter
     manager = get_queue_manager()
     
-    # Close any existing connection and clean up
+    # Force close any existing connection to ensure clean state
     try:
         await manager.close()
     except Exception as e:
@@ -53,7 +53,13 @@ async def queue_manager(event_loop):
     
     # Start fresh connection
     try:
+        # Force re-initialization of key components
+        manager._initialized = False
+        manager.__init__()
+        
+        # Connect with robust error handling
         await manager.connect()
+        
         # Clear any existing queues to ensure clean state
         await manager.clear_queue()
     except Exception as e:
@@ -66,8 +72,8 @@ async def queue_manager(event_loop):
     try:
         await manager.clear_queue()
         await manager.close()
-    except:
-        pass
+    except Exception as e:
+        print(f"Error during queue manager cleanup: {e}")
 
 @pytest.fixture
 def db_session():

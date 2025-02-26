@@ -54,7 +54,9 @@ class RabbitMQManager(BaseQueueManager):
         self.exchange_manager = None
         self.queue_handler = None
         self.aging_manager = None
-        self.processor = None
+        
+        # Initialize processor immediately (not during connect)
+        self.processor = RequestProcessor(self.ollama_url)
         
         # Request tracking
         self.request_history: List[Dict[str, Any]] = []
@@ -84,14 +86,13 @@ class RabbitMQManager(BaseQueueManager):
             self.exchange_manager,
             self.queue_handler
         )
-        self.processor = RequestProcessor(self.ollama_url)
         
         # Set up exchanges
         main_exchange = await self.exchange_manager.declare_exchange(
             "llm_requests_exchange"
         )
         
-        # Set up queues
+        # Set up queues - ensure durable=True for consistency
         await self.queue_handler.setup_priority_queues(self._aging_threshold_seconds)
         
         # Set up aging system
@@ -108,7 +109,11 @@ class RabbitMQManager(BaseQueueManager):
     
     async def ensure_connected(self) -> None:
         """Ensure connection is established"""
-        await self.connection.ensure_connected()
+        if not self.connection.is_connected:
+            await self.connect()
+        elif not self.exchange_manager or not self.queue_handler:
+            # If connection exists but managers don't, reconnect
+            await self.connect()
     
     async def close(self) -> None:
         """Close the connection"""
@@ -116,16 +121,21 @@ class RabbitMQManager(BaseQueueManager):
             try:
                 # Delete all queues first
                 await self.queue_handler.delete_all_queues()
-            except:
-                logger.warning("Failed to delete queues during cleanup")
+            except Exception as e:
+                logger.warning(f"Failed to delete queues during cleanup: {e}")
         
-        await self.connection.close()
-        logger.info("RabbitMQ manager closed")
+        if self.connection:
+            await self.connection.close()
+            logger.info("RabbitMQ manager closed")
     
     async def add_request(self, request: QueuedRequest) -> int:
         """Add a request to the queue"""
         await self.ensure_connected()
         
+        # Check if processor is initialized
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
+            
         # Update statistics
         self.processor.stats.total_requests += 1
         
@@ -174,10 +184,14 @@ class RabbitMQManager(BaseQueueManager):
     
     async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
         """Process a request synchronously"""
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
         return await self.processor.process_request(request)
     
     async def process_streaming_request(self, request: QueuedRequest) -> AsyncGenerator[str, None]:
         """Process a request with streaming"""
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
         async for chunk in self.processor.process_streaming_request(request):
             yield chunk
     
@@ -205,6 +219,10 @@ class RabbitMQManager(BaseQueueManager):
         await self.ensure_connected()
         sizes = await self.get_queue_size()
         
+        # Check if processor exists
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
+            
         return {
             "queue_size": sum(sizes.values()),
             "queue_by_priority": sizes,
@@ -244,15 +262,23 @@ class RabbitMQManager(BaseQueueManager):
     
     async def handle_request_aging(self) -> None:
         """Handle request aging (managed by aging system)"""
-        pass
+        # This is handled by the aging manager through RabbitMQ's dead letter exchange
+        if self.aging_manager:
+            logger.debug("Aging system is active")
+        else:
+            logger.warning("Aging manager not initialized")
     
     async def get_stats(self) -> QueueStats:
         """Get queue statistics"""
-        return await self.processor.get_stats()
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
+        return self.processor.stats
     
     async def reset_stats(self) -> None:
         """Reset queue statistics"""
-        await self.processor.reset_stats()
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
+        self.processor.stats = QueueStats()
     
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""

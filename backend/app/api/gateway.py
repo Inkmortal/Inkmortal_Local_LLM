@@ -12,8 +12,7 @@ from ..db import get_db
 from ..auth.utils import get_current_user, validate_api_key, get_current_admin_user
 from ..auth.models import User
 from ..queue import QueuedRequest, RequestPriority  # Use the __init__.py exports
-# Get the queue manager using dependency injection rather than direct import
-from ..queue.rabbitmq.manager import get_queue_manager
+from ..queue.rabbitmq.manager import get_queue_manager  # Import the getter function
 
 # Load environment variables
 load_dotenv()
@@ -27,7 +26,10 @@ router = APIRouter(prefix="/api", tags=["api"])
 # Create a FastAPI dependency for the queue manager
 async def get_queue():
     """Get the queue manager instance"""
-    return get_queue_manager()
+    queue_manager = get_queue_manager()
+    # Ensure the manager is connected
+    await queue_manager.ensure_connected()
+    return queue_manager
 
 # Helper function to determine request priority
 async def get_request_priority(
@@ -146,7 +148,7 @@ async def chat_completions(
         if not queue_manager.processor.current_request:
             next_request = await queue_manager.get_next_request()
             if next_request and next_request.timestamp == request_obj.timestamp:
-                return await queue_manager.processor.process_request(next_request)
+                return await queue_manager.process_request(next_request)
         await asyncio.sleep(0.1)
     
     # If we reach here, we timed out waiting for the request
@@ -210,7 +212,7 @@ async def completions(
         if not queue_manager.processor.current_request:
             next_request = await queue_manager.get_next_request()
             if next_request and next_request.timestamp == request_obj.timestamp:
-                return await queue_manager.processor.process_request(next_request)
+                return await queue_manager.process_request(next_request)
         await asyncio.sleep(0.1)
     
     # If we reach here, we timed out waiting for the request
@@ -246,7 +248,7 @@ async def list_models(
         
         return {"data": openai_format_models}
 
-# Queue status endpoint (now uses RabbitMQManager)
+# Queue status endpoint
 @router.get("/queue/status")
 async def queue_status(
     current_user: User = Depends(get_current_user),
