@@ -246,6 +246,10 @@ class MockQueueManager(QueueManagerInterface):
         """Reset queue statistics"""
         self.stats = QueueStats()
     
+    async def get_current_request(self) -> Optional[QueuedRequest]:
+        """Get the request currently being processed, if any"""
+        return self.current_request
+    
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""
         self.request_history.append(request.to_dict())
