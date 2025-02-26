@@ -66,10 +66,6 @@ class RabbitMQManager(BaseQueueManager):
         await self.connection.connect()
         channel = await self.connection.get_channel()
         
-        # Enable publisher confirms
-        await channel.set_qos(prefetch_count=1)
-        await channel.confirm_delivery()
-        
         # Initialize managers
         self.exchange_manager = ExchangeManager(channel)
         self.queue_handler = QueueHandler(channel)
@@ -120,16 +116,13 @@ class RabbitMQManager(BaseQueueManager):
         if not exchange:
             raise RuntimeError("Main exchange not found")
         
-        # Wait for confirmation
-        confirmation = await self.queue_handler.publish_message(
+        # Publish message
+        await self.queue_handler.publish_message(
             exchange,
             f"priority_{request.priority}",
             json.dumps(request.to_dict()).encode(),
             {"x-original-priority": request.original_priority}
         )
-        
-        if not confirmation:
-            raise RuntimeError("Failed to publish message")
         
         # Get queue position
         sizes = await self.get_queue_size()

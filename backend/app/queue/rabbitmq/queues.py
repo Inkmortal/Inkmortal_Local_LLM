@@ -103,31 +103,19 @@ class QueueManager:
         routing_key: str,
         message_body: bytes,
         headers: Optional[Dict] = None
-    ) -> bool:
-        """
-        Publish a message to an exchange.
-        Returns True if message was confirmed, False otherwise.
-        """
-        try:
-            message = Message(
-                body=message_body,
-                delivery_mode=DeliveryMode.PERSISTENT,
-                headers=headers or {}
-            )
-            
-            # Publish with confirmation
-            await exchange.publish(
-                message,
-                routing_key=routing_key,
-                timeout=30  # 30 second timeout for confirmation
-            )
-            
-            logger.info(f"Published and confirmed message to exchange {exchange.name}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to publish message: {str(e)}")
-            return False
+    ) -> None:
+        """Publish a message to an exchange"""
+        message = Message(
+            body=message_body,
+            delivery_mode=DeliveryMode.PERSISTENT,
+            headers=headers or {}
+        )
+        
+        await exchange.publish(
+            message,
+            routing_key=routing_key
+        )
+        logger.info(f"Published message to exchange {exchange.name}")
     
     async def get_next_message(
         self,
