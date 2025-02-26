@@ -45,7 +45,8 @@ class QueueManager:
                 durable=True,
                 arguments={
                     "x-max-priority": 10,
-                    "x-message-ttl": aging_threshold_seconds * 1000
+                    "x-message-ttl": aging_threshold_seconds * 1000,
+                    "x-queue-mode": "lazy"  # Better for long-lived messages
                 }
             )
     
@@ -76,7 +77,9 @@ class QueueManager:
         for priority, queue_name in self.queue_names.items():
             queue = await self.get_queue(queue_name)
             if queue:
-                result[priority] = queue.declaration_result.message_count
+                # Get fresh declaration to get current size
+                declaration = await queue.declare(passive=True)
+                result[priority] = declaration.message_count
             else:
                 result[priority] = 0
         return result
@@ -100,15 +103,31 @@ class QueueManager:
         routing_key: str,
         message_body: bytes,
         headers: Optional[Dict] = None
-    ) -> None:
-        """Publish a message to an exchange"""
-        message = Message(
-            body=message_body,
-            delivery_mode=DeliveryMode.PERSISTENT,
-            headers=headers or {}
-        )
-        await exchange.publish(message, routing_key=routing_key)
-        logger.info(f"Published message to exchange {exchange.name}")
+    ) -> bool:
+        """
+        Publish a message to an exchange.
+        Returns True if message was confirmed, False otherwise.
+        """
+        try:
+            message = Message(
+                body=message_body,
+                delivery_mode=DeliveryMode.PERSISTENT,
+                headers=headers or {}
+            )
+            
+            # Publish with confirmation
+            await exchange.publish(
+                message,
+                routing_key=routing_key,
+                timeout=30  # 30 second timeout for confirmation
+            )
+            
+            logger.info(f"Published and confirmed message to exchange {exchange.name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to publish message: {str(e)}")
+            return False
     
     async def get_next_message(
         self,
@@ -118,5 +137,8 @@ class QueueManager:
         """Get the next message from a queue"""
         queue = await self.get_queue(queue_name)
         if queue:
-            return await queue.get(no_ack=no_ack)
+            try:
+                return await queue.get(no_ack=no_ack, fail=False)
+            except aio_pika.exceptions.QueueEmpty:
+                return None
         return None

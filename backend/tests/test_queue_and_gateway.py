@@ -4,6 +4,16 @@ import time
 from fastapi import status
 from app.queue import RequestPriority, QueuedRequest
 
+async def wait_for_queue_size(queue_manager, expected_total: int, timeout: float = 5.0) -> bool:
+    """Wait for queue to reach expected size"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        sizes = await queue_manager.get_queue_size()
+        if sum(sizes.values()) == expected_total:
+            return True
+        await asyncio.sleep(0.1)
+    return False
+
 @pytest.mark.asyncio
 async def test_queue_priority_ordering(queue_manager):
     """Test that requests are processed in priority order"""
@@ -26,6 +36,9 @@ async def test_queue_priority_ordering(queue_manager):
         body={"message": "custom"}
     ))
     
+    # Wait for messages to be queued
+    assert await wait_for_queue_size(queue_manager, 3)
+    
     # Check queue sizes
     sizes = await queue_manager.get_queue_size()
     assert sizes[RequestPriority.DIRECT_API] == 1
@@ -34,14 +47,17 @@ async def test_queue_priority_ordering(queue_manager):
     
     # Get next request - should be DIRECT_API
     next_request = await queue_manager.get_next_request()
+    assert next_request is not None
     assert next_request.priority == RequestPriority.DIRECT_API
     
     # Get next request - should be CUSTOM_APP
     next_request = await queue_manager.get_next_request()
+    assert next_request is not None
     assert next_request.priority == RequestPriority.CUSTOM_APP
     
     # Get next request - should be WEB_INTERFACE
     next_request = await queue_manager.get_next_request()
+    assert next_request is not None
     assert next_request.priority == RequestPriority.WEB_INTERFACE
 
 @pytest.mark.asyncio
@@ -55,8 +71,14 @@ async def test_request_aging(queue_manager):
     )
     await queue_manager.add_request(request)
     
+    # Wait for message to be queued
+    assert await wait_for_queue_size(queue_manager, 1)
+    
     # Wait for aging to occur
     await asyncio.sleep(queue_manager.aging_threshold_seconds + 1)
+    
+    # Wait for promotion
+    await asyncio.sleep(1)
     
     # Check that request was promoted
     sizes = await queue_manager.get_queue_size()
@@ -77,6 +99,9 @@ async def test_request_processing(queue_manager):
     )
     
     await queue_manager.add_request(request)
+    
+    # Wait for message to be queued
+    assert await wait_for_queue_size(queue_manager, 1)
     
     # Process the request
     response = await queue_manager.process_request(request)
@@ -105,6 +130,9 @@ async def test_queue_clear(queue_manager):
         body={"message": "direct"}
     ))
     
+    # Wait for messages to be queued
+    assert await wait_for_queue_size(queue_manager, 2)
+    
     # Check queue sizes
     sizes = await queue_manager.get_queue_size()
     assert sum(sizes.values()) == 2
@@ -112,9 +140,8 @@ async def test_queue_clear(queue_manager):
     # Clear queue
     await queue_manager.clear_queue()
     
-    # Check queue sizes again
-    sizes = await queue_manager.get_queue_size()
-    assert sum(sizes.values()) == 0
+    # Wait for queues to be empty
+    assert await wait_for_queue_size(queue_manager, 0)
 
 def test_api_gateway_auth_required(client):
     """Test that API gateway endpoints require authentication"""
@@ -141,6 +168,9 @@ async def test_api_gateway_with_api_key(client, test_api_key, queue_manager):
     
     assert response.status_code == status.HTTP_200_OK
     
+    # Wait for message to be queued
+    assert await wait_for_queue_size(queue_manager, 1)
+    
     # Check that request was queued with correct priority
     sizes = await queue_manager.get_queue_size()
     assert sizes[test_api_key.priority] >= 1
@@ -158,6 +188,9 @@ async def test_api_gateway_with_jwt(client, auth_headers, queue_manager):
     )
     
     assert response.status_code == status.HTTP_200_OK
+    
+    # Wait for message to be queued
+    assert await wait_for_queue_size(queue_manager, 1)
     
     # Check that request was queued with web interface priority
     sizes = await queue_manager.get_queue_size()
@@ -185,6 +218,9 @@ async def test_queue_status(client, auth_headers, queue_manager):
         body={"message": "test"}
     ))
     
+    # Wait for message to be queued
+    assert await wait_for_queue_size(queue_manager, 1)
+    
     response = client.get("/api/queue/status", headers=auth_headers)
     
     assert response.status_code == status.HTTP_200_OK
@@ -204,6 +240,9 @@ async def test_clear_queue_admin_only(client, auth_headers, admin_headers, queue
         body={"message": "test"}
     ))
     
+    # Wait for message to be queued
+    assert await wait_for_queue_size(queue_manager, 1)
+    
     # Regular user cannot clear queue
     response = client.post("/api/queue/clear", headers=auth_headers)
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -212,6 +251,5 @@ async def test_clear_queue_admin_only(client, auth_headers, admin_headers, queue
     response = client.post("/api/queue/clear", headers=admin_headers)
     assert response.status_code == status.HTTP_200_OK
     
-    # Queue should be empty
-    sizes = await queue_manager.get_queue_size()
-    assert sum(sizes.values()) == 0
+    # Wait for queue to be empty
+    assert await wait_for_queue_size(queue_manager, 0)

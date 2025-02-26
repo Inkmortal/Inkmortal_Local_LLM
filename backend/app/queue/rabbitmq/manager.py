@@ -2,7 +2,6 @@ import logging
 import json
 from typing import Dict, Any, Optional, AsyncGenerator, List
 import asyncio
-import httpx
 import os
 from dotenv import load_dotenv
 
@@ -12,6 +11,7 @@ from .connection import RabbitMQConnection
 from .exchanges import ExchangeManager
 from .queues import QueueManager as QueueHandler
 from .aging import AgingManager
+from .processor import RequestProcessor
 
 # Load environment variables
 load_dotenv()
@@ -44,22 +44,31 @@ class RabbitMQManager(BaseQueueManager):
         self.exchange_manager = None
         self.queue_handler = None
         self.aging_manager = None
+        self.processor = None
         
         # Request tracking
-        self.current_request = None
         self.request_history: List[Dict[str, Any]] = []
         self.max_history_size = 100
         
-        # Statistics
-        self.stats = QueueStats()
+        # Aging configuration
+        self._aging_threshold_seconds = 30
         
         self._initialized = True
         logger.info("RabbitMQ Manager initialized")
+    
+    @property
+    def aging_threshold_seconds(self) -> int:
+        """Get aging threshold in seconds"""
+        return self._aging_threshold_seconds
     
     async def connect(self) -> None:
         """Connect and set up RabbitMQ infrastructure"""
         await self.connection.connect()
         channel = await self.connection.get_channel()
+        
+        # Enable publisher confirms
+        await channel.set_qos(prefetch_count=1)
+        await channel.confirm_delivery()
         
         # Initialize managers
         self.exchange_manager = ExchangeManager(channel)
@@ -69,6 +78,7 @@ class RabbitMQManager(BaseQueueManager):
             self.exchange_manager,
             self.queue_handler
         )
+        self.processor = RequestProcessor(self.ollama_url)
         
         # Set up exchanges
         main_exchange = await self.exchange_manager.declare_exchange(
@@ -76,7 +86,7 @@ class RabbitMQManager(BaseQueueManager):
         )
         
         # Set up queues
-        await self.queue_handler.setup_priority_queues()
+        await self.queue_handler.setup_priority_queues(self._aging_threshold_seconds)
         
         # Set up aging system
         await self.aging_manager.setup_aging()
@@ -103,19 +113,23 @@ class RabbitMQManager(BaseQueueManager):
         await self.ensure_connected()
         
         # Update statistics
-        self.stats.total_requests += 1
+        self.processor.stats.total_requests += 1
         
         # Publish request
         exchange = await self.exchange_manager.get_exchange("llm_requests_exchange")
         if not exchange:
             raise RuntimeError("Main exchange not found")
         
-        await self.queue_handler.publish_message(
+        # Wait for confirmation
+        confirmation = await self.queue_handler.publish_message(
             exchange,
             f"priority_{request.priority}",
             json.dumps(request.to_dict()).encode(),
             {"x-original-priority": request.original_priority}
         )
+        
+        if not confirmation:
+            raise RuntimeError("Failed to publish message")
         
         # Get queue position
         sizes = await self.get_queue_size()
@@ -145,49 +159,11 @@ class RabbitMQManager(BaseQueueManager):
     async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
         """Process a request synchronously"""
         while True:
-            if self.current_request is None:
+            if not self.processor.current_request:
                 next_request = await self.get_next_request()
                 if next_request and next_request.timestamp == request.timestamp:
-                    self.current_request = next_request
-                    self.current_request.status = "processing"
-                    break
+                    return await self.processor.process_request(next_request)
             await asyncio.sleep(0.1)
-        
-        try:
-            # Forward to Ollama
-            endpoint = request.endpoint.replace("/api", "")
-            url = f"{self.ollama_url}{endpoint}"
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    url,
-                    json=request.body,
-                    timeout=60.0
-                )
-                
-                # Update request status
-                self.current_request.status = "completed"
-                
-                # Update statistics
-                self._update_stats(self.current_request)
-                
-                # Add to history
-                self._add_to_history(self.current_request)
-                
-                # Clear current request
-                self.current_request = None
-                
-                return response.json()
-        
-        except Exception as e:
-            if self.current_request:
-                self.current_request.status = "failed"
-                self.current_request.error = str(e)
-                self.stats.failed_requests += 1
-                self._add_to_history(self.current_request)
-                self.current_request = None
-            
-            raise
     
     async def process_streaming_request(
         self,
@@ -195,49 +171,13 @@ class RabbitMQManager(BaseQueueManager):
     ) -> AsyncGenerator[str, None]:
         """Process a streaming request"""
         while True:
-            if self.current_request is None:
+            if not self.processor.current_request:
                 next_request = await self.get_next_request()
                 if next_request and next_request.timestamp == request.timestamp:
-                    self.current_request = next_request
-                    self.current_request.status = "processing"
-                    break
-            await asyncio.sleep(0.1)
-        
-        try:
-            endpoint = request.endpoint.replace("/api", "")
-            url = f"{self.ollama_url}{endpoint}"
-            
-            async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    "POST",
-                    url,
-                    json=request.body,
-                    timeout=300.0
-                ) as response:
-                    async for chunk in response.aiter_text():
+                    async for chunk in self.processor.process_streaming_request(next_request):
                         yield chunk
-                
-                # Update request status
-                self.current_request.status = "completed"
-                
-                # Update statistics
-                self._update_stats(self.current_request)
-                
-                # Add to history
-                self._add_to_history(self.current_request)
-                
-                # Clear current request
-                self.current_request = None
-        
-        except Exception as e:
-            if self.current_request:
-                self.current_request.status = "failed"
-                self.current_request.error = str(e)
-                self.stats.failed_requests += 1
-                self._add_to_history(self.current_request)
-                self.current_request = None
-            
-            yield json.dumps({"error": str(e)})
+                    return
+            await asyncio.sleep(0.1)
     
     async def clear_queue(self) -> None:
         """Clear all queues"""
@@ -260,8 +200,8 @@ class RabbitMQManager(BaseQueueManager):
         return {
             "queue_size": sum(sizes.values()),
             "queue_by_priority": sizes,
-            "current_request": self.current_request.to_dict() if self.current_request else None,
-            "stats": self.stats.to_dict(),
+            "current_request": self.processor.current_request.to_dict() if self.processor.current_request else None,
+            "stats": self.processor.stats.to_dict(),
             "rabbitmq_connected": self.connection.is_connected
         }
     
@@ -285,21 +225,11 @@ class RabbitMQManager(BaseQueueManager):
     
     async def get_stats(self) -> QueueStats:
         """Get queue statistics"""
-        return self.stats
+        return self.processor.stats
     
     async def reset_stats(self) -> None:
         """Reset queue statistics"""
-        self.stats = QueueStats()
-    
-    def _update_stats(self, request: QueuedRequest) -> None:
-        """Update statistics from completed request"""
-        if not request.processing_start or not request.processing_end:
-            return
-        
-        wait_time = (request.processing_start - request.timestamp).total_seconds()
-        processing_time = (request.processing_end - request.processing_start).total_seconds()
-        
-        self.stats.update_timing(wait_time, processing_time)
+        self.processor.stats = QueueStats()
     
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""
