@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
+import crypto from 'crypto-js';
 
 type LoginMode = 'login' | 'setup';
+
+// The expected passphrase hash (SHA-256 of "i will defy the heavens")
+const EXPECTED_PASSPHRASE_HASH = "8c1ba38c3d7351b7a56a48a9bb14bf754d2099e069c07c27ddc0d35e8d35e501";
 
 const AdminLogin: React.FC = () => {
   const { currentTheme } = useTheme();
@@ -16,12 +20,49 @@ const AdminLogin: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [passphraseInput, setPassphraseInput] = useState('');
+  const [setupTokenFetched, setSetupTokenFetched] = useState('');
+  const [showTokenFetchForm, setShowTokenFetchForm] = useState(false);
+  const [keySequence, setKeySequence] = useState<string[]>([]);
+
+  // Track key presses for the special sequence
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Update the key sequence with the latest key
+    setKeySequence(prev => {
+      const updated = [...prev, e.key.toLowerCase()];
+      // Only keep the last 20 keys to prevent memory build-up
+      return updated.slice(-20);
+    });
+  }, []);
+
+  // Check for the special sequence in the key presses
+  useEffect(() => {
+    // Add the keyboard event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Check if the key sequence contains the trigger pattern
+    // The pattern is Ctrl+Alt+S
+    const lastKeys = keySequence.slice(-3);
+    if (
+      lastKeys.length === 3 &&
+      lastKeys[0] === 'control' &&
+      lastKeys[1] === 'alt' &&
+      lastKeys[2] === 's'
+    ) {
+      setShowTokenFetchForm(true);
+    }
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [keySequence, handleKeyDown]);
 
   // Check if admin setup is required
   useEffect(() => {
     const checkSetupStatus = async () => {
       try {
-        const response = await fetch('/api/auth/admin/setup-status');
+        const response = await fetch('/auth/admin/setup-status');
         const data = await response.json();
         
         if (!data.admin_exists) {
@@ -30,11 +71,47 @@ const AdminLogin: React.FC = () => {
         }
       } catch (error) {
         console.error('Failed to check admin setup status:', error);
+        setError('Unable to connect to the server. Please check your connection and try again.');
       }
     };
     
     checkSetupStatus();
   }, []);
+
+  const handlePassphraseVerification = () => {
+    // Hash the input passphrase using SHA-256
+    const inputHash = crypto.SHA256(passphraseInput).toString();
+    
+    // Compare with the expected hash
+    if (inputHash === EXPECTED_PASSPHRASE_HASH) {
+      fetchSetupToken();
+      setShowTokenInput(true);
+      setPassphraseInput('');
+    } else {
+      setError('Invalid passphrase');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const fetchSetupToken = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/auth/admin/fetch-setup-token');
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSetupTokenFetched(data.token || 'No token available. Admin account already exists.');
+      } else {
+        const data = await response.json();
+        setError(data.detail || 'Failed to fetch setup token');
+      }
+    } catch (error) {
+      console.error('Error fetching setup token:', error);
+      setError('Network error while fetching setup token');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +124,7 @@ const AdminLogin: React.FC = () => {
       formData.append('username', username);
       formData.append('password', password);
       
-      const response = await fetch('/api/auth/admin/login', {
+      const response = await fetch('/auth/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -65,11 +142,15 @@ const AdminLogin: React.FC = () => {
         // Redirect to admin dashboard
         window.navigateTo('/admin');
       } else {
-        const data = await response.json();
-        setError(data.detail || 'Login failed');
+        if (!response.bodyUsed) {
+          const data = await response.json();
+          setError(data.detail || 'Login failed');
+        } else {
+          setError('Login failed');
+        }
       }
     } catch (error) {
-      setError('An error occurred during login');
+      setError('Network error during login. Please check your connection.');
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);
@@ -82,7 +163,7 @@ const AdminLogin: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const response = await fetch('/api/auth/admin/setup', {
+      const response = await fetch('/auth/admin/setup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,15 +186,26 @@ const AdminLogin: React.FC = () => {
         // Redirect to admin dashboard
         window.navigateTo('/admin');
       } else {
-        const data = await response.json();
-        setError(data.detail || 'Admin setup failed');
+        if (!response.bodyUsed) {
+          const data = await response.json();
+          setError(data.detail || 'Admin setup failed');
+        } else {
+          setError('Admin setup failed');
+        }
       }
     } catch (error) {
-      setError('An error occurred during admin setup');
+      setError('Network error during admin setup. Please check your connection.');
       console.error('Admin setup error:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const closeTokenFetchForm = () => {
+    setShowTokenFetchForm(false);
+    setShowTokenInput(false);
+    setSetupTokenFetched('');
+    setPassphraseInput('');
   };
 
   return (
@@ -139,6 +231,76 @@ const AdminLogin: React.FC = () => {
           {mode === 'login' ? 'Admin Login' : 'Admin Setup'}
         </h2>
       </div>
+
+      {showTokenFetchForm && (
+        <Card className="w-full max-w-md mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-medium" style={{ color: currentTheme.colors.accentPrimary }}>
+              Admin Setup Token
+            </h3>
+            <button 
+              onClick={closeTokenFetchForm} 
+              className="text-sm p-1 rounded hover:bg-opacity-10 hover:bg-black"
+              style={{ color: currentTheme.colors.textMuted }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {!showTokenInput ? (
+            <div className="space-y-4">
+              <p className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
+                Enter the passphrase to retrieve the admin setup token.
+              </p>
+              <input
+                type="password"
+                value={passphraseInput}
+                onChange={(e) => setPassphraseInput(e.target.value)}
+                className="w-full p-2 rounded-md border"
+                style={{
+                  backgroundColor: currentTheme.colors.bgTertiary,
+                  color: currentTheme.colors.textPrimary,
+                  borderColor: currentTheme.colors.borderColor,
+                }}
+                placeholder="Enter passphrase"
+              />
+              <Button 
+                onClick={handlePassphraseVerification}
+                fullWidth
+              >
+                Verify Passphrase
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm mb-2" style={{ color: currentTheme.colors.textSecondary }}>
+                Admin setup token (only generated for first admin creation):
+              </p>
+              <div 
+                className="p-3 bg-opacity-10 rounded-md font-mono text-sm break-all"
+                style={{ 
+                  backgroundColor: currentTheme.colors.bgTertiary,
+                  color: currentTheme.colors.accentSecondary
+                }}
+              >
+                {isLoading ? "Fetching token..." : setupTokenFetched || "No token available"}
+              </div>
+              {setupTokenFetched && (
+                <Button 
+                  onClick={() => {
+                    setSetupToken(setupTokenFetched);
+                    setMode('setup');
+                    closeTokenFetchForm();
+                  }}
+                  fullWidth
+                >
+                  Use This Token
+                </Button>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card className="w-full max-w-md">
         {error && (
@@ -245,6 +407,9 @@ const AdminLogin: React.FC = () => {
                 }}
                 required
               />
+              <p className="text-xs mt-1" style={{ color: currentTheme.colors.textMuted }}>
+                Press Ctrl+Alt+S to fetch the setup token with passphrase
+              </p>
             </div>
 
             <div>

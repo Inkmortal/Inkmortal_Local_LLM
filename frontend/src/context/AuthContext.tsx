@@ -58,20 +58,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
       
-      // Verify token with backend (this is a mock implementation)
-      // In a real implementation, you would make an API call to verify the token
-      // const response = await fetch('/api/auth/verify', {
-      //   headers: { 'Authorization': `Bearer ${token}` }
-      // });
-      // const isValid = response.ok;
-      
-      // For now, just check if token exists
-      const isValid = !!token;
-      
-      setIsAuthenticated(isValid);
-      setUsername(isValid ? storedUsername : null);
-      setLoading(false);
-      return isValid;
+      // Verify token with backend
+      try {
+        const response = await fetch('/auth/users/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setIsAuthenticated(true);
+          setUsername(userData.username);
+          setLoading(false);
+          return true;
+        } else {
+          // Token is invalid or expired
+          setIsAuthenticated(false);
+          setUsername(null);
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminUsername');
+          setLoading(false);
+          return false;
+        }
+      } catch (error) {
+        // Network error or server not available
+        // For now, assume token is valid to allow offline development
+        console.warn('Could not verify token with server:', error);
+        setIsAuthenticated(!!token);
+        setUsername(storedUsername);
+        setLoading(false);
+        return !!token;
+      }
     } catch (error) {
       console.error('Auth check error:', error);
       setIsAuthenticated(false);

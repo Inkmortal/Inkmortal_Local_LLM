@@ -62,6 +62,39 @@ async def generate_setup_token(db: Session) -> str:
     
     return token
 
+# Check admin setup status
+@router.get("/admin/setup-status")
+async def check_admin_setup_status(db: Session = Depends(get_db)):
+    """Check if admin setup is required"""
+    admin_exists = await check_admin_exists(db)
+    return {"admin_exists": admin_exists}
+
+# Fetch setup token endpoint
+@router.get("/admin/fetch-setup-token")
+async def fetch_setup_token(db: Session = Depends(get_db)):
+    """Fetch the current admin setup token if no admin exists yet"""
+    
+    # Check if admin already exists
+    admin_exists = await check_admin_exists(db)
+    if admin_exists:
+        return {"token": None, "message": "Admin account already exists"}
+    
+    # Look for existing valid token
+    existing_token = db.query(SetupToken).filter(
+        SetupToken.is_valid == True,
+        SetupToken.expires_at > datetime.utcnow()
+    ).first()
+    
+    if existing_token:
+        return {"token": existing_token.token, "expires_at": existing_token.expires_at}
+    
+    # Generate a new token
+    token = await generate_setup_token(db)
+    if token:
+        return {"token": token, "message": "New setup token generated"}
+    
+    return {"token": None, "message": "Failed to generate setup token"}
+
 # Admin setup endpoint
 @router.post("/admin/setup", status_code=status.HTTP_201_CREATED)
 async def setup_admin(
@@ -167,13 +200,6 @@ async def login_admin(
         "username": user.username,
         "is_admin": user.is_admin
     }
-
-# Check admin setup status
-@router.get("/admin/setup-status")
-async def check_admin_setup_status(db: Session = Depends(get_db)):
-    """Check if admin setup is required"""
-    admin_exists = await check_admin_exists(db)
-    return {"admin_exists": admin_exists}
 
 # User registration
 @router.post("/register", status_code=status.HTTP_201_CREATED)
