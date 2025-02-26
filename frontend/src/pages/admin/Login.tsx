@@ -10,6 +10,9 @@ type LoginMode = 'login' | 'setup';
 // The expected passphrase hash (SHA-256 of "i will defy the heavens")
 const EXPECTED_PASSPHRASE_HASH = "8c1ba38c3d7351b7a56a48a9bb14bf754d2099e069c07c27ddc0d35e8d35e501";
 
+// Detect if we're on macOS
+const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
 const AdminLogin: React.FC = () => {
   const { currentTheme } = useTheme();
   const [username, setUsername] = useState('');
@@ -25,14 +28,30 @@ const AdminLogin: React.FC = () => {
   const [setupTokenFetched, setSetupTokenFetched] = useState('');
   const [showTokenFetchForm, setShowTokenFetchForm] = useState(false);
   const [keySequence, setKeySequence] = useState<string[]>([]);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   // Track key presses for the special sequence
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Update the key sequence with the latest key
     setKeySequence(prev => {
-      const updated = [...prev, e.key.toLowerCase()];
+      // Track modifiers and key separately
+      let keys = [...prev];
+      
+      // Get modifier keys
+      if (e.key.toLowerCase() !== 'control' && e.key.toLowerCase() !== 'alt' && 
+          e.key.toLowerCase() !== 'meta' && e.key.toLowerCase() !== 'shift') {
+        const modifiers = [];
+        if (e.ctrlKey) modifiers.push('control');
+        if (e.altKey) modifiers.push('alt');
+        if (e.metaKey) modifiers.push('meta');
+        
+        keys = [...keys, ...modifiers, e.key.toLowerCase()];
+      } else {
+        keys.push(e.key.toLowerCase());
+      }
+      
       // Only keep the last 20 keys to prevent memory build-up
-      return updated.slice(-20);
+      return keys.slice(-20);
     });
   }, []);
 
@@ -42,14 +61,23 @@ const AdminLogin: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     
     // Check if the key sequence contains the trigger pattern
-    // The pattern is Ctrl+Alt+S
     const lastKeys = keySequence.slice(-3);
-    if (
+    
+    // Check for Windows/Linux pattern (Ctrl+Alt+S)
+    const isWindowsPattern = 
       lastKeys.length === 3 &&
       lastKeys[0] === 'control' &&
       lastKeys[1] === 'alt' &&
-      lastKeys[2] === 's'
-    ) {
+      lastKeys[2] === 's';
+    
+    // Check for Mac pattern (Command+Option+S)
+    const isMacPattern = 
+      lastKeys.length === 3 &&
+      lastKeys[0] === 'meta' &&
+      lastKeys[1] === 'alt' &&
+      lastKeys[2] === 's';
+    
+    if (isWindowsPattern || isMacPattern) {
       setShowTokenFetchForm(true);
     }
     
@@ -58,24 +86,55 @@ const AdminLogin: React.FC = () => {
     };
   }, [keySequence, handleKeyDown]);
 
-  // Check if admin setup is required
+  // Check if server is available and if admin setup is required
   useEffect(() => {
-    const checkSetupStatus = async () => {
+    const checkServerStatus = async () => {
       try {
-        const response = await fetch('/auth/admin/setup-status');
-        const data = await response.json();
+        // First, check if server is reachable with a simple health check
+        const healthResponse = await fetch('/health', { 
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          // Set a short timeout to quickly detect if server is down
+          signal: AbortSignal.timeout(5000)
+        });
         
-        if (!data.admin_exists) {
-          setNeedsSetup(true);
-          setMode('setup');
+        if (healthResponse.ok) {
+          setServerStatus('online');
+          
+          // Now check admin setup status
+          try {
+            const setupResponse = await fetch('/auth/admin/setup-status');
+            
+            if (setupResponse.ok) {
+              const data = await setupResponse.json();
+              
+              if (!data.admin_exists) {
+                setNeedsSetup(true);
+                setMode('setup');
+              }
+            } else {
+              console.error('Admin setup status error:', await setupResponse.text());
+              setError('Error checking admin setup status. Please try again.');
+            }
+          } catch (setupError) {
+            console.error('Failed to check admin setup status:', setupError);
+            setError('Unable to check admin setup. The server may not be configured correctly.');
+          }
+        } else {
+          console.error('Health check failed:', await healthResponse.text());
+          setServerStatus('offline');
+          setError('Server is not responding properly. Please check if the backend is running.');
         }
       } catch (error) {
-        console.error('Failed to check admin setup status:', error);
+        console.error('Server connection error:', error);
+        setServerStatus('offline');
         setError('Unable to connect to the server. Please check your connection and try again.');
       }
     };
     
-    checkSetupStatus();
+    checkServerStatus();
   }, []);
 
   const handlePassphraseVerification = () => {
@@ -102,8 +161,14 @@ const AdminLogin: React.FC = () => {
         const data = await response.json();
         setSetupTokenFetched(data.token || 'No token available. Admin account already exists.');
       } else {
-        const data = await response.json();
-        setError(data.detail || 'Failed to fetch setup token');
+        const errorText = await response.text();
+        console.error('Failed to fetch token:', errorText);
+        try {
+          const errorJson = JSON.parse(errorText);
+          setError(errorJson.detail || 'Failed to fetch setup token');
+        } catch {
+          setError('Failed to fetch setup token. Server returned: ' + errorText);
+        }
       }
     } catch (error) {
       console.error('Error fetching setup token:', error);
@@ -132,26 +197,34 @@ const AdminLogin: React.FC = () => {
         body: formData,
       });
       
+      const responseText = await response.text();
+      console.log('Login response:', responseText);
+      
       if (response.ok) {
-        const data = await response.json();
-        
-        // Store the token in localStorage
-        localStorage.setItem('adminToken', data.access_token);
-        localStorage.setItem('adminUsername', data.username);
-        
-        // Redirect to admin dashboard
-        window.navigateTo('/admin');
+        try {
+          const data = JSON.parse(responseText);
+          
+          // Store the token in localStorage
+          localStorage.setItem('adminToken', data.access_token);
+          localStorage.setItem('adminUsername', data.username);
+          
+          // Redirect to admin dashboard
+          window.navigateTo('/admin');
+        } catch (parseError) {
+          console.error('Error parsing login response:', parseError);
+          setError('Received invalid response from server');
+        }
       } else {
-        if (!response.bodyUsed) {
-          const data = await response.json();
-          setError(data.detail || 'Login failed');
-        } else {
-          setError('Login failed');
+        try {
+          const errorData = JSON.parse(responseText);
+          setError(errorData.detail || 'Login failed');
+        } catch {
+          setError('Login failed: ' + responseText);
         }
       }
     } catch (error) {
-      setError('Network error during login. Please check your connection.');
       console.error('Login error:', error);
+      setError('Network error during login. Please check your connection.');
     } finally {
       setIsLoading(false);
     }
@@ -176,26 +249,34 @@ const AdminLogin: React.FC = () => {
         }),
       });
       
+      const responseText = await response.text();
+      console.log('Setup response:', responseText);
+      
       if (response.ok) {
-        const data = await response.json();
-        
-        // Store the token
-        localStorage.setItem('adminToken', data.access_token);
-        localStorage.setItem('adminUsername', data.username);
-        
-        // Redirect to admin dashboard
-        window.navigateTo('/admin');
+        try {
+          const data = JSON.parse(responseText);
+          
+          // Store the token
+          localStorage.setItem('adminToken', data.access_token);
+          localStorage.setItem('adminUsername', data.username);
+          
+          // Redirect to admin dashboard
+          window.navigateTo('/admin');
+        } catch (parseError) {
+          console.error('Error parsing setup response:', parseError);
+          setError('Received invalid response from server');
+        }
       } else {
-        if (!response.bodyUsed) {
-          const data = await response.json();
-          setError(data.detail || 'Admin setup failed');
-        } else {
-          setError('Admin setup failed');
+        try {
+          const errorData = JSON.parse(responseText);
+          setError(errorData.detail || 'Admin setup failed');
+        } catch {
+          setError('Admin setup failed: ' + responseText);
         }
       }
     } catch (error) {
-      setError('Network error during admin setup. Please check your connection.');
       console.error('Admin setup error:', error);
+      setError('Network error during admin setup. Please check your connection.');
     } finally {
       setIsLoading(false);
     }
@@ -231,6 +312,22 @@ const AdminLogin: React.FC = () => {
           {mode === 'login' ? 'Admin Login' : 'Admin Setup'}
         </h2>
       </div>
+
+      {serverStatus === 'offline' && (
+        <Card className="w-full max-w-md mb-4">
+          <div 
+            className="p-3 rounded-md text-center"
+            style={{
+              backgroundColor: `${currentTheme.colors.error}20`,
+              color: currentTheme.colors.error,
+            }}
+          >
+            <h3 className="font-bold mb-2">Server Connection Error</h3>
+            <p>The backend server appears to be offline or unreachable.</p>
+            <p className="mt-2 text-sm">Check that the backend is running and refresh this page.</p>
+          </div>
+        </Card>
+      )}
 
       {showTokenFetchForm && (
         <Card className="w-full max-w-md mb-4">
@@ -366,7 +463,7 @@ const AdminLogin: React.FC = () => {
             <Button
               type="submit"
               fullWidth
-              disabled={isLoading}
+              disabled={isLoading || serverStatus === 'offline'}
             >
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
@@ -408,7 +505,7 @@ const AdminLogin: React.FC = () => {
                 required
               />
               <p className="text-xs mt-1" style={{ color: currentTheme.colors.textMuted }}>
-                Press Ctrl+Alt+S to fetch the setup token with passphrase
+                Press {isMac ? "Cmd+Option+S" : "Ctrl+Alt+S"} to fetch the setup token with passphrase
               </p>
             </div>
 
@@ -484,7 +581,7 @@ const AdminLogin: React.FC = () => {
             <Button
               type="submit"
               fullWidth
-              disabled={isLoading}
+              disabled={isLoading || serverStatus === 'offline'}
             >
               {isLoading ? 'Setting up...' : 'Create Admin Account'}
             </Button>
