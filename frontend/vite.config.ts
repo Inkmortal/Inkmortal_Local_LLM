@@ -14,5 +14,8 @@ export default defineConfig({
         secure: false,
       }
     }
+  },
+  resolve: {
+    extensions: ['.js', '.jsx', '.ts', '.tsx']
   }
 })
