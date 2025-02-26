@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 from ..db import get_db
 from ..auth.utils import get_current_user, validate_api_key, get_current_admin_user
 from ..auth.models import User
-from ..queue import RabbitMQManager, QueuedRequest, RequestPriority  # Use the __init__.py exports
-from ..main import queue_manager  # Import the singleton instance from main.py
+from ..queue import QueuedRequest, RequestPriority  # Use the __init__.py exports
+# Get the queue manager using dependency injection rather than direct import
+from ..queue.rabbitmq.manager import get_queue_manager
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +24,10 @@ OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 # Create router
 router = APIRouter(prefix="/api", tags=["api"])
 
-# Queue manager is now imported from main.py
+# Create a FastAPI dependency for the queue manager
+async def get_queue():
+    """Get the queue manager instance"""
+    return get_queue_manager()
 
 # Helper function to determine request priority
 async def get_request_priority(
@@ -89,6 +93,7 @@ async def get_request_priority(
 async def chat_completions(
     request: Request,
     priority_data: Dict[str, Any] = Depends(get_request_priority),
+    queue_manager = Depends(get_queue),
     db: Session = Depends(get_db)
 ):
     """
@@ -152,6 +157,7 @@ async def chat_completions(
 async def completions(
     request: Request,
     priority_data: Dict[str, Any] = Depends(get_request_priority),
+    queue_manager = Depends(get_queue),
     db: Session = Depends(get_db)
 ):
     """
@@ -243,7 +249,8 @@ async def list_models(
 # Queue status endpoint (now uses RabbitMQManager)
 @router.get("/queue/status")
 async def queue_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    queue_manager = Depends(get_queue)
 ):
     """Get current queue status (authenticated users only)"""
     status = await queue_manager.get_status()
@@ -252,7 +259,8 @@ async def queue_status(
 # Admin-only queue management endpoints
 @router.post("/queue/clear")
 async def clear_queue(
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(get_current_admin_user),
+    queue_manager = Depends(get_queue)
 ):
     """Clear the queue (admin only)"""
     await queue_manager.clear_queue()
@@ -260,7 +268,7 @@ async def clear_queue(
 
 # Health check endpoint
 @router.get("/health")
-async def api_health():
+async def api_health(queue_manager = Depends(get_queue)):
     """Check API gateway health"""
     # Check Ollama connection
     try:

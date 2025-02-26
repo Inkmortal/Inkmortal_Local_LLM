@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 from ..base import QueueManager as BaseQueueManager
-from ..models import QueuedRequest, RequestPriority
+from ..models import QueuedRequest, RequestPriority, QueueStats
 from .connection import RabbitMQConnection
 from .exchanges import ExchangeManager
 from .queues import QueueManager as QueueHandler
@@ -19,17 +19,27 @@ load_dotenv()
 # Configure logging
 logger = logging.getLogger("rabbitmq_manager")
 
+# Global singleton instance
+_instance = None
+
+def get_queue_manager():
+    """Get the singleton queue manager instance"""
+    global _instance
+    if _instance is None:
+        _instance = RabbitMQManager()
+    return _instance
+
 class RabbitMQManager(BaseQueueManager):
     """RabbitMQ implementation of queue manager"""
     
-    _instance = None
     _initialized = False
     
     def __new__(cls):
         """Ensure only one instance exists"""
-        if cls._instance is None:
-            cls._instance = super(RabbitMQManager, cls).__new__(cls)
-        return cls._instance
+        global _instance
+        if _instance is None:
+            _instance = super(RabbitMQManager, cls).__new__(cls)
+        return _instance
     
     def __init__(self):
         """Initialize the manager"""
@@ -161,6 +171,15 @@ class RabbitMQManager(BaseQueueManager):
                 return QueuedRequest.from_dict(request_dict)
         
         return None
+    
+    async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
+        """Process a request synchronously"""
+        return await self.processor.process_request(request)
+    
+    async def process_streaming_request(self, request: QueuedRequest) -> AsyncGenerator[str, None]:
+        """Process a request with streaming"""
+        async for chunk in self.processor.process_streaming_request(request):
+            yield chunk
     
     async def clear_queue(self) -> None:
         """Clear all queues"""

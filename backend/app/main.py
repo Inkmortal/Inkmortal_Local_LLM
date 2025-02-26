@@ -12,7 +12,7 @@ from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
 from .db import engine, Base, get_db
-from .queue import RabbitMQManager  # Import from __init__.py
+from .queue.rabbitmq.manager import get_queue_manager
 
 # Configure logging
 logger = logging.getLogger("app.main")
@@ -47,8 +47,8 @@ load_dotenv()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost/")
 
-# Initialize RabbitMQManager (ensure it's a singleton)
-queue_manager = RabbitMQManager()
+# Get the queue manager instance
+queue_manager = get_queue_manager()
 
 @app.on_event("startup")
 async def startup_event():
