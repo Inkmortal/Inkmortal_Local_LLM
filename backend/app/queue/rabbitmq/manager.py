@@ -191,7 +191,16 @@ class RabbitMQManager(BaseQueueManager):
     async def get_queue_size(self) -> Dict[int, int]:
         """Get size of each priority queue"""
         await self.ensure_connected()
-        return await self.queue_handler.get_queue_size()
+        sizes = {}
+        for priority, queue_name in self.queue_handler.queue_names.items():
+            queue = await self.queue_handler.get_queue(queue_name)
+            if queue:
+                # Use declare with passive=True to get current size
+                declaration = await queue.declare(passive=True)
+                sizes[priority] = declaration.message_count
+            else:
+                sizes[priority] = 0
+        return sizes
     
     async def get_status(self) -> Dict[str, Any]:
         """Get current queue status"""
