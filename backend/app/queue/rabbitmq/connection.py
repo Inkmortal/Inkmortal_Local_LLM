@@ -1,7 +1,9 @@
 import logging
 import os
-from typing import Optional
+import asyncio
+from typing import Optional, Dict, Any
 import aio_pika
+from aio_pika import connect_robust
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -11,48 +13,79 @@ load_dotenv()
 logger = logging.getLogger("rabbitmq_connection")
 
 class RabbitMQConnection:
-    """Manages RabbitMQ connection and channel"""
+    """Handles RabbitMQ connection"""
     
-    def __init__(self, url: Optional[str] = None):
-        """Initialize connection manager"""
-        self.url = url or os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost/")
+    def __init__(self):
+        self.url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost/")
         self.connection: Optional[aio_pika.RobustConnection] = None
         self.channel: Optional[aio_pika.RobustChannel] = None
-    
-    async def connect(self) -> None:
-        """Establish connection to RabbitMQ"""
-        try:
-            if not self.connection or self.connection.is_closed:
-                self.connection = await aio_pika.connect_robust(self.url)
-                self.channel = await self.connection.channel()
-                logger.info("Connected to RabbitMQ")
-        except Exception as e:
-            logger.error(f"Error connecting to RabbitMQ: {str(e)}")
-            self.connection = None
-            self.channel = None
-            raise
-    
-    async def ensure_connected(self) -> None:
-        """Ensure connection is established"""
-        if not self.connection or self.connection.is_closed:
-            await self.connect()
-    
-    async def close(self) -> None:
-        """Close the connection"""
-        if self.connection and not self.connection.is_closed:
-            await self.connection.close()
-            self.connection = None
-            self.channel = None
-            logger.info("RabbitMQ connection closed")
+        self._is_connected = False
+        self.lock = asyncio.Lock()  # Add a lock for thread safety
     
     @property
     def is_connected(self) -> bool:
-        """Check if connection is established and open"""
-        return bool(self.connection and not self.connection.is_closed)
+        """Check if connected"""
+        if not self.connection or not self.channel:
+            return False
+        return self._is_connected and not self.connection.is_closed
+    
+    async def connect(self) -> None:
+        """Connect to RabbitMQ"""
+        async with self.lock:  # Use lock to prevent concurrent connections
+            if self.is_connected:
+                logger.info("Already connected to RabbitMQ")
+                return
+            
+            # Close any existing connection
+            if self.connection and not self.connection.is_closed:
+                try:
+                    await self.connection.close()
+                except Exception as e:
+                    logger.warning(f"Error closing existing connection: {str(e)}")
+            
+            try:
+                logger.info(f"Connecting to RabbitMQ at {self.url}")
+                self.connection = await connect_robust(self.url)
+                self.channel = await self.connection.channel()
+                self._is_connected = True
+                logger.info("Connected to RabbitMQ")
+            except Exception as e:
+                self._is_connected = False
+                logger.error(f"Failed to connect to RabbitMQ: {str(e)}")
+                raise
     
     async def get_channel(self) -> aio_pika.RobustChannel:
-        """Get the current channel, ensuring connection is established"""
-        await self.ensure_connected()
-        if not self.channel:
-            raise RuntimeError("Channel not available")
+        """Get channel, reconnecting if needed"""
+        if not self.is_connected or self.channel.is_closed:
+            await self.connect()
         return self.channel
+    
+    async def ensure_connected(self) -> None:
+        """Ensure connection is established"""
+        if not self.is_connected:
+            await self.connect()
+        elif self.channel.is_closed:
+            # Reopen channel if closed
+            try:
+                self.channel = await self.connection.channel()
+            except Exception as e:
+                logger.error(f"Failed to reopen channel: {str(e)}")
+                await self.connect()  # Full reconnect if channel opening fails
+    
+    async def close(self) -> None:
+        """Close the connection"""
+        async with self.lock:
+            if self.connection:
+                try:
+                    logger.info("Closing RabbitMQ connection")
+                    await self.connection.close()
+                    self._is_connected = False
+                    self.connection = None
+                    self.channel = None
+                    logger.info("RabbitMQ connection closed")
+                except Exception as e:
+                    logger.error(f"Error closing RabbitMQ connection: {str(e)}")
+                    # Reset connection anyway
+                    self._is_connected = False
+                    self.connection = None
+                    self.channel = None

@@ -82,9 +82,10 @@ class QueueManager:
         if name not in self.queues:
             try:
                 # Try to get existing queue
-                queue = await self.channel.get_queue(name, passive=True)
+                queue = await self.channel.declare_queue(name, durable=True)
                 self.queues[name] = queue
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error getting queue {name}: {str(e)}")
                 return None
                 
         return self.queues.get(name)
@@ -95,9 +96,9 @@ class QueueManager:
         for priority, queue_name in self.queue_names.items():
             queue = await self.get_queue(queue_name)
             if queue:
-                # Use declare with passive=True to get current size
-                declaration = await queue.declare(passive=True)
-                result[priority] = declaration.message_count
+                # Get the queue information with message count
+                queue_info = await self.channel.declare_queue(queue_name, durable=True)
+                result[priority] = queue_info.message_count
             else:
                 result[priority] = 0
         return result
@@ -139,17 +140,27 @@ class QueueManager:
         headers: Optional[Dict] = None
     ) -> None:
         """Publish a message to an exchange"""
+        # Check if channel is closed
+        if self.channel.is_closed:
+            logger.warning("Channel closed, attempting to reopen")
+            # Try to reacquire
+            self.channel = await self.channel.connection.channel()
+            
         message = Message(
             body=message_body,
             delivery_mode=DeliveryMode.PERSISTENT,
             headers=headers or {}
         )
         
-        await exchange.publish(
-            message,
-            routing_key=routing_key
-        )
-        logger.info(f"Published message to exchange {exchange.name} with routing key {routing_key}")
+        try:
+            await exchange.publish(
+                message,
+                routing_key=routing_key
+            )
+            logger.info(f"Published message to exchange {exchange.name} with routing key {routing_key}")
+        except Exception as e:
+            logger.error(f"Error publishing message: {str(e)}")
+            raise
     
     async def get_next_message(
         self,

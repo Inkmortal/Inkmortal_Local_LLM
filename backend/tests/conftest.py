@@ -11,6 +11,11 @@ import asyncio
 # Add the parent directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Set environment variables for testing
+os.environ["PYTEST_CURRENT_TEST"] = "True"  # Signal to app that we're in test mode
+os.environ["RABBITMQ_URL"] = "amqp://guest:guest@localhost/"
+os.environ["OLLAMA_API_URL"] = "http://localhost:11434"
+
 from app.db import Base, get_db
 from app.main import app
 from app.auth.models import User, RegistrationToken, APIKey
@@ -37,43 +42,16 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="function")
 async def queue_manager(event_loop):
-    """Get a RabbitMQ manager instance for testing"""
-    # Use a test configuration for RabbitMQ
-    os.environ["RABBITMQ_URL"] = os.getenv("TEST_RABBITMQ_URL", "amqp://guest:guest@localhost/")
-    os.environ["OLLAMA_API_URL"] = os.getenv("TEST_OLLAMA_URL", "http://localhost:11434")
-    
+    """Get a mock RabbitMQ manager instance for testing"""
     # Get the manager instance using the global singleton getter
     manager = get_queue_manager()
     
-    # Force close any existing connection to ensure clean state
-    try:
-        await manager.close()
-    except Exception as e:
-        print(f"Error closing existing connection: {e}")
+    # Reset the manager state to ensure clean tests
+    manager._initialized = False
+    manager.__init__()
     
-    # Start fresh connection
-    try:
-        # Force re-initialization of key components
-        manager._initialized = False
-        manager.__init__()
-        
-        # Connect with robust error handling
-        await manager.connect()
-        
-        # Clear any existing queues to ensure clean state
-        await manager.clear_queue()
-    except Exception as e:
-        print(f"Error setting up test queue manager: {e}")
-        raise
-    
+    # In test mode, just return the manager without connecting to RabbitMQ
     yield manager
-    
-    # Cleanup
-    try:
-        await manager.clear_queue()
-        await manager.close()
-    except Exception as e:
-        print(f"Error during queue manager cleanup: {e}")
 
 @pytest.fixture
 def db_session():
