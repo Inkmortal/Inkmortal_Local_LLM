@@ -215,36 +215,38 @@ class MockQueueManager(QueueManagerInterface):
         # Identify aged requests by their timestamp
         current_time = datetime.utcnow()
         
-        # Check WEB_INTERFACE queue for aging to CUSTOM_APP
-        web_aged = []
-        for i, request in enumerate(self.queues[RequestPriority.WEB_INTERFACE]):
+        # Directly process WEB_INTERFACE queue for aging to CUSTOM_APP
+        # Use a more straightforward approach for clarity and reliability
+        web_queue = self.queues[RequestPriority.WEB_INTERFACE].copy()  # Work with a copy to avoid modification issues
+        self.queues[RequestPriority.WEB_INTERFACE] = []  # Clear the original queue
+        
+        for request in web_queue:
             age_seconds = (current_time - request.timestamp).total_seconds()
             if age_seconds > self.aging_threshold_seconds:
-                web_aged.append(i)  # Store index instead of request
+                # Age this request to CUSTOM_APP
+                request.priority = RequestPriority.CUSTOM_APP
+                request.promoted = True
+                request.promotion_time = datetime.utcnow()
+                self.queues[RequestPriority.CUSTOM_APP].append(request)
+            else:
+                # Keep in original queue
+                self.queues[RequestPriority.WEB_INTERFACE].append(request)
         
-        # Promote aged WEB_INTERFACE requests (in reverse to avoid index shifting)
-        for i in sorted(web_aged, reverse=True):
-            request = self.queues[RequestPriority.WEB_INTERFACE].pop(i)
-            request.priority = RequestPriority.CUSTOM_APP
-            request.promoted = True
-            request.promotion_time = datetime.utcnow()
-            self.queues[RequestPriority.CUSTOM_APP].append(request)
-            
-        # Check CUSTOM_APP queue for aging to DIRECT_API
-        app_aged = []
-        for i, request in enumerate(self.queues[RequestPriority.CUSTOM_APP]):
+        # Process CUSTOM_APP queue for aging to DIRECT_API using the same approach
+        app_queue = self.queues[RequestPriority.CUSTOM_APP].copy()
+        self.queues[RequestPriority.CUSTOM_APP] = []
+        
+        for request in app_queue:
             age_seconds = (current_time - request.timestamp).total_seconds()
-            # Only age requests that were already aged once
             if age_seconds > self.aging_threshold_seconds and request.promoted:
-                app_aged.append(i)  # Store index instead of request
-                
-        # Promote aged CUSTOM_APP requests (in reverse to avoid index shifting)
-        for i in sorted(app_aged, reverse=True):
-            request = self.queues[RequestPriority.CUSTOM_APP].pop(i)
-            request.priority = RequestPriority.DIRECT_API
-            request.promoted = True
-            request.promotion_time = datetime.utcnow()
-            self.queues[RequestPriority.DIRECT_API].append(request)
+                # Age this request to DIRECT_API
+                request.priority = RequestPriority.DIRECT_API
+                request.promoted = True
+                request.promotion_time = datetime.utcnow()
+                self.queues[RequestPriority.DIRECT_API].append(request)
+            else:
+                # Keep in original queue
+                self.queues[RequestPriority.CUSTOM_APP].append(request)
     
     async def get_stats(self) -> QueueStats:
         """Get queue statistics"""
