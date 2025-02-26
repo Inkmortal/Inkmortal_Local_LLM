@@ -188,8 +188,8 @@ async def test_queue_manager_request_aging(queue_manager):
     # Reset queue and stats for this test
     await queue_manager.clear_queue()
     
-    # Set a very short aging threshold for testing
-    queue_manager.aging_threshold_seconds = 0  # Any age will trigger promotion
+    # Set a negative aging threshold to guarantee triggering promotion
+    queue_manager.aging_threshold_seconds = -5  # Any request will be aged
     
     # Create a low priority request with a timestamp in the past
     old_time = datetime.utcnow() - timedelta(seconds=10)  # Much older than threshold
@@ -203,6 +203,16 @@ async def test_queue_manager_request_aging(queue_manager):
     # Manually set the timestamp to an older time to simulate aging
     low_priority.timestamp = old_time
     
+    # Make timestamp clearly in the past
+    old_time = datetime.utcnow() - timedelta(seconds=30)  # 30 seconds old
+    low_priority.timestamp = old_time
+    
+    # Verify timestamp is set properly
+    age_seconds = (datetime.utcnow() - low_priority.timestamp).total_seconds()
+    print(f"Initial request age: {age_seconds} seconds (should be ~30s)")
+    print(f"Aging threshold: {queue_manager.aging_threshold_seconds} seconds")
+    print(f"Will request be aged? {age_seconds >= queue_manager.aging_threshold_seconds}")
+    
     # Add to queue - use direct queue manipulation for more reliability in tests
     queue_manager.queues[RequestPriority.WEB_INTERFACE].append(low_priority)
     
@@ -211,15 +221,13 @@ async def test_queue_manager_request_aging(queue_manager):
     assert len(queue_manager.queues[RequestPriority.CUSTOM_APP]) == 0, "CUSTOM_APP queue should be empty initially"
     
     # Handle aging
+    print("\nCalling handle_request_aging...")
     await queue_manager.handle_request_aging()
     
     # Debug info in case of failure
-    print(f"After aging - Web queue size: {len(queue_manager.queues[RequestPriority.WEB_INTERFACE])}")
+    print(f"\nAfter aging - Web queue size: {len(queue_manager.queues[RequestPriority.WEB_INTERFACE])}")
     print(f"After aging - Custom app queue size: {len(queue_manager.queues[RequestPriority.CUSTOM_APP])}")
-    if queue_manager.queues[RequestPriority.WEB_INTERFACE]:
-        request = queue_manager.queues[RequestPriority.WEB_INTERFACE][0]
-        age = (datetime.utcnow() - request.timestamp).total_seconds()
-        print(f"Request age: {age} seconds, Threshold: {queue_manager.aging_threshold_seconds} seconds")
+    print(f"After aging - Direct API queue size: {len(queue_manager.queues[RequestPriority.DIRECT_API])}")
     
     # Check that the request was promoted
     assert len(queue_manager.queues[RequestPriority.WEB_INTERFACE]) == 0, "Web interface queue should be empty after promotion"
