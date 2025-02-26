@@ -4,13 +4,15 @@ from app.auth.models import User, RegistrationToken, APIKey
 
 def test_register_user(client, test_registration_token, db_session):
     """Test user registration with a valid token"""
+    token_value = test_registration_token.token  # Get token value before request
+    
     response = client.post(
         "/auth/register",
         json={
             "username": "newuser",
             "email": "new@example.com",
             "password": "newpassword",
-            "token": test_registration_token.token
+            "token": token_value
         }
     )
     assert response.status_code == status.HTTP_201_CREATED
@@ -24,7 +26,7 @@ def test_register_user(client, test_registration_token, db_session):
     
     # Check token is marked as used
     token = db_session.query(RegistrationToken).filter(
-        RegistrationToken.token == test_registration_token.token
+        RegistrationToken.token == token_value
     ).first()
     assert token.used
     assert token.used_by == user.id

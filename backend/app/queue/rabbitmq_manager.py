@@ -297,7 +297,10 @@ class RabbitMQManager:
         await self.ensure_connected()
         
         for priority, queue_name in self.queue_names.items():
-            await self.channel.queue_purge(queue_name)
+            # Get queue object
+            queue = await self.channel.declare_queue(queue_name)
+            # Purge the queue
+            await queue.purge()
         
         logger.info("All queues cleared")
     
@@ -308,19 +311,16 @@ class RabbitMQManager:
         # Try to get a message from each queue in priority order
         for priority in sorted(self.queue_names.keys()):
             queue_name = self.queue_names[priority]
+            queue = await self.channel.declare_queue(queue_name)
             
             # Try to get a message with no_ack=False so we can acknowledge it later
-            method_frame, header_frame, body = await self.channel.basic_get(
-                queue=queue_name,
-                no_ack=False
-            )
-            
-            if method_frame:
+            message = await queue.get(no_ack=True)
+            if message:
                 # We got a message
-                request = json.loads(body.decode())
+                request = json.loads(message.body.decode())
                 
                 # Store delivery tag for acknowledgment later
-                request["_delivery_tag"] = method_frame.delivery_tag
+                request["_delivery_tag"] = message.delivery_tag
                 request["_queue_name"] = queue_name
                 
                 return request
@@ -383,9 +383,6 @@ class RabbitMQManager:
                 # Add to history
                 self._add_to_history(self.current_request)
                 
-                # Acknowledge the message
-                await self.channel.basic_ack(self.current_request["_delivery_tag"])
-                
                 # Clear current request
                 self.current_request = None
                 
@@ -404,9 +401,6 @@ class RabbitMQManager:
                 
                 # Add to history
                 self._add_to_history(self.current_request)
-                
-                # Acknowledge the message (we don't want to retry failed requests automatically)
-                await self.channel.basic_ack(self.current_request["_delivery_tag"])
                 
                 # Clear current request
                 self.current_request = None
@@ -473,9 +467,6 @@ class RabbitMQManager:
                 # Add to history
                 self._add_to_history(self.current_request)
                 
-                # Acknowledge the message
-                await self.channel.basic_ack(self.current_request["_delivery_tag"])
-                
                 # Clear current request
                 self.current_request = None
         
@@ -491,9 +482,6 @@ class RabbitMQManager:
                 
                 # Add to history
                 self._add_to_history(self.current_request)
-                
-                # Acknowledge the message
-                await self.channel.basic_ack(self.current_request["_delivery_tag"])
                 
                 # Clear current request
                 self.current_request = None
