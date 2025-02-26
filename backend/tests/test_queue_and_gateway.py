@@ -1,33 +1,30 @@
 import pytest
+import asyncio
 import time
 from fastapi import status
-from app.queue.rabbitmq_manager import RequestPriority
-import json
+from app.queue import RequestPriority, QueuedRequest
 
 @pytest.mark.asyncio
 async def test_queue_priority_ordering(queue_manager):
     """Test that requests are processed in priority order"""
     # Add requests with different priorities
-    await queue_manager.add_request({
-        "priority": RequestPriority.WEB_INTERFACE,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "web"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.WEB_INTERFACE,
+        endpoint="/test",
+        body={"message": "web"}
+    ))
     
-    await queue_manager.add_request({
-        "priority": RequestPriority.DIRECT_API,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "direct"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.DIRECT_API,
+        endpoint="/test",
+        body={"message": "direct"}
+    ))
     
-    await queue_manager.add_request({
-        "priority": RequestPriority.CUSTOM_APP,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "custom"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.CUSTOM_APP,
+        endpoint="/test",
+        body={"message": "custom"}
+    ))
     
     # Check queue sizes
     sizes = await queue_manager.get_queue_size()
@@ -37,28 +34,26 @@ async def test_queue_priority_ordering(queue_manager):
     
     # Get next request - should be DIRECT_API
     next_request = await queue_manager.get_next_request()
-    assert next_request["priority"] == RequestPriority.DIRECT_API
+    assert next_request.priority == RequestPriority.DIRECT_API
     
     # Get next request - should be CUSTOM_APP
     next_request = await queue_manager.get_next_request()
-    assert next_request["priority"] == RequestPriority.CUSTOM_APP
+    assert next_request.priority == RequestPriority.CUSTOM_APP
     
     # Get next request - should be WEB_INTERFACE
     next_request = await queue_manager.get_next_request()
-    assert next_request["priority"] == RequestPriority.WEB_INTERFACE
+    assert next_request.priority == RequestPriority.WEB_INTERFACE
 
 @pytest.mark.asyncio
 async def test_request_aging(queue_manager):
     """Test that old requests get promoted"""
     # Add a web interface request
-    current_time = time.time()
-    old_request = {
-        "priority": RequestPriority.WEB_INTERFACE,
-        "timestamp": current_time - 60,  # 60 seconds old
-        "endpoint": "/test",
-        "body": {"message": "old"}
-    }
-    await queue_manager.add_request(old_request)
+    request = QueuedRequest(
+        priority=RequestPriority.WEB_INTERFACE,
+        endpoint="/test",
+        body={"message": "old"}
+    )
+    await queue_manager.add_request(request)
     
     # Wait for aging to occur
     await asyncio.sleep(queue_manager.aging_threshold_seconds + 1)
@@ -72,15 +67,14 @@ async def test_request_aging(queue_manager):
 async def test_request_processing(queue_manager):
     """Test processing a request"""
     # Add a request
-    request = {
-        "priority": RequestPriority.DIRECT_API,
-        "timestamp": time.time(),
-        "endpoint": "/api/chat/completions",
-        "body": {
+    request = QueuedRequest(
+        priority=RequestPriority.DIRECT_API,
+        endpoint="/api/chat/completions",
+        body={
             "model": "llama3:70b",
             "messages": [{"role": "user", "content": "Hello"}]
         }
-    }
+    )
     
     await queue_manager.add_request(request)
     
@@ -91,26 +85,25 @@ async def test_request_processing(queue_manager):
     assert isinstance(response, dict)
     
     # Check stats
-    assert queue_manager.stats["total_requests"] == 1
-    assert queue_manager.stats["completed_requests"] == 1
+    stats = await queue_manager.get_stats()
+    assert stats.total_requests == 1
+    assert stats.completed_requests == 1
 
 @pytest.mark.asyncio
 async def test_queue_clear(queue_manager):
     """Test clearing the queue"""
     # Add some requests
-    await queue_manager.add_request({
-        "priority": RequestPriority.WEB_INTERFACE,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "web"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.WEB_INTERFACE,
+        endpoint="/test",
+        body={"message": "web"}
+    ))
     
-    await queue_manager.add_request({
-        "priority": RequestPriority.DIRECT_API,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "direct"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.DIRECT_API,
+        endpoint="/test",
+        body={"message": "direct"}
+    ))
     
     # Check queue sizes
     sizes = await queue_manager.get_queue_size()
@@ -186,12 +179,11 @@ async def test_api_gateway_models_endpoint(client, auth_headers):
 async def test_queue_status(client, auth_headers, queue_manager):
     """Test getting queue status"""
     # Add a request to check in status
-    await queue_manager.add_request({
-        "priority": RequestPriority.WEB_INTERFACE,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "test"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.WEB_INTERFACE,
+        endpoint="/test",
+        body={"message": "test"}
+    ))
     
     response = client.get("/api/queue/status", headers=auth_headers)
     
@@ -206,12 +198,11 @@ async def test_queue_status(client, auth_headers, queue_manager):
 async def test_clear_queue_admin_only(client, auth_headers, admin_headers, queue_manager):
     """Test that only admins can clear the queue"""
     # Add a request
-    await queue_manager.add_request({
-        "priority": RequestPriority.WEB_INTERFACE,
-        "timestamp": time.time(),
-        "endpoint": "/test",
-        "body": {"message": "test"}
-    })
+    await queue_manager.add_request(QueuedRequest(
+        priority=RequestPriority.WEB_INTERFACE,
+        endpoint="/test",
+        body={"message": "test"}
+    ))
     
     # Regular user cannot clear queue
     response = client.post("/api/queue/clear", headers=auth_headers)

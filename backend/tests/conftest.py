@@ -15,7 +15,7 @@ from app.db import Base, get_db
 from app.main import app
 from app.auth.models import User, RegistrationToken, APIKey
 from app.auth.utils import get_password_hash
-from app.queue.rabbitmq_manager import RabbitMQManager
+from app.queue import RabbitMQManager
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -30,15 +30,16 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an instance of the default event loop for each test case."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     yield loop
     loop.close()
 
 @pytest_asyncio.fixture(scope="session")
-async def queue_manager():
+async def queue_manager(event_loop):
     """Get a RabbitMQ manager instance"""
     manager = RabbitMQManager()
-    await manager.ensure_connected()
+    await manager.connect()
     
     # Clear any existing queues
     await manager.clear_queue()
