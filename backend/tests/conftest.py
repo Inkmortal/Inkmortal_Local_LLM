@@ -1,3 +1,6 @@
+"""
+Test configuration and fixtures.
+"""
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
@@ -12,15 +15,14 @@ import asyncio
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Set environment variables for testing
-os.environ["PYTEST_CURRENT_TEST"] = "True"  # Signal to app that we're in test mode
-os.environ["RABBITMQ_URL"] = "amqp://guest:guest@localhost/"
-os.environ["OLLAMA_API_URL"] = "http://localhost:11434"
+os.environ["APP_ENV"] = "testing"
 
 from app.db import Base, get_db
 from app.main import app
 from app.auth.models import User, RegistrationToken, APIKey
 from app.auth.utils import get_password_hash
-from app.queue.rabbitmq.manager import get_queue_manager
+from app.queue import get_queue_manager, QueueManagerInterface
+from app.config import settings
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -41,17 +43,20 @@ def event_loop():
     loop.close()
 
 @pytest_asyncio.fixture(scope="function")
-async def queue_manager(event_loop):
-    """Get a mock RabbitMQ manager instance for testing"""
-    # Get the manager instance using the global singleton getter
+async def queue_manager(event_loop) -> QueueManagerInterface:
+    """Get a queue manager instance for testing"""
+    # The factory function should return the mock implementation in test mode
     manager = get_queue_manager()
     
-    # Reset the manager state to ensure clean tests
-    manager._initialized = False
-    manager.__init__()
+    # Reset state for clean test environment
+    await manager.reset_stats()
+    await manager.clear_queue()
     
-    # In test mode, just return the manager without connecting to RabbitMQ
+    # No need to connect since our mock implementation doesn't need real connections
     yield manager
+    
+    # Cleanup
+    await manager.clear_queue()
 
 @pytest.fixture
 def db_session():

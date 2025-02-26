@@ -1,3 +1,7 @@
+"""
+RabbitMQ implementation of the queue manager.
+"""
+
 import logging
 import json
 from typing import Dict, Any, Optional, List, AsyncGenerator
@@ -5,7 +9,7 @@ import asyncio
 import os
 from dotenv import load_dotenv
 
-from ..base import QueueManager as BaseQueueManager
+from ..interface import QueueManagerInterface
 from ..models import QueuedRequest, RequestPriority, QueueStats
 from .connection import RabbitMQConnection
 from .exchanges import ExchangeManager
@@ -29,7 +33,7 @@ def get_queue_manager():
         _instance = RabbitMQManager()
     return _instance
 
-class RabbitMQManager(BaseQueueManager):
+class RabbitMQManager(QueueManagerInterface):
     """RabbitMQ implementation of queue manager"""
     
     _initialized = False
@@ -207,9 +211,9 @@ class RabbitMQManager(BaseQueueManager):
         for priority, queue_name in self.queue_handler.queue_names.items():
             queue = await self.queue_handler.get_queue(queue_name)
             if queue:
-                # Use declare with passive=True to get current size
-                declaration = await queue.declare(passive=True)
-                sizes[priority] = declaration.message_count
+                # Use queue info to get current size
+                queue_info = await self.queue_handler.channel.declare_queue(queue_name, durable=True)
+                sizes[priority] = queue_info.message_count
             else:
                 sizes[priority] = 0
         return sizes
@@ -279,6 +283,12 @@ class RabbitMQManager(BaseQueueManager):
         if not self.processor:
             self.processor = RequestProcessor(self.ollama_url)
         self.processor.stats = QueueStats()
+    
+    async def get_current_request(self) -> Optional[QueuedRequest]:
+        """Get the request currently being processed, if any"""
+        if not self.processor:
+            self.processor = RequestProcessor(self.ollama_url)
+        return self.processor.current_request
     
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""

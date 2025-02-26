@@ -1,3 +1,7 @@
+"""
+Main application entry point.
+"""
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -12,9 +16,14 @@ from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
 from .db import engine, Base, get_db
-from .queue.rabbitmq.manager import get_queue_manager
+from .queue import get_queue_manager
+from .config import settings
 
 # Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
 logger = logging.getLogger("app.main")
 
 # Create database tables
@@ -30,11 +39,7 @@ app = FastAPI(
 # CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://chat.seadragoninkmortal.com",
-        "https://admin.seadragoninkmortal.com",
-        "http://localhost:3000"  # For local development
-    ],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,45 +48,43 @@ app.add_middleware(
 # Load environment variables
 load_dotenv()
 
-# Ensure required environment variables
-OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost/")
-
 # Get the queue manager instance
 queue_manager = get_queue_manager()
 
 @app.on_event("startup")
 async def startup_event():
-    """Connect to RabbitMQ on startup"""
-    # Connect with retry logic
-    max_retries = 5
-    retry_count = 0
-    connected = False
-    
-    while not connected and retry_count < max_retries:
-        try:
-            await queue_manager.connect()
-            connected = True
-            logger.info("Successfully connected to RabbitMQ")
-        except Exception as e:
-            retry_count += 1
-            wait_time = retry_count * 2  # Exponential backoff
-            logger.warning(f"Failed to connect to RabbitMQ (attempt {retry_count}/{max_retries}): {str(e)}")
-            logger.warning(f"Retrying in {wait_time} seconds...")
-            await asyncio.sleep(wait_time)
-    
-    if not connected:
-        logger.error(f"Failed to connect to RabbitMQ after {max_retries} attempts")
-        # Don't crash the app, but log the error
+    """Connect to services on startup"""
+    if not settings.is_testing:
+        # Connect to RabbitMQ with retry logic
+        max_retries = 5
+        retry_count = 0
+        connected = False
+        
+        while not connected and retry_count < max_retries:
+            try:
+                await queue_manager.connect()
+                connected = True
+                logger.info("Successfully connected to message queue")
+            except Exception as e:
+                retry_count += 1
+                wait_time = retry_count * 2  # Exponential backoff
+                logger.warning(f"Failed to connect to message queue (attempt {retry_count}/{max_retries}): {str(e)}")
+                logger.warning(f"Retrying in {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+        
+        if not connected:
+            logger.error(f"Failed to connect to message queue after {max_retries} attempts")
+            # Don't crash the app, but log the error
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Close RabbitMQ connection on shutdown"""
-    try:
-        await queue_manager.close()
-        logger.info("RabbitMQ connection closed")
-    except Exception as e:
-        logger.error(f"Error closing RabbitMQ connection: {str(e)}")
+    """Close connections on shutdown"""
+    if not settings.is_testing:
+        try:
+            await queue_manager.close()
+            logger.info("Queue manager connection closed")
+        except Exception as e:
+            logger.error(f"Error closing queue manager connection: {str(e)}")
 
 
 # Include routers
@@ -94,7 +97,8 @@ async def root():
     return {
         "message": "Seadragon LLM Server",
         "docs": "/docs",
-        "version": "0.1.0"
+        "version": "0.1.0",
+        "environment": settings.environment.name
     }
 
 # Protected endpoint example
@@ -116,4 +120,7 @@ async def admin_route(current_user: User = Depends(get_current_admin_user)):
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "environment": settings.environment.name
+    }

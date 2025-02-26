@@ -1,3 +1,7 @@
+"""
+API Gateway for routing requests to the LLM service.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -11,27 +15,24 @@ from dotenv import load_dotenv
 from ..db import get_db
 from ..auth.utils import get_current_user, validate_api_key, get_current_admin_user
 from ..auth.models import User
-from ..queue import QueuedRequest, RequestPriority  # Use the __init__.py exports
-from ..queue.rabbitmq.manager import get_queue_manager  # Import the getter function
+from ..queue import QueuedRequest, RequestPriority, get_queue_manager, QueueManagerInterface
+from ..config import settings
 
 # Load environment variables
 load_dotenv()
 
 # Get Ollama API URL from environment or use default
-OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-
-# Check if running in test mode (using SQLite DB)
-TEST_MODE = os.getenv("PYTEST_CURRENT_TEST") is not None or "pytest" in os.getenv("PYTHONPATH", "")
+OLLAMA_API_URL = settings.ollama_api_url
 
 # Create router
 router = APIRouter(prefix="/api", tags=["api"])
 
 # Create a FastAPI dependency for the queue manager
-async def get_queue():
+async def get_queue() -> QueueManagerInterface:
     """Get the queue manager instance"""
     queue_manager = get_queue_manager()
-    # Ensure the manager is connected
-    if not TEST_MODE:
+    # Ensure the manager is connected if not in test mode
+    if not settings.is_testing:
         await queue_manager.ensure_connected()
     return queue_manager
 
@@ -77,8 +78,8 @@ async def get_request_priority(
     
     # Check IP whitelist (for direct API access)
     client_ip = request.client.host
-    # TODO: Implement proper IP whitelist check from database (using a model)
-    whitelisted_ips = os.getenv("WHITELISTED_IPS", "127.0.0.1").split(",")
+    # Use configured whitelist
+    whitelisted_ips = settings.whitelisted_ips
     
     if client_ip in whitelisted_ips:
         return {
@@ -94,35 +95,12 @@ async def get_request_priority(
         headers={"WWW-Authenticate": "Bearer"}
     )
 
-# Helper function for test environment
-async def mock_ollama_request(body: Dict[str, Any]) -> Dict[str, Any]:
-    """Mock Ollama response for tests"""
-    return {
-        "id": "test-response-id",
-        "model": body.get("model", "llama3.3:70b"),
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "This is a test response"
-                },
-                "finish_reason": "stop"
-            }
-        ],
-        "usage": {
-            "prompt_tokens": 10,
-            "completion_tokens": 20,
-            "total_tokens": 30
-        }
-    }
-
 # Ollama API proxy endpoint for chat completions
 @router.post("/chat/completions")
 async def chat_completions(
     request: Request,
     priority_data: Dict[str, Any] = Depends(get_request_priority),
-    queue_manager = Depends(get_queue),
+    queue_manager: QueueManagerInterface = Depends(get_queue),
     db: Session = Depends(get_db)
 ):
     """
@@ -133,11 +111,7 @@ async def chat_completions(
     body = await request.json()
     
     # Extract model from request
-    model = body.get("model", "llama3.3:70b")
-    
-    # In test mode, return a mock response instead of using the queue
-    if TEST_MODE:
-        return await mock_ollama_request(body)
+    model = body.get("model", settings.default_model)
         
     # Create a request object for the queue
     request_obj = QueuedRequest(
@@ -152,9 +126,6 @@ async def chat_completions(
     try:
         position = await queue_manager.add_request(request_obj)
     except Exception as e:
-        # Log the error but return a functional response in tests
-        if TEST_MODE:
-            return await mock_ollama_request(body)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to add request to queue: {str(e)}"
@@ -166,7 +137,7 @@ async def chat_completions(
         next_request = await queue_manager.get_next_request()
         if next_request and next_request.timestamp == request_obj.timestamp:
             return StreamingResponse(
-                queue_manager.processor.process_streaming_request(next_request),
+                queue_manager.process_streaming_request(next_request),
                 media_type="text/event-stream"
             )
         else:
@@ -185,7 +156,8 @@ async def chat_completions(
     start_time = asyncio.get_event_loop().time()
     
     while asyncio.get_event_loop().time() - start_time < timeout_seconds:
-        if not queue_manager.processor.current_request:
+        current_request = await queue_manager.get_current_request()
+        if not current_request:
             next_request = await queue_manager.get_next_request()
             if next_request and next_request.timestamp == request_obj.timestamp:
                 return await queue_manager.process_request(next_request)
@@ -199,7 +171,7 @@ async def chat_completions(
 async def completions(
     request: Request,
     priority_data: Dict[str, Any] = Depends(get_request_priority),
-    queue_manager = Depends(get_queue),
+    queue_manager: QueueManagerInterface = Depends(get_queue),
     db: Session = Depends(get_db)
 ):
     """
@@ -210,11 +182,7 @@ async def completions(
     body = await request.json()
     
     # Extract model from request
-    model = body.get("model", "llama3.3:70b")
-    
-    # In test mode, return a mock response
-    if TEST_MODE:
-        return await mock_ollama_request(body)
+    model = body.get("model", settings.default_model)
     
     # Create a request object for the queue
     request_obj = QueuedRequest(
@@ -229,9 +197,6 @@ async def completions(
     try:
         position = await queue_manager.add_request(request_obj)
     except Exception as e:
-        # Log the error but return a functional response in tests
-        if TEST_MODE:
-            return await mock_ollama_request(body)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to add request to queue: {str(e)}"
@@ -243,7 +208,7 @@ async def completions(
         next_request = await queue_manager.get_next_request()
         if next_request and next_request.timestamp == request_obj.timestamp:
             return StreamingResponse(
-                queue_manager.processor.process_streaming_request(next_request),
+                queue_manager.process_streaming_request(next_request),
                 media_type="text/event-stream"
             )
         else:
@@ -262,7 +227,8 @@ async def completions(
     start_time = asyncio.get_event_loop().time()
     
     while asyncio.get_event_loop().time() - start_time < timeout_seconds:
-        if not queue_manager.processor.current_request:
+        current_request = await queue_manager.get_current_request()
+        if not current_request:
             next_request = await queue_manager.get_next_request()
             if next_request and next_request.timestamp == request_obj.timestamp:
                 return await queue_manager.process_request(next_request)
@@ -278,12 +244,12 @@ async def list_models(
     db: Session = Depends(get_db)
 ):
     """List available models from Ollama"""
-    # In test mode, return mock models
-    if TEST_MODE:
+    # For testing mode, return mock models
+    if settings.is_testing:
         return {
             "data": [
                 {
-                    "id": "llama3.3:70b",
+                    "id": settings.default_model,
                     "object": "model", 
                     "created": 0,
                     "owned_by": "ollama"
@@ -319,25 +285,9 @@ async def list_models(
 @router.get("/queue/status")
 async def queue_status(
     current_user: User = Depends(get_current_user),
-    queue_manager = Depends(get_queue)
+    queue_manager: QueueManagerInterface = Depends(get_queue)
 ):
     """Get current queue status (authenticated users only)"""
-    # In test mode, return mock status
-    if TEST_MODE:
-        return {
-            "queue_size": 0,
-            "queue_by_priority": {1: 0, 2: 0, 3: 0},
-            "current_request": None,
-            "stats": {
-                "total_requests": 0,
-                "completed_requests": 0,
-                "failed_requests": 0,
-                "avg_wait_time": 0,
-                "avg_processing_time": 0
-            },
-            "rabbitmq_connected": True
-        }
-        
     status = await queue_manager.get_status()
     return status
 
@@ -345,28 +295,16 @@ async def queue_status(
 @router.post("/queue/clear")
 async def clear_queue(
     current_user: User = Depends(get_current_admin_user),
-    queue_manager = Depends(get_queue)
+    queue_manager: QueueManagerInterface = Depends(get_queue)
 ):
     """Clear the queue (admin only)"""
-    # In test mode, return success without calling RabbitMQ
-    if TEST_MODE:
-        return {"message": "Queue cleared successfully"}
-        
     await queue_manager.clear_queue()
     return {"message": "Queue cleared successfully"}
 
 # Health check endpoint
 @router.get("/health")
-async def api_health(queue_manager = Depends(get_queue)):
+async def api_health(queue_manager: QueueManagerInterface = Depends(get_queue)):
     """Check API gateway health"""
-    # In test mode, always return healthy
-    if TEST_MODE:
-        return {
-            "status": "healthy",
-            "ollama_connected": True,
-            "rabbitmq_connected": True
-        }
-        
     # Check Ollama connection
     try:
         async with httpx.AsyncClient() as client:
