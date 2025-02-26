@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Define the navigation items
 const navItems = [
@@ -86,6 +87,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) => {
   const { currentTheme } = useTheme();
+  const { logout, username } = useAuth();
   
   // Handle navigation
   const handleNavigate = (path: string) => {
@@ -94,6 +96,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
     
     // Call the provided onNavigate for sidebar state management
     onNavigate(path);
+  };
+  
+  // Get contrasting text color for active items
+  const getContrastColor = (bgColor: string) => {
+    // Simple function to determine if text should be light or dark based on background
+    const isHex = bgColor.startsWith('#');
+    if (!isHex) return 'white';
+    
+    const hex = bgColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    return brightness > 155 ? '#000000' : '#FFFFFF';
   };
   
   return (
@@ -125,28 +142,60 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
           </div>
           
           <ul className="space-y-1 px-3 flex-1">
-            {navItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => handleNavigate(item.path)}
-                  className={`flex items-center w-full px-3 py-2.5 rounded-md transition-colors ${
-                    currentPath === item.path ? 'bg-opacity-20' : 'bg-opacity-0 hover:bg-opacity-10'
-                  }`}
-                  style={{
-                    backgroundColor: currentPath === item.path ? currentTheme.colors.accentPrimary : 'transparent',
-                    color: currentPath === item.path 
-                      ? currentTheme.colors.accentPrimary 
-                      : currentTheme.colors.textPrimary
-                  }}
-                >
-                  <span className="mr-3">{item.icon}</span>
-                  <span className="font-medium">{item.name}</span>
-                </button>
-              </li>
-            ))}
+            {navItems.map((item) => {
+              const isActive = currentPath === item.path;
+              const activeStyles = {
+                backgroundColor: isActive ? currentTheme.colors.accentPrimary : 'transparent',
+                color: isActive ? getContrastColor(currentTheme.colors.accentPrimary) : currentTheme.colors.textPrimary,
+                borderLeft: isActive ? `3px solid ${currentTheme.colors.accentSecondary}` : '3px solid transparent'
+              };
+              
+              return (
+                <li key={item.id}>
+                  <button
+                    onClick={() => handleNavigate(item.path)}
+                    className={`flex items-center w-full px-3 py-2.5 rounded-md transition-colors ${
+                      isActive ? 'font-medium' : 'hover:bg-opacity-10'
+                    }`}
+                    style={activeStyles}
+                  >
+                    <span className="mr-3">{item.icon}</span>
+                    <span>{item.name}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
           
           <div className="px-4 mt-auto">
+            {/* User info */}
+            {username && (
+              <div 
+                className="p-3 rounded-md mb-2"
+                style={{ backgroundColor: `${currentTheme.colors.bgTertiary}60` }}
+              >
+                <div className="flex items-center">
+                  <div 
+                    className="w-8 h-8 rounded-full mr-2 flex items-center justify-center"
+                    style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+                  >
+                    <span style={{ color: getContrastColor(currentTheme.colors.accentPrimary) }}>
+                      {username.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="font-medium" style={{ color: currentTheme.colors.textPrimary }}>
+                      {username}
+                    </div>
+                    <div className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                      Administrator
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* System status */}
             <div className="p-3 rounded-md" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}80` }}>
               <div className="flex items-center mb-2">
                 <div 
@@ -167,6 +216,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
                 </span>
               </div>
             </div>
+            
+            {/* Logout button */}
+            {username && (
+              <button
+                onClick={logout}
+                className="mt-4 w-full py-2 text-center rounded-md"
+                style={{ 
+                  backgroundColor: `${currentTheme.colors.error}20`,
+                  color: currentTheme.colors.error
+                }}
+              >
+                Logout
+              </button>
+            )}
           </div>
         </nav>
       </aside>

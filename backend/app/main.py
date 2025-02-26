@@ -11,7 +11,7 @@ import os
 from dotenv import load_dotenv
 
 # Import local modules
-from .auth.router import router as auth_router
+from .auth.router import router as auth_router, generate_setup_token, check_admin_exists
 from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
@@ -75,6 +75,29 @@ async def startup_event():
         if not connected:
             logger.error(f"Failed to connect to message queue after {max_retries} attempts")
             # Don't crash the app, but log the error
+    
+    # Generate admin setup token if needed
+    from contextlib import asynccontextmanager
+    
+    @asynccontextmanager
+    async def get_db_context():
+        db = next(get_db())
+        try:
+            yield db
+        finally:
+            db.close()
+    
+    async with get_db_context() as db:
+        admin_exists = await check_admin_exists(db)
+        if not admin_exists:
+            logger.warning("No admin user found. Generating admin setup token...")
+            token = await generate_setup_token(db)
+            if token:
+                logger.warning(f"[ADMIN SETUP] Initial admin setup token: {token}")
+                logger.warning("Use this token to create the first admin account through the admin setup page.")
+                logger.warning("This token will expire in 24 hours.")
+            else:
+                logger.error("Failed to generate admin setup token.")
 
 @app.on_event("shutdown")
 async def shutdown_event():

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 
@@ -9,6 +10,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { currentTheme } = useTheme();
+  const { isAuthenticated, username } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState('/admin');
 
@@ -29,6 +31,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     };
   }, []);
 
+  // Check authentication status
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Redirect to login if not authenticated
+      window.navigateTo('/admin/login');
+    }
+  }, [isAuthenticated]);
+
   const handleNavigate = (path: string) => {
     setCurrentPath(path);
     
@@ -46,7 +56,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         color: currentTheme.colors.textPrimary
       }}
     >
-      <Navbar toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+      <Navbar 
+        toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
+        username={username || ''}
+      />
       
       <div className="flex flex-1 pt-16">
         <Sidebar 

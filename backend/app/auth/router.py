@@ -5,8 +5,9 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import secrets
 import string
+import logging
 
-from .models import User, RegistrationToken, APIKey
+from .models import User, RegistrationToken, APIKey, SetupToken
 from .utils import (
     get_password_hash, 
     verify_password, 
@@ -18,6 +19,161 @@ from ..db import get_db
 
 # Create router
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+# Setup token functions
+async def check_admin_exists(db: Session) -> bool:
+    """Check if any admin user exists in the system"""
+    return db.query(User).filter(User.is_admin == True).first() is not None
+
+async def generate_setup_token(db: Session) -> str:
+    """Generate a setup token for initial admin creation if no admin exists"""
+    # Check if admin exists
+    admin_exists = await check_admin_exists(db)
+    if admin_exists:
+        return None
+    
+    # Check if valid setup token already exists
+    existing_token = db.query(SetupToken).filter(
+        SetupToken.is_valid == True,
+        SetupToken.expires_at > datetime.utcnow()
+    ).first()
+    
+    if existing_token:
+        return existing_token.token
+    
+    # Generate new token
+    token_chars = string.ascii_letters + string.digits
+    token = 'ADMIN-' + '-'.join(''.join(secrets.choice(token_chars) for _ in range(4)) for _ in range(4))
+    
+    # Create token with 24-hour expiration
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    setup_token = SetupToken(
+        token=token,
+        expires_at=expires_at,
+        is_valid=True
+    )
+    
+    # Save to database
+    db.add(setup_token)
+    db.commit()
+    
+    # Log the token
+    logging.warning(f"[ADMIN SETUP] Initial admin setup token: {token}")
+    
+    return token
+
+# Admin setup endpoint
+@router.post("/admin/setup", status_code=status.HTTP_201_CREATED)
+async def setup_admin(
+    username: str = Body(...),
+    email: str = Body(...),
+    password: str = Body(...),
+    token: str = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Set up the initial admin account using a setup token"""
+    
+    # Check if admin already exists
+    admin_exists = await check_admin_exists(db)
+    if admin_exists:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account already exists"
+        )
+    
+    # Validate setup token
+    setup_token = db.query(SetupToken).filter(
+        SetupToken.token == token,
+        SetupToken.is_valid == True,
+        SetupToken.expires_at > datetime.utcnow()
+    ).first()
+    
+    if not setup_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired setup token"
+        )
+    
+    # Create admin user
+    admin_user = User(
+        username=username,
+        email=email,
+        password_hash=get_password_hash(password),
+        is_admin=True,
+        is_active=True
+    )
+    
+    # Save admin user
+    db.add(admin_user)
+    
+    # Invalidate setup token
+    setup_token.is_valid = False
+    setup_token.used_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(admin_user)
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=30)
+    access_token = create_access_token(
+        data={"sub": admin_user.username},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "username": admin_user.username,
+        "is_admin": admin_user.is_admin
+    }
+
+# Admin login
+@router.post("/admin/login")
+async def login_admin(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """Authenticate admin user and provide a JWT token"""
+    
+    # Get user by username
+    user = db.query(User).filter(User.username == form_data.username).first()
+    
+    # Verify user exists and password is correct
+    if not user or not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Check if user is active and admin
+    if not user.is_active or not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not an active admin",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=60)  # Longer expiry for admins
+    access_token = create_access_token(
+        data={"sub": user.username, "admin": True},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "username": user.username,
+        "is_admin": user.is_admin
+    }
+
+# Check admin setup status
+@router.get("/admin/setup-status")
+async def check_admin_setup_status(db: Session = Depends(get_db)):
+    """Check if admin setup is required"""
+    admin_exists = await check_admin_exists(db)
+    return {"admin_exists": admin_exists}
 
 # User registration
 @router.post("/register", status_code=status.HTTP_201_CREATED)

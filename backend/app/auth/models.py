@@ -48,3 +48,14 @@ class APIKey(Base):
     
     # Relationship with User model if needed
     # user = relationship("User", back_populates="api_keys")
+
+class SetupToken(Base):
+    """Setup token model for initial admin account creation"""
+    __tablename__ = "setup_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, unique=True, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime)
+    is_valid = Column(Boolean, default=True)
+    used_at = Column(DateTime, nullable=True)

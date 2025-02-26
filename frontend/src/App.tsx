@@ -1,24 +1,56 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import './App.css';
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { AuthProvider, useAuth, withAuth } from './context/AuthContext';
 import AdminDashboard from './pages/admin/Admin';
 import IPWhitelist from './pages/admin/IPWhitelist';
 import RegistrationTokens from './pages/admin/RegistrationTokens';
 import APIKeys from './pages/admin/APIKeys';
 import QueueMonitor from './pages/admin/QueueMonitor';
 import ThemeCustomizer from './pages/admin/ThemeCustomizer';
+import SystemStats from './pages/admin/SystemStats';
+import AdminLogin from './pages/admin/Login';
+
+// Wrap admin components with auth protection
+const ProtectedAdminDashboard = withAuth(AdminDashboard);
+const ProtectedIPWhitelist = withAuth(IPWhitelist);
+const ProtectedRegistrationTokens = withAuth(RegistrationTokens);
+const ProtectedAPIKeys = withAuth(APIKeys);
+const ProtectedQueueMonitor = withAuth(QueueMonitor);
+const ProtectedThemeCustomizer = withAuth(ThemeCustomizer);
+const ProtectedSystemStats = withAuth(SystemStats);
 
 // Simple routing mechanism (to be replaced with React Router in a real app)
-type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys' | 'admin/queue' | 'admin/themes' | 'home';
+type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys' 
+          | 'admin/queue' | 'admin/themes' | 'admin/stats' | 'admin/login' | 'home';
+
+// Loader component
+const Loader: React.FC = () => {
+  const { currentTheme } = useTheme();
+  
+  return (
+    <div 
+      className="min-h-screen flex items-center justify-center"
+      style={{ backgroundColor: currentTheme.colors.bgPrimary }}
+    >
+      <div 
+        className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: `transparent transparent ${currentTheme.colors.accentPrimary} ${currentTheme.colors.accentPrimary}` }}
+      />
+    </div>
+  );
+};
 
 function App() {
-  const [currentRoute, setCurrentRoute] = useState<Route>('home');
-
+  const [currentRoute, setCurrentRoute] = React.useState<Route>('home');
+  const [isLoading, setIsLoading] = React.useState(false);
+  
   // Set up navigation handling
-  useEffect(() => {
+  React.useEffect(() => {
     // Define the global navigation handler
     window.navigateTo = (path: string) => {
       console.log('Navigating to:', path);
+      setIsLoading(true);
       
       // Remove leading slash if present
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -28,6 +60,9 @@ function App() {
       
       // Update window URL without full navigation (for visual feedback)
       window.history.pushState(null, '', path);
+      
+      // Simulate loading (remove in production with real navigation)
+      setTimeout(() => setIsLoading(false), 300);
       
       return false; // Prevent default navigation
     };
@@ -53,19 +88,27 @@ function App() {
 
   // Render the current route
   const renderRoute = () => {
+    if (isLoading) {
+      return <Loader />;
+    }
+    
     switch (currentRoute) {
       case 'admin':
-        return <AdminDashboard />;
+        return <ProtectedAdminDashboard />;
       case 'admin/ip-whitelist':
-        return <IPWhitelist />;
+        return <ProtectedIPWhitelist />;
       case 'admin/tokens':
-        return <RegistrationTokens />;
+        return <ProtectedRegistrationTokens />;
       case 'admin/api-keys':
-        return <APIKeys />;
+        return <ProtectedAPIKeys />;
       case 'admin/queue':
-        return <QueueMonitor />;
+        return <ProtectedQueueMonitor />;
       case 'admin/themes':
-        return <ThemeCustomizer />;
+        return <ProtectedThemeCustomizer />;
+      case 'admin/stats':
+        return <ProtectedSystemStats />;
+      case 'admin/login':
+        return <AdminLogin />;
       case 'home':
       default:
         return (
@@ -84,9 +127,9 @@ function App() {
               </p>
               <button 
                 className="mt-4 bg-themed-tertiary hover:opacity-90 px-4 py-2 rounded text-themed"
-                onClick={() => window.navigateTo('/admin')}
+                onClick={() => window.navigateTo('/admin/login')}
               >
-                Go to Admin Panel
+                Admin Login
               </button>
             </div>
           </div>
@@ -96,7 +139,9 @@ function App() {
   
   return (
     <ThemeProvider>
-      {renderRoute()}
+      <AuthProvider>
+        {renderRoute()}
+      </AuthProvider>
     </ThemeProvider>
   );
 }
