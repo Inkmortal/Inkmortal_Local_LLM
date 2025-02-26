@@ -113,9 +113,6 @@ async def chat_completions(
     # Add request to queue and get position
     position = await queue_manager.add_request(request_obj)
     
-    # Add request to queue
-    position = await queue_manager.add_request(request_obj)
-    
     # If streaming is requested
     if body.get("stream", False):
         # Get the next request from the queue and process it
@@ -127,18 +124,28 @@ async def chat_completions(
             )
         else:
             # If request wasn't found in queue, return error
+            async def error_stream():
+                yield json.dumps({"error": "Request not found in queue"}).encode()
+            
             return StreamingResponse(
-                (yield json.dumps({"error": "Request not found in queue"}).encode()),
+                error_stream(),
                 media_type="text/event-stream"
             )
     
     # For non-streaming requests
-    while True:
+    # Add timeout to prevent hanging
+    timeout_seconds = 60.0  # 1 minute timeout for waiting in queue
+    start_time = asyncio.get_event_loop().time()
+    
+    while asyncio.get_event_loop().time() - start_time < timeout_seconds:
         if not queue_manager.processor.current_request:
             next_request = await queue_manager.get_next_request()
             if next_request and next_request.timestamp == request_obj.timestamp:
                 return await queue_manager.processor.process_request(next_request)
         await asyncio.sleep(0.1)
+    
+    # If we reach here, we timed out waiting for the request
+    return {"error": f"Request timed out after {timeout_seconds} seconds in queue"}
 
 # Ollama API proxy endpoint for completions
 @router.post("/completions")
@@ -169,9 +176,6 @@ async def completions(
     # Add request to queue and get position
     position = await queue_manager.add_request(request_obj)
     
-    # Add request to queue
-    position = await queue_manager.add_request(request_obj)
-    
     # If streaming is requested
     if body.get("stream", False):
         # Get the next request from the queue and process it
@@ -183,18 +187,28 @@ async def completions(
             )
         else:
             # If request wasn't found in queue, return error
+            async def error_stream():
+                yield json.dumps({"error": "Request not found in queue"}).encode()
+            
             return StreamingResponse(
-                (yield json.dumps({"error": "Request not found in queue"}).encode()),
+                error_stream(),
                 media_type="text/event-stream"
             )
     
     # For non-streaming requests
-    while True:
+    # Add timeout to prevent hanging
+    timeout_seconds = 60.0  # 1 minute timeout for waiting in queue
+    start_time = asyncio.get_event_loop().time()
+    
+    while asyncio.get_event_loop().time() - start_time < timeout_seconds:
         if not queue_manager.processor.current_request:
             next_request = await queue_manager.get_next_request()
             if next_request and next_request.timestamp == request_obj.timestamp:
                 return await queue_manager.processor.process_request(next_request)
         await asyncio.sleep(0.1)
+    
+    # If we reach here, we timed out waiting for the request
+    return {"error": f"Request timed out after {timeout_seconds} seconds in queue"}
 
 # Get available models
 @router.get("/models")

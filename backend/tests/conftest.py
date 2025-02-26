@@ -51,11 +51,17 @@ async def queue_manager(event_loop):
     # Close any existing connection and clean up
     try:
         await manager.close()
-    except:
-        pass
+    except Exception as e:
+        print(f"Error closing existing connection: {e}")
     
     # Start fresh connection
-    await manager.connect()
+    try:
+        await manager.connect()
+        # Clear any existing queues to ensure clean state
+        await manager.clear_queue()
+    except Exception as e:
+        print(f"Error setting up test queue manager: {e}")
+        raise
     
     yield manager
     
