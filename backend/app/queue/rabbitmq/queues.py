@@ -44,7 +44,8 @@ class QueueManager:
                 durable=True,
                 arguments={
                     "x-max-priority": 10,
-                    "x-message-ttl": aging_threshold_seconds * 1000
+                    "x-message-ttl": aging_threshold_seconds * 1000,
+                    "x-queue-mode": "lazy"  # Better for long-lived messages
                 }
             )
     
@@ -75,7 +76,7 @@ class QueueManager:
         for priority, queue_name in self.queue_names.items():
             queue = await self.get_queue(queue_name)
             if queue:
-                # Get fresh declaration to get current size
+                # Use declare with passive=True to get current size
                 declaration = await queue.declare(passive=True)
                 result[priority] = declaration.message_count
             else:
