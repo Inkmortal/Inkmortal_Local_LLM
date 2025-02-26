@@ -38,6 +38,7 @@ class RabbitMQManager:
     """
     _instance = None
     _initialized = False
+    _queues = {}  # Store queue objects
     
     def __new__(cls):
         """Ensure only one instance of RabbitMQManager exists"""
@@ -117,6 +118,9 @@ class RabbitMQManager:
                         "x-message-ttl": self.aging_threshold_seconds * 1000  # TTL in milliseconds
                     }
                 )
+                
+                # Store queue object
+                self._queues[queue_name] = queue
                 
                 # Bind queue to exchange with routing key based on priority
                 await queue.bind(
@@ -264,12 +268,8 @@ class RabbitMQManager:
         
         result = {}
         for priority, queue_name in self.queue_names.items():
-            # Declare queue to get current size
-            queue = await self.channel.declare_queue(
-                queue_name,
-                durable=True,
-                passive=True  # Don't create if doesn't exist
-            )
+            # Get queue object
+            queue = self._queues[queue_name]
             result[priority] = queue.declaration_result.message_count
         
         return result
@@ -298,7 +298,7 @@ class RabbitMQManager:
         
         for priority, queue_name in self.queue_names.items():
             # Get queue object
-            queue = await self.channel.declare_queue(queue_name)
+            queue = self._queues[queue_name]
             # Purge the queue
             await queue.purge()
         
@@ -311,7 +311,7 @@ class RabbitMQManager:
         # Try to get a message from each queue in priority order
         for priority in sorted(self.queue_names.keys()):
             queue_name = self.queue_names[priority]
-            queue = await self.channel.declare_queue(queue_name)
+            queue = self._queues[queue_name]
             
             # Try to get a message with no_ack=False so we can acknowledge it later
             message = await queue.get(no_ack=True)
