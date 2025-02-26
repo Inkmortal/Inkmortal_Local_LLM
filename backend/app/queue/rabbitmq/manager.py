@@ -102,7 +102,15 @@ class RabbitMQManager(BaseQueueManager):
     
     async def close(self) -> None:
         """Close the connection"""
+        if self.queue_handler:
+            try:
+                # Delete all queues first
+                await self.queue_handler.delete_all_queues()
+            except:
+                logger.warning("Failed to delete queues during cleanup")
+        
         await self.connection.close()
+        logger.info("RabbitMQ manager closed")
     
     async def add_request(self, request: QueuedRequest) -> int:
         """Add a request to the queue"""
@@ -123,6 +131,9 @@ class RabbitMQManager(BaseQueueManager):
             json.dumps(request.to_dict()).encode(),
             {"x-original-priority": request.original_priority}
         )
+        
+        # Small delay to ensure message is queued
+        await asyncio.sleep(0.1)
         
         # Get queue position
         sizes = await self.get_queue_size()

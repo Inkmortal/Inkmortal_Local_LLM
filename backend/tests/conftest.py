@@ -35,19 +35,23 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def queue_manager(event_loop):
     """Get a RabbitMQ manager instance"""
     manager = RabbitMQManager()
-    await manager.connect()
     
-    # Clear any existing queues
-    await manager.clear_queue()
+    # Close any existing connection and clean up
+    try:
+        await manager.close()
+    except:
+        pass
+    
+    # Start fresh
+    await manager.connect()
     
     yield manager
     
     # Cleanup
-    await manager.clear_queue()
     await manager.close()
 
 @pytest.fixture

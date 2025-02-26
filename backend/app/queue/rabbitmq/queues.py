@@ -27,15 +27,14 @@ class QueueManager:
         arguments: Optional[Dict] = None
     ) -> aio_pika.RobustQueue:
         """Declare a queue"""
-        if name not in self.queues:
-            queue = await self.channel.declare_queue(
-                name,
-                durable=durable,
-                arguments=arguments or {}
-            )
-            self.queues[name] = queue
-            logger.info(f"Declared queue: {name}")
-        return self.queues[name]
+        queue = await self.channel.declare_queue(
+            name,
+            durable=durable,
+            arguments=arguments or {}
+        )
+        self.queues[name] = queue
+        logger.info(f"Declared queue: {name}")
+        return queue
     
     async def setup_priority_queues(self, aging_threshold_seconds: int = 30) -> None:
         """Set up priority queues with aging"""
@@ -45,8 +44,7 @@ class QueueManager:
                 durable=True,
                 arguments={
                     "x-max-priority": 10,
-                    "x-message-ttl": aging_threshold_seconds * 1000,
-                    "x-queue-mode": "lazy"  # Better for long-lived messages
+                    "x-message-ttl": aging_threshold_seconds * 1000
                 }
             )
     
@@ -96,6 +94,20 @@ class QueueManager:
         for queue_name in self.queue_names.values():
             await self.purge_queue(queue_name)
         logger.info("Purged all queues")
+    
+    async def delete_queue(self, name: str) -> None:
+        """Delete a queue"""
+        queue = await self.get_queue(name)
+        if queue:
+            await queue.delete(if_unused=False, if_empty=False)
+            del self.queues[name]
+            logger.info(f"Deleted queue: {name}")
+    
+    async def delete_all_queues(self) -> None:
+        """Delete all queues"""
+        for queue_name in list(self.queues.keys()):
+            await self.delete_queue(queue_name)
+        logger.info("Deleted all queues")
     
     async def publish_message(
         self,
