@@ -225,3 +225,35 @@ This component-based architecture ensures:
 - Maintainable and testable code
 - Robust error handling
 - Reliable message delivery
+
+## Testing Infrastructure
+
+To ensure reliability and correctness of the queueing system, a comprehensive testing infrastructure has been implemented:
+
+1. **Mock Queue Manager** (mock/manager.py):
+   - In-memory implementation of the QueueManagerInterface
+   - Supports all operations without external dependencies
+   - Used for testing in environments without RabbitMQ
+
+2. **Queue Manager Interface** (interface.py):
+   - Defines the abstract interface that all queue manager implementations must follow
+   - Ensures consistency between mock and real implementations
+   - Enables dependency injection in tests
+
+3. **Queue Model Tests** (test_queue_manager.py):
+   - Tests the core functionality of queue managers
+   - Verifies request aging, queue ordering, and request processing
+   - Uses fixtures to provide a clean environment for each test
+
+4. **Queue Integration Tests** (test_queue_and_gateway.py):
+   - Tests the integration between API Gateway and queue manager
+   - Verifies authentication requirements and priority assignment
+   - Tests streaming and non-streaming responses
+
+5. **Key Testing Features**:
+   - Proper interface abstraction to prevent implementation-specific dependencies
+   - Consistent error handling and recovery
+   - Statistics tracking for performance monitoring
+   - Prevention of double-promotion in request aging logic
+   - Comprehensive debugging for troubleshooting
+   - Reliable fixtures for test isolation

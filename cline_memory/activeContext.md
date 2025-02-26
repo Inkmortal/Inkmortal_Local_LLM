@@ -65,6 +65,12 @@ The web interface should emphasize educational assistant capabilities:
 - Updated setup script to include PostgreSQL detection and environment configuration
 - Refactored RabbitMQ implementation into smaller, more maintainable components with improved reliability
 - Updated to use Llama 3.3 model instead of Llama 3
+- Fixed critical issues in the queue testing environment:
+  - Resolved double-promotion bug in request aging logic
+  - Improved error handling and statistics tracking in queue managers
+  - Enhanced test reliability with more robust assertions
+  - Fixed interface abstraction to ensure proper implementation in both queue managers
+  - Added comprehensive debugging to help identify queue state issues
 
 ## Open Questions
 - Specific details of the admin panel UI design
