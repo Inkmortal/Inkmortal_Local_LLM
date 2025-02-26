@@ -16,18 +16,18 @@ RESET='\033[0m'
 # ASCII art logo
 echo -e "${MAGENTA}"
 cat << "EOF"
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                ║
 ║  ███████╗███████╗ █████╗ ██████╗ ██████╗  █████╗  ██████╗  ██████╗ ███╗   ██╗  ║
 ║  ██╔════╝██╔════╝██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝ ██╔═══██╗████╗  ██║  ║
 ║  ███████╗█████╗  ███████║██║  ██║██████╔╝███████║██║  ███╗██║   ██║██╔██╗ ██║  ║
 ║  ╚════██║██╔══╝  ██╔══██║██║  ██║██╔══██╗██╔══██║██║   ██║██║   ██║██║╚██╗██║  ║
 ║  ███████║███████╗██║  ██║██████╔╝██║  ██║██║  ██║╚██████╔╝╚██████╔╝██║ ╚████║  ║
 ║  ╚══════╝╚══════╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝  ║
-║                                                               ║
-║                     𝕃𝕃𝕄 𝕊𝔼ℝ𝕍𝔼ℝ                              ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
+║                                                                                ║
+║                     𝕃𝕃𝕄 𝕊𝔼ℝ𝕍𝔼ℝ                                               ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
 EOF
 echo -e "${RESET}"
 
@@ -108,6 +108,63 @@ else
     exit 1
 fi
 
+# Check PostgreSQL
+if command_exists psql; then
+    PSQL_VERSION=$(psql --version)
+    echo -e "${GREEN}✓ ${RESET}Found $PSQL_VERSION"
+else
+    echo -e "${YELLOW}⚠️ ${RESET}PostgreSQL not found. You'll need to install PostgreSQL for database functionality."
+    echo -e "   The application will use SQLite for development if PostgreSQL is not available."
+    
+    # Check if we're on macOS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo -e "   Install with: brew install postgresql"
+    else
+        echo -e "   Install with: sudo apt-get install postgresql (Debian/Ubuntu)"
+        echo -e "   or: sudo yum install postgresql (RHEL/CentOS)"
+    fi
+fi
+
+# Check RabbitMQ
+if command_exists rabbitmqctl; then
+    echo -e "${GREEN}✓ ${RESET}Found RabbitMQ"
+else
+    echo -e "${YELLOW}⚠️ ${RESET}RabbitMQ not found. You'll need to install RabbitMQ for queue functionality."
+    
+    # Check if we're on macOS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo -e "   Install with: brew install rabbitmq"
+    else
+        echo -e "   Install with: sudo apt-get install rabbitmq-server (Debian/Ubuntu)"
+        echo -e "   or: sudo yum install rabbitmq-server (RHEL/CentOS)"
+        echo -e "   or visit: https://www.rabbitmq.com/download.html"
+    fi
+fi
+
+# Check Ollama
+if command_exists ollama; then
+    echo -e "${GREEN}✓ ${RESET}Found Ollama"
+    
+    # Check if Llama 3 model is installed
+    echo -e "${BLUE}🤖 ${RESET}Checking for Llama 3 model..."
+    if ollama list 2>/dev/null | grep -q "llama3.3"; then
+        echo -e "${GREEN}✓ ${RESET}Found Llama 3 model"
+    else
+        echo -e "${YELLOW}⚠️ ${RESET}Llama 3 model not found. Installing..."
+        echo -e "   This may take a while..."
+        ollama pull llama3.3:70b
+    fi
+else
+    echo -e "${YELLOW}⚠️ ${RESET}Ollama not found. You'll need to install Ollama for LLM functionality."
+    
+    # Check if we're on macOS
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo -e "   Install with: brew install ollama"
+    else
+        echo -e "   Download from: https://ollama.ai/download"
+    fi
+fi
+
 # Check if we're on macOS
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo -e "${BLUE}🍎 ${RESET}macOS detected"
@@ -159,8 +216,44 @@ source venv/bin/activate
 
 # Install backend dependencies
 echo -e "${BLUE}Installing Python dependencies...${RESET}"
-progress_bar "Installing FastAPI and dependencies" 2
-pip install fastapi uvicorn sqlalchemy psycopg2-binary httpx python-jose[cryptography] python-multipart
+progress_bar "Installing backend dependencies" 2
+
+# Check if requirements.txt exists
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+else
+    pip install fastapi uvicorn sqlalchemy psycopg2-binary httpx python-jose[cryptography] python-multipart python-dotenv aio-pika pika
+fi
+
+# Create .env file if it doesn't exist
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo -e "${BLUE}Creating .env file from example...${RESET}"
+    cp .env.example .env
+    echo -e "${GREEN}✓ ${RESET}Created .env file"
+elif [ ! -f ".env" ]; then
+    echo -e "${BLUE}Creating .env file...${RESET}"
+    cat > .env << EOF
+# Database configuration
+DATABASE_URL=postgresql://postgres:postgres@localhost/seadragon
+# For SQLite (fallback)
+# DATABASE_URL=sqlite:///./seadragon.db
+
+# JWT configuration
+JWT_SECRET_KEY=CHANGE_ME_IN_PRODUCTION
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Ollama configuration
+OLLAMA_API_URL=http://localhost:11434
+
+# RabbitMQ configuration
+RABBITMQ_URL=amqp://guest:guest@localhost/
+
+# IP whitelist for direct API access (comma-separated)
+WHITELISTED_IPS=127.0.0.1,::1
+EOF
+    echo -e "${GREEN}✓ ${RESET}Created .env file"
+fi
 
 # Return to project root
 cd ..
@@ -176,6 +269,16 @@ echo -e "${BLUE}Installing Node.js dependencies...${RESET}"
 progress_bar "Installing React and dependencies" 3
 npm install
 
+# Create .env file for frontend
+if [ ! -f ".env" ]; then
+    echo -e "${BLUE}Creating frontend .env file...${RESET}"
+    cat > .env << EOF
+VITE_API_URL=http://localhost:8000
+VITE_WEBSOCKET_URL=ws://localhost:8000/ws
+EOF
+    echo -e "${GREEN}✓ ${RESET}Created frontend .env file"
+fi
+
 # Return to project root
 cd ..
 
@@ -186,18 +289,33 @@ echo -e "${GREEN}✨ ${RESET}Setup completed successfully!"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║               🌟  Setup complete! Ready to go!  🌟            ║
+║               🌟  Setup complete! Ready to go!  🌟           ║
 ║                                                               ║
 ║  To start the development server:                             ║
 ║                                                               ║
-║  1. Backend:                                                  ║
+║  1. Ollama:                                                   ║
+║     - Ensure Ollama is running                                ║
+║     - Model llama3.3:70b should be downloaded                 ║
+║                                                               ║
+║  2. RabbitMQ:                                                 ║
+║     - Ensure RabbitMQ service is running                      ║
+║     - Default credentials: guest/guest                        ║
+║                                                               ║
+║  3. Database:                                                 ║
+║     - Create a PostgreSQL database named 'seadragon'          ║
+║     - Or use SQLite by updating the DATABASE_URL in .env      ║
+║                                                               ║
+║  4. Backend:                                                  ║
 ║     cd backend                                                ║
 ║     source venv/bin/activate                                  ║
 ║     uvicorn app.main:app --reload                             ║
 ║                                                               ║
-║  2. Frontend:                                                 ║
+║  5. Frontend:                                                 ║
 ║     cd frontend                                               ║
 ║     npm run dev                                               ║
+║                                                               ║
+║  6. API Documentation:                                        ║
+║     - Visit http://localhost:8000/docs when backend is running║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 EOF
