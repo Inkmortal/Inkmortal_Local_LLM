@@ -13,6 +13,7 @@ class MockChannel:
         self.exchanges = {}
         self.bindings = {}
         self.consumers = {}
+        self.delivery_tag_counter = 0
     
     async def declare_queue(self, name, durable=False, passive=False, **kwargs):
         """Mock queue declaration"""
@@ -58,10 +59,11 @@ class MockChannel:
         async def publish(message, routing_key):
             if name in self.bindings and routing_key in self.bindings[name]:
                 queue_name = self.bindings[name][routing_key]
+                self.delivery_tag_counter += 1
                 self.queues[queue_name].append({
                     "body": message.body,
                     "headers": message.headers,
-                    "delivery_tag": len(self.queues[queue_name]) + 1
+                    "delivery_tag": self.delivery_tag_counter
                 })
         
         exchange.publish = publish
@@ -115,9 +117,11 @@ class MockConnection:
         """Close the connection"""
         self.is_closed = True
 
-@patch('aio_pika.connect_robust')
-async def mock_rabbitmq_connect(mock_connect):
+async def mock_rabbitmq_connect():
     """Set up mock RabbitMQ connection"""
     connection = MockConnection()
-    mock_connect.return_value = connection
     return connection
+
+def patch_rabbitmq():
+    """Create a context manager to patch RabbitMQ"""
+    return patch('aio_pika.connect_robust', side_effect=mock_rabbitmq_connect)

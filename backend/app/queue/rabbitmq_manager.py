@@ -37,12 +37,12 @@ class RabbitMQManager:
     Implements the Singleton pattern to ensure only one manager exists.
     """
     _instance = None
+    _initialized = False
     
     def __new__(cls):
         """Ensure only one instance of RabbitMQManager exists"""
         if cls._instance is None:
             cls._instance = super(RabbitMQManager, cls).__new__(cls)
-            cls._instance._initialized = False
         return cls._instance
     
     def __init__(self):
@@ -86,10 +86,12 @@ class RabbitMQManager:
         # Mark as initialized
         self._initialized = True
         
-        # Start connection
-        asyncio.create_task(self.connect())
-        
         logger.info("RabbitMQ Manager initialized")
+    
+    async def ensure_connected(self):
+        """Ensure connection to RabbitMQ is established"""
+        if not self.connection or self.connection.is_closed:
+            await self.connect()
     
     async def connect(self):
         """Connect to RabbitMQ and set up exchanges and queues"""
@@ -150,9 +152,9 @@ class RabbitMQManager:
         
         except Exception as e:
             logger.error(f"Error connecting to RabbitMQ: {str(e)}")
-            # Retry connection after delay
-            await asyncio.sleep(5)
-            asyncio.create_task(self.connect())
+            self.connection = None
+            self.channel = None
+            raise
     
     async def start_aging_consumers(self):
         """Start consumers for dead-letter queues to handle request aging"""
@@ -206,8 +208,7 @@ class RabbitMQManager:
     
     async def publish_request(self, request: Dict[str, Any]):
         """Publish a request to the appropriate queue based on priority"""
-        if not self.channel:
-            await self.connect()
+        await self.ensure_connected()
         
         # Get priority
         priority = request.get("priority", RequestPriority.WEB_INTERFACE)
@@ -259,8 +260,7 @@ class RabbitMQManager:
     
     async def get_queue_size(self) -> Dict[int, int]:
         """Get the current size of each queue"""
-        if not self.channel:
-            await self.connect()
+        await self.ensure_connected()
         
         result = {}
         for priority, queue_name in self.queue_names.items():
@@ -276,7 +276,12 @@ class RabbitMQManager:
     
     async def get_status(self) -> Dict[str, Any]:
         """Get the current status of the queue"""
-        queue_sizes = await self.get_queue_size()
+        try:
+            await self.ensure_connected()
+            queue_sizes = await self.get_queue_size()
+        except:
+            queue_sizes = {p: 0 for p in RequestPriority}
+        
         total_size = sum(queue_sizes.values())
         
         return {
@@ -289,8 +294,7 @@ class RabbitMQManager:
     
     async def clear_queue(self) -> None:
         """Clear all queues (admin only)"""
-        if not self.channel:
-            await self.connect()
+        await self.ensure_connected()
         
         for priority, queue_name in self.queue_names.items():
             await self.channel.queue_purge(queue_name)
@@ -299,8 +303,7 @@ class RabbitMQManager:
     
     async def get_next_request(self) -> Optional[Dict[str, Any]]:
         """Get the next request from the highest priority non-empty queue"""
-        if not self.channel:
-            await self.connect()
+        await self.ensure_connected()
         
         # Try to get a message from each queue in priority order
         for priority in sorted(self.queue_names.keys()):

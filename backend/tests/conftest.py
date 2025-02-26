@@ -15,7 +15,7 @@ from app.db import Base, get_db
 from app.main import app
 from app.auth.models import User, RegistrationToken, APIKey
 from app.auth.utils import get_password_hash
-from .mock_rabbitmq import mock_rabbitmq_connect
+from .mock_rabbitmq import patch_rabbitmq
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -37,9 +37,8 @@ def event_loop():
 @pytest.fixture
 async def mock_rabbitmq():
     """Set up mock RabbitMQ for testing"""
-    with patch('aio_pika.connect_robust') as mock_connect:
-        connection = await mock_rabbitmq_connect()
-        yield connection
+    with patch_rabbitmq():
+        yield
 
 @pytest.fixture
 def db_session():
@@ -53,8 +52,8 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture
-def client(db_session, mock_rabbitmq):
-    """Create a test client using the test database and mock RabbitMQ"""
+def client(db_session):
+    """Create a test client using the test database"""
     def override_get_db():
         try:
             yield db_session

@@ -21,7 +21,7 @@ OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 # Create router
 router = APIRouter(prefix="/api", tags=["api"])
 
-# Get queue manager instance
+# Create queue manager instance
 queue_manager = RabbitMQManager()
 
 # Helper function to determine request priority
@@ -228,14 +228,14 @@ async def api_health():
         ollama_status = False
     
     # Check RabbitMQ connection
-    rabbitmq_status = queue_manager.connection is not None and not queue_manager.connection.is_closed
-    
-    # Get queue sizes
-    queue_sizes = await queue_manager.get_queue_size()
+    try:
+        status = await queue_manager.get_status()
+        rabbitmq_status = status["rabbitmq_connected"]
+    except:
+        rabbitmq_status = False
     
     return {
         "status": "healthy" if (ollama_status and rabbitmq_status) else "degraded",
         "ollama_connected": ollama_status,
-        "rabbitmq_connected": rabbitmq_status,
-        "queue_size": sum(queue_sizes.values())
+        "rabbitmq_connected": rabbitmq_status
     }
