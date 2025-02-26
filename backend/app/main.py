@@ -124,6 +124,16 @@ async def root():
         "environment": settings.environment.name
     }
 
+# Health check endpoint - simpler and more reliable than the one previously added in Login.tsx
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint to verify server is responding"""
+    return {
+        "status": "healthy",
+        "message": "Server is running",
+        "version": "0.1.0"
+    }
+
 # Protected endpoint example
 @app.get("/protected")
 async def protected_route(current_user: User = Depends(get_current_user)):
@@ -138,12 +148,4 @@ async def admin_route(current_user: User = Depends(get_current_admin_user)):
     return {
         "message": f"Hello, Admin {current_user.username}!",
         "admin_id": current_user.id
-    }
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "environment": settings.environment.name
     }
