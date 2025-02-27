@@ -5,10 +5,32 @@ interface ThemeSelectorProps {
   compact?: boolean;
 }
 
+// Key for storing recent themes in localStorage
+const RECENT_THEMES_KEY = 'seadragon-recent-themes';
+const MAX_RECENT_THEMES = 3;
+
 const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
-  const { currentTheme, themeName, setTheme, isCustomThemeActive } = useTheme();
+  const { currentTheme, themeName, setTheme, isCustomThemeActive, customTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
+  const [recentThemes, setRecentThemes] = useState<ThemeName[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Load recent themes from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedRecent = localStorage.getItem(RECENT_THEMES_KEY);
+      if (savedRecent) {
+        const parsed = JSON.parse(savedRecent) as ThemeName[];
+        setRecentThemes(parsed);
+      } else {
+        // Initialize with default themes if no recent themes found
+        setRecentThemes(['catppuccin', 'dracula', 'matcha-cafe']);
+      }
+    } catch (e) {
+      console.error('Error loading recent themes:', e);
+      setRecentThemes(['catppuccin', 'dracula', 'matcha-cafe']);
+    }
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -31,25 +53,49 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
     return themes[name]?.displayName || name.replace(/-/g, ' ');
   };
 
+  // Update recent themes when a theme is selected
+  const updateRecentThemes = (selectedTheme: ThemeName) => {
+    const updatedRecent = [
+      selectedTheme,
+      ...recentThemes.filter(name => name !== selectedTheme)
+    ].slice(0, MAX_RECENT_THEMES);
+    
+    setRecentThemes(updatedRecent);
+    
+    try {
+      localStorage.setItem(RECENT_THEMES_KEY, JSON.stringify(updatedRecent));
+    } catch (e) {
+      console.error('Error saving recent themes:', e);
+    }
+  };
+
   const handleThemeChange = (newTheme: ThemeName) => {
     setTheme(newTheme);
+    updateRecentThemes(newTheme);
     setIsOpen(false);
   };
 
-  const navigateToThemeCustomizer = (e: React.MouseEvent) => {
+  const navigateToThemeGallery = (e: React.MouseEvent) => {
     e.preventDefault();
-    window.navigateTo('/admin/theme');
+    window.navigateTo('/themes');
     setIsOpen(false);
   };
 
-  const renderThemeButton = (name: keyof typeof themes) => {
-    const theme = themes[name];
+  const renderThemeButton = (name: ThemeName) => {
+    // Handle both built-in themes and custom theme
+    const theme = name === 'custom' && isCustomThemeActive 
+      ? customTheme 
+      : themes[name];
+      
+    // Skip if theme doesn't exist (shouldn't happen, but just in case)
+    if (!theme) return null;
+    
     const isActive = themeName === name || (name === 'custom' && isCustomThemeActive);
     
     return (
       <button
         key={name}
-        onClick={() => handleThemeChange(name as ThemeName)}
+        onClick={() => handleThemeChange(name)}
         className={`flex items-center w-full text-left px-3 py-2 rounded-md ${isActive ? 'bg-opacity-20' : 'bg-opacity-0'} hover:bg-opacity-10 transition-colors`}
         style={{
           backgroundColor: isActive ? theme.colors.accentPrimary : 'transparent',
@@ -117,22 +163,25 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
         >
           <div className="py-2">
             <div className="px-3 py-2 mb-1 border-b" style={{ borderColor: currentTheme.colors.borderColor }}>
-              <h3 className="font-medium" style={{ color: currentTheme.colors.textPrimary }}>Select Theme</h3>
+              <h3 className="font-medium" style={{ color: currentTheme.colors.textPrimary }}>Recent Themes</h3>
             </div>
             
-            {Object.keys(themes).map((name) => renderThemeButton(name as keyof typeof themes))}
+            {/* Show only recent themes */}
+            <div className="space-y-1 px-2 mb-2">
+              {recentThemes.map(name => renderThemeButton(name))}
+            </div>
 
             <div className="px-3 py-2 mt-1 border-t" style={{ borderColor: currentTheme.colors.borderColor }}>
               <a
-                href="/admin/themes"
+                href="/themes"
                 className="block text-center py-2 rounded-md"
                 style={{
                   backgroundColor: currentTheme.colors.accentSecondary,
                   color: currentTheme.isDark ? 'white' : 'black'
                 }}
-                onClick={navigateToThemeCustomizer}
+                onClick={navigateToThemeGallery}
               >
-                Customize Theme
+                Explore All Themes
               </a>
             </div>
           </div>

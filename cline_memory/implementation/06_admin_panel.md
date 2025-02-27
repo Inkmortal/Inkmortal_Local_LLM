@@ -219,3 +219,90 @@ This document outlines the steps to create the React-based administration panel.
 9. **Styling:**
 
     *Task Description:* Apply Tailwind CSS classes to style the admin panel components, ensuring a consistent and user-friendly interface.
+
+10. **API Configuration & Backend Connectivity:**
+
+    *Task Description:* Create a dedicated API configuration module to ensure reliable connectivity between the frontend and backend. This centralized approach provides better error handling and consistent API access across components.
+
+    ```typescript
+    // frontend/src/config/api.ts
+    export const API_BASE_URL = 'http://localhost:8000';
+
+    export const fetchApi = async (endpoint: string, options = {}) => {
+      const url = `${API_BASE_URL}${endpoint}`;
+      console.log(`Fetching from: ${url}`);
+      
+      try {
+        const response = await fetch(url, options);
+        return response;
+      } catch (error) {
+        console.error(`Network error:`, error);
+        throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Please check if the server is running.`);
+      }
+    };
+    ```
+
+11. **Authentication Context Enhancement:**
+
+    *Task Description:* Improve the AuthContext to better handle connection failures and provide clear error messages to users. Enhance the integration with API configuration.
+    
+    Key improvements:
+    - Add connection status tracking
+    - Provide explicit error messages for backend connectivity issues
+    - Implement better token handling and refresh logic
+    - Improve development mode experience with fallback offline authentication
+
+12. **Admin Setup Flow Improvement:**
+
+    *Task Description:* Simplify the admin setup flow and improve the user experience for the first-time setup process. Make the secret question more prominent and ensure clear visibility of registration tokens.
+    
+    Key improvements:
+    - Automatically show the secret question section when needed
+    - Provide clearer error messages for connection failures
+    - Improve visual presentation of the setup token
+
+13. **CORS Configuration:**
+
+    *Task Description:* Update the backend CORS settings to ensure proper connectivity with the frontend development server. This is critical for local development as well as production deployment.
+    
+    ```python
+    # backend/app/config.py
+    self.allowed_origins = [
+        f"https://chat.{self.base_domain}",
+        f"https://admin.{self.base_domain}",
+        "http://localhost:3000",  # Frontend dev server
+        "http://127.0.0.1:3000",  # Alternative frontend address
+        "http://localhost:8000",  # Backend dev server
+        "http://127.0.0.1:8000",  # Alternative backend address
+    ]
+    ```
+
+## Implementation Challenges
+
+Several challenges were encountered during the implementation of the admin panel:
+
+1. **API Connection Issues:**
+   - Using relative URLs without specifying the base URL caused connection failures
+   - Lack of proper error handling obscured the root causes of connectivity issues
+   - Solution: Created a dedicated API configuration module with explicit base URL and error handling
+
+2. **Route Inconsistency:**
+   - Mismatched route paths between App.tsx, ThemeSelector, and Sidebar components
+   - Route defined as "admin/theme" in some places and "admin/themes" in others
+   - Solution: Standardized all routes to "admin/theme" for consistency
+
+3. **Admin Login UX:**
+   - Poor placement of admin login button made it difficult to find
+   - Inadequate error messages when backend connection failed
+   - Solution: Moved login button to the header and improved error feedback
+
+4. **Authentication Flow Issues:**
+   - Lack of proper connection status reporting in authentication context
+   - No fallback for development mode when backend is unavailable
+   - Solution: Enhanced AuthContext with connection status and better error handling
+
+These challenges highlight the importance of:
+- Consistent routing conventions
+- Centralized API configuration
+- Clear error messages and status reporting
+- Fallback mechanisms for development scenarios

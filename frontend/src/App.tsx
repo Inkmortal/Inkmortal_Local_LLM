@@ -13,6 +13,7 @@ import AdminLogin from './pages/admin/Login';
 import Card from './components/ui/Card';
 import Button from './components/ui/Button';
 import ThemeSelector from './components/ui/ThemeSelector';
+import ThemeGallery from './pages/themes/ThemeGallery';
 
 // Wrap admin components with auth protection
 const ProtectedAdminDashboard = withAuth(AdminDashboard);
@@ -24,8 +25,17 @@ const ProtectedThemeCustomizer = withAuth(ThemeCustomizer);
 const ProtectedSystemStats = withAuth(SystemStats);
 
 // Simple routing mechanism (to be replaced with React Router in a real app)
-type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys'
-          | 'admin/queue' | 'admin/theme' | 'admin/stats' | 'admin/login' | 'home';
+type Route = 
+  | 'admin' 
+  | 'admin/ip-whitelist' 
+  | 'admin/tokens' 
+  | 'admin/api-keys'
+  | 'admin/queue' 
+  | 'admin/theme' 
+  | 'admin/stats' 
+  | 'admin/login' 
+  | 'themes'
+  | 'home';
 
 // Loader component
 const Loader: React.FC = () => {
@@ -82,7 +92,7 @@ const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: currentTheme.colors.bgPrimary, color: currentTheme.colors.textPrimary }}>
       <div className="fixed top-4 right-4 z-10 flex items-center space-x-3">
-        <Button
+        <Button 
           size="sm"
           variant="outline"
           onClick={() => window.navigateTo('/admin/login')}
@@ -164,9 +174,9 @@ const HomePage: React.FC = () => {
         <div className="text-center">
           <Button 
             size="lg"
-            onClick={() => window.navigateTo('/admin/login')}
+            onClick={() => window.navigateTo('/themes')}
           >
-            Admin Login
+            Explore Themes
           </Button>
         </div>
       </main>
@@ -251,6 +261,8 @@ function App() {
         return <ProtectedSystemStats />;
       case 'admin/login':
         return <AdminLogin />;
+      case 'themes':
+        return <ThemeGallery />;
       case 'home':
       default:
         return <HomePage />;

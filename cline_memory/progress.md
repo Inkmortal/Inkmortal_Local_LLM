@@ -85,5 +85,17 @@
 - Configure Cloudflare Tunnel for secure remote access.
 - Implement system monitoring and logging.
 
+## Completed (Continued)
+- Fixed admin panel issues:
+  - Created a proper API configuration (`frontend/src/config/api.ts`) to ensure correct backend connectivity
+  - Fixed routing inconsistencies between components for theme customizer
+  - Improved admin login UX by moving the login button to a more prominent position
+  - Enhanced AuthContext with better error handling and connection status reporting
+  - Updated CORS settings in the backend to allow connections from all relevant origins
+  - Simplified the admin setup flow and improved error messages
+
 ## Issues
-- None at this time.
+- ~~Admin panel connectivity issues~~ (Fixed)
+- ~~Registration token not displaying during admin setup~~ (Fixed)
+- ~~Theme customizer routing inconsistencies~~ (Fixed)
+- ~~Poor placement of admin login button~~ (Fixed)

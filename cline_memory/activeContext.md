@@ -71,6 +71,14 @@ The web interface should emphasize educational assistant capabilities:
   - Enhanced test reliability with more robust assertions
   - Fixed interface abstraction to ensure proper implementation in both queue managers
   - Added comprehensive debugging to help identify queue state issues
+- Fixed admin panel connectivity and user experience issues:
+  - Created a proper API configuration module to ensure correct backend connectivity
+  - Added explicit error handling for API connection failures
+  - Fixed routing inconsistencies for the theme customizer component
+  - Improved admin login UX with better button placement
+  - Enhanced AuthContext with better error handling and connection status reporting
+  - Updated CORS settings to allow connections from all frontend origins
+  - Simplified the admin setup flow and improved the registration token experience
 
 ## Open Questions
 - Specific details of the admin panel UI design
