@@ -40,6 +40,7 @@ const ModernChatPage: React.FC = () => {
   const [conversations, setConversations] = useState<{id: string, title: string, date: Date}[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<{content: string, type: 'code' | 'math' | 'image'} | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showHistorySidebar, setShowHistorySidebar] = useState(true);
   
   // Refs for scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -319,6 +320,11 @@ const ModernChatPage: React.FC = () => {
     setShowSidebar(!showSidebar);
   };
 
+  // Toggle function for the history sidebar
+  const toggleHistorySidebar = () => {
+    setShowHistorySidebar(!showHistorySidebar);
+  };
+
   const handleInsertCode = () => {
     // For demo, add a code snippet template to the input
     const codeSnippet = `\`\`\`javascript
@@ -341,488 +347,504 @@ function example() {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
-      {/* Modern Glass Header - Reduced glow effect */}
-      <header 
-        className="py-3 px-4 md:px-6 flex justify-between items-center z-10 sticky top-0"
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
+      {/* Left Sidebar - Conversation History */}
+      <aside 
+        className={`flex-shrink-0 h-full transition-all ${showHistorySidebar ? 'w-64' : 'w-0 overflow-hidden'}`}
         style={{ 
-          background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}CC, ${currentTheme.colors.bgPrimary}BF)`,
+          background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
           backdropFilter: 'blur(10px)',
-          borderBottom: `1px solid ${currentTheme.colors.borderColor}30`,
-          boxShadow: `0 4px 16px rgba(0, 0, 0, 0.08)`,
+          boxShadow: `0 4px 20px rgba(0, 0, 0, 0.07), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
+          borderRight: `1px solid ${currentTheme.colors.borderColor}30`,
+          zIndex: 20,
+          transition: 'all 0.3s ease',
         }}
       >
-        <div className="flex items-center space-x-3">
-          <div className="relative group">
-            <div 
-              className="absolute -inset-1 rounded-full opacity-40 group-hover:opacity-70 transition-all blur-sm"
-              style={{ 
-                background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                filter: 'blur(6px)'
-              }}
-            />
-            <div className="relative p-2 rounded-full"
-              style={{ 
-                background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-              }}
+        {/* Conversation History Section */}
+        <div className="flex flex-col h-full">
+          <div 
+            className="px-4 py-3 border-b flex justify-between items-center"
+            style={{ 
+              borderColor: `${currentTheme.colors.borderColor}40`,
+              background: `linear-gradient(90deg, ${currentTheme.colors.accentPrimary}10, transparent)`,
+            }}
+          >
+            <h3 
+              className="text-base font-medium flex items-center"
+              style={{ color: currentTheme.colors.textPrimary }}
             >
-              <svg 
-                className="w-6 h-6" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ color: '#fff' }}
-              >
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg className="w-4 h-4 mr-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-            </div>
+              Recent Chats
+            </h3>
+            <Button
+              size="xs"
+              variant="ghost"
+              className="rounded-full p-1.5"
+              style={{
+                color: currentTheme.colors.textSecondary
+              }}
+              onClick={toggleHistorySidebar}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </Button>
           </div>
-          <div>
-            <div className="flex items-baseline">
-              <span 
-                className="text-lg font-semibold" 
+          
+          {/* New chat button - moved to top for better visibility */}
+          <button 
+            className="w-[calc(100%-1rem)] mx-auto mt-3 p-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
+            style={{ 
+              background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}20, ${currentTheme.colors.accentSecondary}20)`,
+              color: currentTheme.colors.textSecondary,
+              border: `1px solid ${currentTheme.colors.borderColor}40`,
+            }}
+          >
+            <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            New Conversation
+          </button>
+          
+          <div className="p-2 space-y-1.5 overflow-y-auto modern-scrollbar flex-grow">
+            {/* Conversations list */}
+            {conversations.map((conv, index) => (
+              <div 
+                key={conv.id}
+                className="p-2.5 rounded-lg cursor-pointer transition-all relative overflow-hidden group"
                 style={{ 
-                  background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
+                  backgroundColor: conv.id === conversationId 
+                    ? `${currentTheme.colors.accentPrimary}15` 
+                    : 'transparent',
+                  borderLeft: conv.id === conversationId 
+                    ? `2px solid ${currentTheme.colors.accentPrimary}` 
+                    : `2px solid transparent`,
                 }}
+                onClick={() => {/* Load conversation */}}
               >
-                SeaDragon
-              </span>
-              <span className="ml-1.5 text-sm font-medium" style={{ color: currentTheme.colors.textPrimary }}>
-                Chat
-              </span>
-            </div>
-            <div className="text-xs font-light" style={{ color: currentTheme.colors.textMuted }}>
-              Powered by Artificial Intelligence
+                <h4 
+                  className="text-sm font-medium mb-1 flex items-center"
+                  style={{ 
+                    color: conv.id === conversationId 
+                      ? currentTheme.colors.textPrimary
+                      : currentTheme.colors.textSecondary
+                  }}
+                >
+                  {index === 0 ? (
+                    <>
+                      <span className="relative flex h-2 w-2 mr-2">
+                        <span 
+                          className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
+                          style={{ backgroundColor: currentTheme.colors.success }}
+                        />
+                        <span 
+                          className="relative inline-flex rounded-full h-2 w-2" 
+                          style={{ backgroundColor: currentTheme.colors.success }}
+                        />
+                      </span>
+                      {conv.title}
+                    </>
+                  ) : (
+                    conv.title
+                  )}
+                </h4>
+                <p 
+                  className="text-xs truncate"
+                  style={{ color: currentTheme.colors.textMuted }}
+                >
+                  {index === 0 
+                    ? 'Active conversation' 
+                    : `Started on ${conv.date.toLocaleDateString()}`}
+                </p>
+              </div>
+            ))}
+          </div>
+        
+          {/* Features Section */}
+          <div 
+            className="px-4 py-3 mt-auto border-t" 
+            style={{ 
+              borderColor: `${currentTheme.colors.borderColor}40`,
+              background: `linear-gradient(to bottom, transparent, ${currentTheme.colors.bgTertiary}40)`,
+            }}
+          >
+            <h4 
+              className="text-xs uppercase tracking-wider font-medium mb-2 opacity-70"
+              style={{ color: currentTheme.colors.textSecondary }}
+            >
+              Capabilities
+            </h4>
+            
+            <div className="space-y-1.5 text-xs" style={{ color: currentTheme.colors.textSecondary }}>
+              <div className="flex items-center gap-1.5">
+                <span 
+                  className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+                />
+                <span>Mathematical expression rendering</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span 
+                  className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: currentTheme.colors.accentSecondary }}
+                />
+                <span>Code syntax highlighting & execution</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span 
+                  className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: currentTheme.colors.accentTertiary }}
+                />
+                <span>Document uploading & analysis</span>
+              </div>
             </div>
           </div>
         </div>
-        
-        <div className="flex items-center space-x-3">
-          {/* New conversation button */}
-          <Button 
-            size="sm"
-            variant="outline"
-            className="text-sm rounded-lg"
-            style={{
-              color: currentTheme.colors.textSecondary,
-              borderColor: `${currentTheme.colors.borderColor}60`,
-            }}
-          >
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            New Chat
-          </Button>
+      </aside>
 
-          {/* Chat info button */}
-          <Button 
-            size="sm"
-            variant="ghost"
-            className="text-sm rounded-lg"
-            style={{
-              color: showSidebar ? currentTheme.colors.accentPrimary : currentTheme.colors.textSecondary,
-              backgroundColor: showSidebar ? `${currentTheme.colors.accentPrimary}10` : 'transparent',
-            }}
-            onClick={toggleSidebar}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </Button>
+      {/* Main Chat Area - This is the flex-grow section that fills the space */}
+      <div className="flex flex-col flex-grow overflow-hidden relative">
+        {/* Modern Glass Header */}
+        <header 
+          className="py-3 px-4 md:px-6 flex justify-between items-center z-10 sticky top-0"
+          style={{ 
+            background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}AA, ${currentTheme.colors.bgPrimary}90)`,
+            backdropFilter: 'blur(10px)',
+            borderBottom: `1px solid ${currentTheme.colors.borderColor}30`,
+            boxShadow: `0 4px 16px rgba(0, 0, 0, 0.08)`,
+          }}
+        >
+          <div className="flex items-center space-x-3">
+            {/* Toggle History Sidebar Button (only shows when sidebar is closed) */}
+            {!showHistorySidebar && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="rounded-full p-1.5"
+                style={{
+                  color: currentTheme.colors.textSecondary
+                }}
+                onClick={toggleHistorySidebar}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+              </Button>
+            )}
+            
+            <div className="relative group">
+              <div 
+                className="absolute -inset-1 rounded-full opacity-40 group-hover:opacity-70 transition-all blur-sm"
+                style={{ 
+                  background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                  filter: 'blur(6px)'
+                }}
+              />
+              <div className="relative p-2 rounded-full"
+                style={{ 
+                  background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                }}
+              >
+                <svg 
+                  className="w-6 h-6" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ color: '#fff' }}
+                >
+                  <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-baseline">
+                <span 
+                  className="text-lg font-semibold" 
+                  style={{ 
+                    background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  SeaDragon
+                </span>
+                <span className="ml-1.5 text-sm font-medium" style={{ color: currentTheme.colors.textPrimary }}>
+                  Chat
+                </span>
+              </div>
+              <div className="text-xs font-light" style={{ color: currentTheme.colors.textMuted }}>
+                Powered by Artificial Intelligence
+              </div>
+            </div>
+          </div>
           
-          {isAuthenticated && (
+          <div className="flex items-center space-x-3">
+            {/* New conversation button */}
+            <Button 
+              size="sm"
+              variant="outline"
+              className="text-sm rounded-lg"
+              style={{
+                color: currentTheme.colors.textSecondary,
+                borderColor: `${currentTheme.colors.borderColor}60`,
+              }}
+            >
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              New Chat
+            </Button>
+
+            {/* Artifact Panel button */}
             <Button 
               size="sm"
               variant="ghost"
-              onClick={() => window.navigateTo('/admin')}
-              className="text-sm transition-all rounded-lg"
+              className="text-sm rounded-lg"
               style={{
-                color: currentTheme.colors.textSecondary,
-                background: `${currentTheme.colors.bgTertiary}60`,
+                color: showSidebar ? currentTheme.colors.accentPrimary : currentTheme.colors.textSecondary,
+                backgroundColor: showSidebar ? `${currentTheme.colors.accentPrimary}10` : 'transparent',
               }}
+              onClick={toggleSidebar}
+              title="View artifacts and uploads"
             >
-              Admin
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
             </Button>
-          )}
-          <ThemeSelector />
-        </div>
-      </header>
-      
-      {/* Main Chat Interface */}
-      <div className="flex flex-grow overflow-hidden relative">
-        {/* Decorative background elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-          {/* Gradient sphere 1 */}
-          <div 
-            className="absolute rounded-full opacity-20 blur-3xl" 
-            style={{
-              width: '40vw',
-              height: '40vw',
-              top: '20%',
-              left: '-10%',
-              background: `radial-gradient(circle, ${currentTheme.colors.accentPrimary}40, transparent 70%)`,
-              filter: 'blur(120px)',
-            }}
-          />
-          
-          {/* Gradient sphere 2 */}
-          <div 
-            className="absolute rounded-full opacity-10 blur-3xl" 
-            style={{
-              width: '45vw',
-              height: '45vw',
-              bottom: '-10%',
-              right: '-5%',
-              background: `radial-gradient(circle, ${currentTheme.colors.accentSecondary}30, transparent 70%)`,
-              filter: 'blur(120px)',
-            }}
-          />
-        </div>
-        
-        {/* Main container - with reasonable max width */}
-        <div className="flex flex-grow max-w-7xl mx-auto px-4 md:px-6 py-4 relative z-1">
-          {/* Left Sidebar - Conversation History */}
-          <aside 
-            className="hidden lg:flex flex-col w-64 mr-8 rounded-xl overflow-hidden shrink-0 animate-fade-in h-full transition-all"
-            style={{ 
-              background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
-              backdropFilter: 'blur(10px)',
-              boxShadow: `0 4px 20px rgba(0, 0, 0, 0.07), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
-              borderRight: `1px solid ${currentTheme.colors.borderColor}30`,
-              transition: 'all 0.3s ease',
-            }}
-          >
-            {/* Conversation History Section */}
-            <div className="flex flex-col h-full">
-              <div 
-                className="px-4 py-3 border-b"
-                style={{ 
-                  borderColor: `${currentTheme.colors.borderColor}40`,
-                  background: `linear-gradient(90deg, ${currentTheme.colors.accentPrimary}10, transparent)`,
-                }}
-              >
-                <h3 
-                  className="text-base font-medium flex items-center"
-                  style={{ color: currentTheme.colors.textPrimary }}
-                >
-                  <svg className="w-4 h-4 mr-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  Recent Conversations
-                </h3>
-              </div>
-              
-              {/* New chat button - moved to top for better visibility */}
-              <button 
-                className="w-[calc(100%-1rem)] mx-auto mt-3 p-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
-                style={{ 
-                  background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}20, ${currentTheme.colors.accentSecondary}20)`,
-                  color: currentTheme.colors.textSecondary,
-                  border: `1px solid ${currentTheme.colors.borderColor}40`,
-                }}
-              >
-                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                New Conversation
-              </button>
-              
-              <div className="p-2 space-y-1.5 overflow-y-auto modern-scrollbar flex-grow">
-                {/* Conversations list */}
-                {conversations.map((conv, index) => (
-                  <div 
-                    key={conv.id}
-                    className="p-2.5 rounded-lg cursor-pointer transition-all relative overflow-hidden group"
-                    style={{ 
-                      backgroundColor: conv.id === conversationId 
-                        ? `${currentTheme.colors.accentPrimary}15` 
-                        : 'transparent',
-                      borderLeft: conv.id === conversationId 
-                        ? `2px solid ${currentTheme.colors.accentPrimary}` 
-                        : `2px solid transparent`,
-                    }}
-                    onClick={() => {/* Load conversation */}}
-                  >
-                    <h4 
-                      className="text-sm font-medium mb-1 flex items-center"
-                      style={{ 
-                        color: conv.id === conversationId 
-                          ? currentTheme.colors.textPrimary
-                          : currentTheme.colors.textSecondary
-                      }}
-                    >
-                      {index === 0 ? (
-                        <>
-                          <span className="relative flex h-2 w-2 mr-2">
-                            <span 
-                              className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
-                              style={{ backgroundColor: currentTheme.colors.success }}
-                            />
-                            <span 
-                              className="relative inline-flex rounded-full h-2 w-2" 
-                              style={{ backgroundColor: currentTheme.colors.success }}
-                            />
-                          </span>
-                          {conv.title}
-                        </>
-                      ) : (
-                        conv.title
-                      )}
-                    </h4>
-                    <p 
-                      className="text-xs truncate"
-                      style={{ color: currentTheme.colors.textMuted }}
-                    >
-                      {index === 0 
-                        ? 'Active conversation' 
-                        : `Started on ${conv.date.toLocaleDateString()}`}
-                    </p>
-                  </div>
-                ))}
-              </div>
             
-              {/* Features Section */}
-              <div 
-                className="px-4 py-3 mt-auto border-t" 
-                style={{ 
-                  borderColor: `${currentTheme.colors.borderColor}40`,
-                  background: `linear-gradient(to bottom, transparent, ${currentTheme.colors.bgTertiary}40)`,
+            {isAuthenticated && (
+              <Button 
+                size="sm"
+                variant="ghost"
+                onClick={() => window.navigateTo('/admin')}
+                className="text-sm transition-all rounded-lg"
+                style={{
+                  color: currentTheme.colors.textSecondary,
+                  background: `${currentTheme.colors.bgTertiary}60`,
                 }}
               >
-                <h4 
-                  className="text-xs uppercase tracking-wider font-medium mb-2 opacity-70"
-                  style={{ color: currentTheme.colors.textSecondary }}
-                >
-                  Capabilities
-                </h4>
-                
-                <div className="space-y-1.5 text-xs" style={{ color: currentTheme.colors.textSecondary }}>
-                  <div className="flex items-center gap-1.5">
-                    <span 
-                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: currentTheme.colors.accentPrimary }}
-                    />
-                    <span>Mathematical expression rendering</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span 
-                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: currentTheme.colors.accentSecondary }}
-                    />
-                    <span>Code syntax highlighting & execution</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span 
-                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: currentTheme.colors.accentTertiary }}
-                    />
-                    <span>Document uploading & analysis</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </aside>
-          
-          {/* Main Chat Window */}
-          <div 
-            className="flex-grow flex flex-col overflow-hidden rounded-xl"
-            style={{ 
-              background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}90, ${currentTheme.colors.bgPrimary}90)`,
-              backdropFilter: 'blur(12px)',
-              boxShadow: `0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px ${currentTheme.colors.borderColor}20`,
-              border: `1px solid ${currentTheme.colors.borderColor}30`,
-              transition: 'all 0.3s ease',
-            }}
-          >
-            {/* Message area */}
-            <ChatWindow 
-              messages={messages} 
-              loading={loading}
-              onRegenerate={handleRegenerate}
-              onStopGeneration={handleStopGeneration}
-              isGenerating={isGenerating}
+                Admin
+              </Button>
+            )}
+            <ThemeSelector />
+          </div>
+        </header>
+        
+        {/* Main Chat Interface */}
+        <div className="flex flex-grow overflow-hidden relative">
+          {/* Decorative background elements */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            {/* Gradient sphere 1 */}
+            <div 
+              className="absolute rounded-full opacity-15 blur-3xl" 
+              style={{
+                width: '40vw',
+                height: '40vw',
+                top: '20%',
+                left: '-10%',
+                background: `radial-gradient(circle, ${currentTheme.colors.accentPrimary}40, transparent 70%)`,
+                filter: 'blur(120px)',
+              }}
             />
             
-            {/* File upload area */}
-            {showFileUpload && (
+            {/* Gradient sphere 2 */}
+            <div 
+              className="absolute rounded-full opacity-10 blur-3xl" 
+              style={{
+                width: '45vw',
+                height: '45vw',
+                bottom: '-10%',
+                right: '-5%',
+                background: `radial-gradient(circle, ${currentTheme.colors.accentSecondary}30, transparent 70%)`,
+                filter: 'blur(120px)',
+              }}
+            />
+          </div>
+          
+          {/* Content container */}
+          <div className="w-full h-full flex relative">
+            {/* Main Chat Window - No border or background to blend with page */}
+            <div className="flex-grow flex flex-col overflow-hidden">
+              {/* Message area */}
+              <ChatWindow 
+                messages={messages} 
+                loading={loading}
+                onRegenerate={handleRegenerate}
+                onStopGeneration={handleStopGeneration}
+                isGenerating={isGenerating}
+              />
+            
+              {/* File upload area */}
+              {showFileUpload && (
+                <div 
+                  className="px-5 py-4 animate-slideUp"
+                  style={{ 
+                    background: `linear-gradient(to top, ${currentTheme.colors.bgSecondary}90, ${currentTheme.colors.bgTertiary}90)`,
+                    backdropFilter: 'blur(10px)',
+                  }}
+                >
+                  <FileUpload
+                    onFileSelect={handleFileSelect}
+                    label="Upload an image or PDF to analyze"
+                  />
+                </div>
+              )}
+              
+              {/* Action bar - with useful buttons */}
               <div 
-                className="px-5 py-4 border-t animate-slideUp"
+                className="px-4 py-2 flex items-center justify-between"
                 style={{ 
-                  borderColor: `${currentTheme.colors.borderColor}30`,
-                  background: `linear-gradient(to top, ${currentTheme.colors.bgSecondary}90, ${currentTheme.colors.bgTertiary}90)`,
-                  backdropFilter: 'blur(10px)',
+                  background: 'transparent',
                 }}
               >
-                <FileUpload
-                  onFileSelect={handleFileSelect}
-                  label="Upload an image or PDF to analyze"
-                />
-              </div>
-            )}
-            
-            {/* Action bar - with useful buttons */}
-            <div 
-              className="px-4 py-2 border-t flex items-center justify-between"
-              style={{ 
-                borderColor: `${currentTheme.colors.borderColor}20`,
-                background: `linear-gradient(to bottom, ${currentTheme.colors.bgPrimary}80, ${currentTheme.colors.bgSecondary}80)`,
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <div className="flex items-center gap-1.5">
-                {/* File Upload Button */}
-                <Button
-                  size="xs"
-                  variant={showFileUpload ? "default" : "ghost"}
-                  className="rounded-full p-1.5 transition-all"
-                  style={{
-                    color: showFileUpload 
-                      ? '#fff'
-                      : currentTheme.colors.textSecondary,
-                    backgroundColor: showFileUpload 
-                      ? currentTheme.colors.accentTertiary
-                      : `${currentTheme.colors.bgTertiary}40`,
-                  }}
-                  title={showFileUpload ? "Hide file upload" : "Attach file"}
-                  onClick={() => setShowFileUpload(!showFileUpload)}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                </Button>
-                
-                {/* Code Snippet Button */}
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  className="rounded-full p-1.5 transition-all"
-                  style={{
-                    color: currentTheme.colors.textSecondary,
-                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
-                  }}
-                  title="Insert code snippet"
-                  onClick={handleInsertCode}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                  </svg>
-                </Button>
-                
-                {/* Math Expression Button */}
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  className="rounded-full p-1.5 transition-all"
-                  style={{
-                    color: currentTheme.colors.textSecondary,
-                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
-                  }}
-                  title="Insert math expression"
-                  onClick={handleInsertMath}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
-                  </svg>
-                </Button>
-                
-                {selectedFile && (
-                  <div 
-                    className="text-xs px-2 py-1 rounded-full animate-fade-in flex items-center ml-1"
-                    style={{ 
-                      backgroundColor: `${currentTheme.colors.accentTertiary}15`,
-                      color: currentTheme.colors.textSecondary,
-                      border: `1px solid ${currentTheme.colors.accentTertiary}30`
+                <div className="flex items-center gap-1.5">
+                  {/* File Upload Button */}
+                  <Button
+                    size="xs"
+                    variant={showFileUpload ? "default" : "ghost"}
+                    className="rounded-full p-1.5 transition-all"
+                    style={{
+                      color: showFileUpload 
+                        ? '#fff'
+                        : currentTheme.colors.textSecondary,
+                      backgroundColor: showFileUpload 
+                        ? currentTheme.colors.accentTertiary
+                        : `${currentTheme.colors.bgTertiary}40`,
                     }}
+                    title={showFileUpload ? "Hide file upload" : "Attach file"}
+                    onClick={() => setShowFileUpload(!showFileUpload)}
                   >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
-                    {selectedFile.name}
-                    <button 
-                      className="ml-1.5 hover:text-red-500 transition-colors"
-                      onClick={() => setSelectedFile(null)}
+                  </Button>
+                  
+                  {/* Code Snippet Button */}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="rounded-full p-1.5 transition-all"
+                    style={{
+                      color: currentTheme.colors.textSecondary,
+                      backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+                    }}
+                    title="Insert code snippet"
+                    onClick={handleInsertCode}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                  </Button>
+                  
+                  {/* Math Expression Button */}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="rounded-full p-1.5 transition-all"
+                    style={{
+                      color: currentTheme.colors.textSecondary,
+                      backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+                    }}
+                    title="Insert math expression"
+                    onClick={handleInsertMath}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                    </svg>
+                  </Button>
+                  
+                  {selectedFile && (
+                    <div 
+                      className="text-xs px-2 py-1 rounded-full animate-fade-in flex items-center ml-1"
+                      style={{ 
+                        backgroundColor: `${currentTheme.colors.accentTertiary}15`,
+                        color: currentTheme.colors.textSecondary,
+                        border: `1px solid ${currentTheme.colors.accentTertiary}30`
+                      }}
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                       </svg>
-                    </button>
+                      {selectedFile.name}
+                      <button 
+                        className="ml-1.5 hover:text-red-500 transition-colors"
+                        onClick={() => setSelectedFile(null)}
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex items-center">
+                  <div 
+                    className="text-xs mr-2 select-none"
+                    style={{ color: currentTheme.colors.textMuted }}
+                  >
+                    <span className="hidden sm:inline">Press </span>
+                    <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-0.5"
+                      style={{
+                        backgroundColor: `${currentTheme.colors.bgTertiary}80`,
+                        color: currentTheme.colors.textSecondary,
+                        border: `1px solid ${currentTheme.colors.borderColor}40`,
+                      }}
+                    >
+                      Shift
+                    </kbd>
+                    <span className="hidden sm:inline-block mx-0.5">+</span>
+                    <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-0.5"
+                      style={{
+                        backgroundColor: `${currentTheme.colors.bgTertiary}80`,
+                        color: currentTheme.colors.textSecondary,
+                        border: `1px solid ${currentTheme.colors.borderColor}40`,
+                      }}
+                    >
+                      ↵
+                    </kbd>
+                    <span className="hidden sm:inline"> for line break</span>
                   </div>
-                )}
+                </div>
               </div>
               
-              <div className="flex items-center">
-                <div 
-                  className="text-xs mr-2 select-none"
-                  style={{ color: currentTheme.colors.textMuted }}
+              {/* Chat input - styled like Claude with no background */}
+              <div className="px-4 py-3 relative">
+                <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
+                  style={{
+                    boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
+                    border: `1px solid ${currentTheme.colors.borderColor}40`,
+                  }}
                 >
-                  <span className="hidden sm:inline">Press </span>
-                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-0.5"
-                    style={{
-                      backgroundColor: `${currentTheme.colors.bgTertiary}80`,
-                      color: currentTheme.colors.textSecondary,
-                      border: `1px solid ${currentTheme.colors.borderColor}40`,
-                    }}
-                  >
-                    Shift
-                  </kbd>
-                  <span className="hidden sm:inline-block mx-0.5">+</span>
-                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-0.5"
-                    style={{
-                      backgroundColor: `${currentTheme.colors.bgTertiary}80`,
-                      color: currentTheme.colors.textSecondary,
-                      border: `1px solid ${currentTheme.colors.borderColor}40`,
-                    }}
-                  >
-                    ↵
-                  </kbd>
-                  <span className="hidden sm:inline"> for line break</span>
+                  <ChatInput 
+                    onSend={handleSendMessage} 
+                    disabled={loading}
+                    placeholder="Message SeaDragon..."
+                    isGenerating={isGenerating}
+                  />
                 </div>
               </div>
             </div>
             
-            {/* Chat input - styled like Claude */}
-            <div className="px-4 py-3 border-t relative"
-              style={{
-                borderColor: `${currentTheme.colors.borderColor}30`,
-                background: `linear-gradient(to top, ${currentTheme.colors.bgSecondary}80, ${currentTheme.colors.bgPrimary}90)`,
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
-                style={{
-                  boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
-                  border: `1px solid ${currentTheme.colors.borderColor}40`,
-                }}
-              >
-                <ChatInput 
-                  onSend={handleSendMessage} 
-                  disabled={loading}
-                  placeholder="Message SeaDragon..."
-                  isGenerating={isGenerating}
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Right Sidebar - Chat Info Panel (conditionally shown) */}
-          {showSidebar && (
+            {/* Right Sidebar - Artifacts Panel */}
             <aside 
-              className="w-72 ml-8 rounded-xl overflow-hidden shrink-0 animate-fade-in h-full transition-all hidden lg:flex flex-col"
+              className={`transition-all ${showSidebar ? 'w-80' : 'w-0 overflow-hidden'} h-full`}
               style={{ 
                 background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
                 backdropFilter: 'blur(10px)',
                 boxShadow: `0 4px 20px rgba(0, 0, 0, 0.07), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
                 borderLeft: `1px solid ${currentTheme.colors.borderColor}30`,
                 transition: 'all 0.3s ease',
+                zIndex: 20
               }}
             >
               <div className="flex flex-col h-full">
                 <div 
-                  className="px-4 py-3 border-b"
+                  className="px-4 py-3 border-b flex justify-between items-center"
                   style={{ 
                     borderColor: `${currentTheme.colors.borderColor}40`,
                     background: `linear-gradient(90deg, ${currentTheme.colors.accentSecondary}10, transparent)`,
@@ -833,10 +855,23 @@ function example() {
                     style={{ color: currentTheme.colors.textPrimary }}
                   >
                     <svg className="w-4 h-4 mr-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    Chat Information
+                    Artifacts
                   </h3>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="rounded-full p-1.5"
+                    style={{
+                      color: currentTheme.colors.textSecondary
+                    }}
+                    onClick={toggleSidebar}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    </svg>
+                  </Button>
                 </div>
                 
                 <div className="p-4 overflow-y-auto modern-scrollbar flex-grow">
@@ -963,10 +998,106 @@ function example() {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Selected Artifact Display */}
+                  {selectedArtifact && (
+                    <div 
+                      className="mt-6 p-4 border-t artifact-display"
+                      style={{ 
+                        borderColor: `${currentTheme.colors.borderColor}30`,
+                      }}
+                    >
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 
+                          className="text-sm font-medium flex items-center"
+                          style={{ 
+                            color: selectedArtifact.type === 'code' 
+                              ? currentTheme.colors.accentPrimary 
+                              : selectedArtifact.type === 'math' 
+                                ? currentTheme.colors.accentSecondary 
+                                : currentTheme.colors.accentTertiary
+                          }}
+                        >
+                          {selectedArtifact.type === 'code' && (
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                          )}
+                          {selectedArtifact.type === 'math' && (
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                            </svg>
+                          )}
+                          {selectedArtifact.type === 'image' && (
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                          {selectedArtifact.type === 'code' ? 'Code Snippet' : 
+                          selectedArtifact.type === 'math' ? 'Mathematical Expression' : 'Image'}
+                        </h3>
+                        
+                        <div className="flex space-x-2">
+                          <Button 
+                            size="xs" 
+                            variant="outline"
+                            className="text-xs"
+                            style={{
+                              borderColor: currentTheme.colors.borderColor,
+                              color: currentTheme.colors.textSecondary
+                            }}
+                            onClick={() => setSelectedArtifact(null)}
+                          >
+                            <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Close
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div 
+                        className="rounded-lg overflow-hidden"
+                        style={{ 
+                          boxShadow: `0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
+                        }}
+                      >
+                        {selectedArtifact.type === 'code' && (
+                          <CodeBlock 
+                            code={selectedArtifact.content}
+                            language="javascript" 
+                          />
+                        )}
+                        {selectedArtifact.type === 'math' && (
+                          <div 
+                            className="p-5 text-center"
+                            style={{ 
+                              backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
+                            }}
+                          >
+                            <MathRenderer 
+                              latex={selectedArtifact.content}
+                              display={true}
+                            />
+                          </div>
+                        )}
+                        {selectedArtifact.type === 'image' && (
+                          <div className="p-4 text-center" style={{ backgroundColor: `${currentTheme.colors.bgPrimary}E6` }}>
+                            <img
+                              src={selectedArtifact.content}
+                              alt="Shared content"
+                              className="max-w-full mx-auto rounded-lg"
+                              style={{ maxHeight: '300px' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </aside>
-          )}
+          </div>
         </div>
       </div>
     </div>

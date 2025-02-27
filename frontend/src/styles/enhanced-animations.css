@@ -1,0 +1,159 @@
+/* Enhanced Animation Keyframes */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 5px currentColor; }
+  50% { opacity: 1; box-shadow: 0 0 15px currentColor, 0 0 5px currentColor; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes border-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(var(--accent-primary-rgb), 0.3); }
+  50% { box-shadow: 0 0 15px rgba(var(--accent-primary-rgb), 0.6); }
+}
+
+@keyframes ambient-gradient {
+  0%, 100% { 
+    background-position: 0% 50%;
+    opacity: 0.1;
+  }
+  50% { 
+    background-position: 100% 50%;
+    opacity: 0.15;
+  }
+}
+
+@keyframes shine {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* Special effect for generating messages */
+.generating-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.generating-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shine 3s infinite linear;
+}
+
+/* Message appearance animations */
+.message-visible {
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+}
+
+.last-message::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 10%;
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(
+    to right, 
+    transparent, 
+    rgba(255, 255, 255, 0.05), 
+    transparent
+  );
+}
+
+/* Smooth scroll when new message arrives */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Avatar effect */
+.avatar-glow {
+  animation: glow 3s infinite ease-in-out;
+}
+
+.avatar-ripple::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.3);
+  animation: ripple 2s infinite ease-out;
+}
+
+/* Typing effects */
+.is-typing .cursor-effect {
+  opacity: 1;
+}
+
+/* Loading indicator */
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  margin: 0 2px;
+  border-radius: 50%;
+  display: inline-block;
+  animation: blink 1.4s infinite both;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Advanced cursor effect */
+.cursor-glow {
+  position: absolute;
+  width: 2px;
+  height: 1.2em;
+  background-color: var(--accent-primary);
+  animation: blink 1s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: 1px;
+  box-shadow: 0 0 8px 2px rgba(var(--accent-primary-rgb), 0.6);
+  z-index: 10;
+}

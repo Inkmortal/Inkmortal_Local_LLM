@@ -16,6 +16,7 @@
 /* Import modern UI styles */
 @import './styles/animations.css';
 @import './styles/modern-ui.css';
+@import './styles/enhanced-animations.css';
 
 @tailwind base;
 @tailwind components;
@@ -40,8 +41,11 @@
  --text-secondary: #b8c0e0;
  --text-muted: #8087a2;
  --accent-primary: #8aadf4;
+ --accent-primary-rgb: 138, 173, 244;
  --accent-secondary: #c6a0f6;
+ --accent-secondary-rgb: 198, 160, 246;
  --accent-tertiary: #f5a97f;
+ --accent-tertiary-rgb: 245, 169, 127;
  --border-color: #494d64;
  --success: #a6da95;
  --warning: #eed49f;
@@ -97,18 +101,37 @@ body {
 
 /* Custom scrollbar for the cozy feel */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
   background: var(--bg-secondary);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--accent-tertiary);
   border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-primary);
+  background-clip: content-box;
+}
+
+/* Spin animation for loaders */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1.5s linear infinite;
+}
+
+/* Floating animation for components */
+.floating-ui {
+  animation: float-subtle 4s ease-in-out infinite;
 }
