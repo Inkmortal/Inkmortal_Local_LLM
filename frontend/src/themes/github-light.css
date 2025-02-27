@@ -1,0 +1,15 @@
+[data-theme="github-light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #eaeef2;
+  --text-primary: #24292f;
+  --text-secondary: #57606a;
+  --text-muted: #6e7781;
+  --accent-primary: #0969da;
+  --accent-secondary: #8250df;
+  --accent-tertiary: #bf3989;
+  --border-color: #d0d7de;
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --error: #cf222e;
+}

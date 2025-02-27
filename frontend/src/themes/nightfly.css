@@ -1,0 +1,15 @@
+[data-theme="nightfly"] {
+  --bg-primary: #011627;
+  --bg-secondary: #0e293f;
+  --bg-tertiary: #1d3b53;
+  --text-primary: #c3ccdc;
+  --text-secondary: #a2aabc;
+  --text-muted: #637777;
+  --accent-primary: #82aaff;
+  --accent-secondary: #c792ea;
+  --accent-tertiary: #ff5874;
+  --border-color: #1d3b53;
+  --success: #a1cd5e;
+  --warning: #ecc48d;
+  --error: #ff5874;
+}

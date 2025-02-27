@@ -1,82 +1,84 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
+import {
+  fetchDashboardData,
+  DashboardData,
+  DashboardCard,
+  SystemStats,
+  Activity
+} from './AdminDashboardData';
 
 const AdminDashboard: React.FC = () => {
   const { currentTheme } = useTheme();
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   
-  // Mock data for dashboard cards
-  const dashboardCards = [
-    {
-      id: 'ip-whitelist',
-      title: 'IP Whitelist',
-      count: 12,
-      path: '/admin/ip-whitelist',
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-      )
-    },
-    {
-      id: 'tokens',
-      title: 'Registration Tokens',
-      count: 8,
-      active: 5,
-      path: '/admin/tokens',
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-        </svg>
-      )
-    },
-    {
-      id: 'api-keys',
-      title: 'API Keys',
-      count: 15,
-      path: '/admin/api-keys',
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-        </svg>
-      )
-    },
-    {
-      id: 'queue',
-      title: 'Queue Monitor',
-      count: 3,
-      processing: 1,
-      path: '/admin/queue',
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      )
-    }
-  ];
-
-  // Mock data for system stats
-  const systemStats = {
-    cpu: 28,
-    memory: 45,
-    storage: 32,
-    uptime: '5d 12h 43m',
-    ollama: {
-      status: 'Running',
-      model: 'Llama 3.3 70B',
-      version: '0.2.1'
-    }
+  // Icons for dashboard cards (not fetched from API)
+  const cardIcons: { [key: string]: React.ReactNode } = {
+    'ip-whitelist': (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    ),
+    'tokens': (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+      </svg>
+    ),
+    'api-keys': (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+      </svg>
+    ),
+    'queue': (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+    )
   };
 
-  // Mock data for recent activities
-  const recentActivities = [
-    { id: 1, type: 'api-key', action: 'created', user: 'Admin', target: 'Development App', time: '10 minutes ago' },
-    { id: 2, type: 'ip', action: 'added', user: 'Admin', target: '192.168.1.105', time: '25 minutes ago' },
-    { id: 3, type: 'token', action: 'generated', user: 'Admin', target: 'New User Invite', time: '1 hour ago' },
-    { id: 4, type: 'queue', action: 'cleared', user: 'System', target: 'Priority 3 Queue', time: '2 hours ago' },
-    { id: 5, type: 'api-key', action: 'revoked', user: 'Admin', target: 'Test App', time: '3 hours ago' }
-  ];
+  // Fetch dashboard data on component mount
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchDashboardData();
+        setDashboardData(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error loading dashboard data:', err);
+        setError('Failed to load dashboard data. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+    
+    // Set up auto-refresh every 30 seconds
+    const refreshInterval = setInterval(loadDashboardData, 30000);
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(refreshInterval);
+  }, []);
+  
+  // Extract data from the fetched dashboard data, or use empty defaults if not loaded yet
+  const dashboardCards = dashboardData?.dashboard_cards || [];
+  const systemStats = dashboardData?.system_stats || {
+    cpu: 0,
+    memory: 0,
+    storage: 0,
+    uptime: 'Loading...',
+    ollama: {
+      status: 'Unknown',
+      model: 'Loading...',
+      version: 'Loading...'
+    }
+  };
+  const recentActivities = dashboardData?.recent_activities || [];
 
   return (
     <Layout>
@@ -90,7 +92,7 @@ const AdminDashboard: React.FC = () => {
           <Card key={card.id} className="flex flex-col">
             <div className="flex items-start justify-between mb-4">
               <div className="p-3 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentPrimary}20` }}>
-                <div style={{ color: currentTheme.colors.accentPrimary }}>{card.icon}</div>
+                <div style={{ color: currentTheme.colors.accentPrimary }}>{cardIcons[card.id]}</div>
               </div>
               <div className="text-right">
                 <h3 className="font-semibold">{card.title}</h3>

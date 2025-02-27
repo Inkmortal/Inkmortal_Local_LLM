@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { fetchIpWhitelist } from './AdminDashboardData';
+import { fetchApi } from '../../config/api';
 import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
@@ -9,15 +11,60 @@ const IPWhitelist: React.FC = () => {
   const [newIP, setNewIP] = useState('');
   const [isValidIP, setIsValidIP] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [ipList, setIpList] = useState<Array<{id: number, ip: string, added: string, lastUsed: string | null}>>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [fetchingClientIP, setFetchingClientIP] = useState(false);
   
-  // Mock data for IP whitelist
-  const [ipList, setIpList] = useState([
-    { id: 1, ip: '192.168.1.100', added: '2025-02-20', lastUsed: '2025-02-26' },
-    { id: 2, ip: '192.168.1.101', added: '2025-02-21', lastUsed: '2025-02-25' },
-    { id: 3, ip: '192.168.1.102', added: '2025-02-22', lastUsed: '2025-02-24' },
-    { id: 4, ip: '10.0.0.15', added: '2025-02-23', lastUsed: '2025-02-26' },
-    { id: 5, ip: '10.0.0.16', added: '2025-02-24', lastUsed: null }
-  ]);
+  // Fetch IP whitelist data on component mount
+  useEffect(() => {
+    const loadIpWhitelist = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchIpWhitelist();
+        setIpList(data);
+        setApiError(null);
+      } catch (err) {
+        console.error('Error loading IP whitelist:', err);
+        setApiError('Failed to load IP whitelist. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadIpWhitelist();
+  }, []);
+  
+  // Fetch client IP address from the server and fill the input field
+  const fetchClientIP = async () => {
+    try {
+      setFetchingClientIP(true);
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetchApi('/admin/client-ip', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch client IP: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setNewIP(data.ip);
+      setIsValidIP(validateIP(data.ip));
+      setErrorMessage('');
+    } catch (error) {
+      console.error('Error fetching client IP:', error);
+      setErrorMessage('Failed to fetch your IP address. Please enter it manually.');
+    } finally {
+      setFetchingClientIP(false);
+    }
+  };
 
   // Validate IP address format
   const validateIP = (ip: string) => {
@@ -43,7 +90,7 @@ const IPWhitelist: React.FC = () => {
   };
 
   // Add IP to whitelist
-  const addIP = () => {
+  const addIP = async () => {
     if (!newIP.trim() || !isValidIP) {
       return;
     }
@@ -55,25 +102,63 @@ const IPWhitelist: React.FC = () => {
       return;
     }
     
-    // In a real application, this would make an API call
-    const today = new Date().toISOString().split('T')[0];
-    const newItem = {
-      id: ipList.length + 1,
-      ip: newIP,
-      added: today,
-      lastUsed: null
-    };
-    
-    setIpList([...ipList, newItem]);
-    setNewIP('');
-    setIsValidIP(true);
-    setErrorMessage('');
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      // Use the fetchApi utility from config
+      const response = await fetchApi('/admin/ip-whitelist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ip_address: newIP })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to add IP: ${response.status} ${response.statusText}`);
+      }
+      
+      const newItem = await response.json();
+      setIpList([...ipList, newItem]);
+      setNewIP('');
+      setIsValidIP(true);
+      setErrorMessage('');
+    } catch (error) {
+      console.error('Error adding IP:', error);
+      setErrorMessage('Failed to add IP to whitelist. Please try again.');
+    }
   };
 
   // Remove IP from whitelist
-  const removeIP = (id: number) => {
-    // In a real application, this would make an API call
-    setIpList(ipList.filter(item => item.id !== id));
+  const removeIP = async (id: number) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      // Use fetchApi utility
+      const response = await fetchApi(`/admin/ip-whitelist/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to remove IP: ${response.status} ${response.statusText}`);
+      }
+      
+      // Update the list after successful deletion
+      setIpList(ipList.filter(item => item.id !== id));
+    } catch (error) {
+      console.error('Error removing IP:', error);
+      setErrorMessage('Failed to remove IP from whitelist. Please try again.');
+    }
   };
 
   return (
@@ -123,6 +208,17 @@ const IPWhitelist: React.FC = () => {
                   Add
                 </Button>
               </div>
+              
+              <Button
+                onClick={fetchClientIP}
+                disabled={fetchingClientIP}
+                variant="secondary"
+                size="sm"
+                className="mt-2"
+              >
+                {fetchingClientIP ? 'Detecting...' : 'Use My Current IP'}
+              </Button>
+              
               {errorMessage && (
                 <p className="mt-1 text-sm" style={{ color: currentTheme.colors.error }}>
                   {errorMessage}

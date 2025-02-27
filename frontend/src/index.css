@@ -4,6 +4,14 @@
 @import './themes/matcha-cafe.css';
 @import './themes/nord.css';
 @import './themes/tokyo-night.css';
+@import './themes/github-dark.css';
+@import './themes/github-light.css';
+@import './themes/solarized-dark.css';
+@import './themes/solarized-light.css';
+@import './themes/gruvbox.css';
+@import './themes/one-dark.css';
+@import './themes/synthwave.css';
+@import './themes/nightfly.css';
 
 @tailwind base;
 @tailwind components;

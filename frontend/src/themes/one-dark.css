@@ -1,0 +1,15 @@
+[data-theme="one-dark"] {
+  --bg-primary: #282c34;
+  --bg-secondary: #21252b;
+  --bg-tertiary: #333842;
+  --text-primary: #abb2bf;
+  --text-secondary: #9da5b4;
+  --text-muted: #6b717d;
+  --accent-primary: #61afef;
+  --accent-secondary: #c678dd;
+  --accent-tertiary: #e06c75;
+  --border-color: #181a1f;
+  --success: #98c379;
+  --warning: #e5c07b;
+  --error: #e06c75;
+}

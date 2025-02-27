@@ -15,6 +15,7 @@ from .auth.router import router as auth_router, generate_setup_token, check_admi
 from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
+from .admin.router import router as admin_router
 from .db import engine, Base, get_db
 from .queue import get_queue_manager
 from .config import settings
@@ -113,6 +114,7 @@ async def shutdown_event():
 # Include routers
 app.include_router(auth_router)
 app.include_router(api_router)
+app.include_router(admin_router)
 
 # Root endpoint
 @app.get("/")
