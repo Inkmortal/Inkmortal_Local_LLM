@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import theme files */
+@import './themes/catppuccin.css';
+@import './themes/dracula.css';
+@import './themes/matcha-cafe.css';
+@import './themes/nord.css';
+@import './themes/tokyo-night.css';
+
 /* Theme Variables */
 :root {
   /* Base font settings */
@@ -27,57 +34,6 @@
   --success: #a6da95;
   --warning: #eed49f;
   --error: #ed8796;
-}
-
-/* Catppuccin Macchiato Theme */
-[data-theme="catppuccin"] {
-  --bg-primary: #24273a;
-  --bg-secondary: #1e2030;
-  --bg-tertiary: #363a4f;
-  --text-primary: #cad3f5;
-  --text-secondary: #b8c0e0;
-  --text-muted: #8087a2;
-  --accent-primary: #8aadf4;
-  --accent-secondary: #c6a0f6;
-  --accent-tertiary: #f5a97f;
-  --border-color: #494d64;
-  --success: #a6da95;
-  --warning: #eed49f;
-  --error: #ed8796;
-}
-
-/* Dracula Theme */
-[data-theme="dracula"] {
-  --bg-primary: #282a36;
-  --bg-secondary: #1e1f29;
-  --bg-tertiary: #44475a;
-  --text-primary: #f8f8f2;
-  --text-secondary: #f8f8f2cc;
-  --text-muted: #f8f8f280;
-  --accent-primary: #bd93f9;
-  --accent-secondary: #ff79c6;
-  --accent-tertiary: #ffb86c;
-  --border-color: #44475a;
-  --success: #50fa7b;
-  --warning: #f1fa8c;
-  --error: #ff5555;
-}
-
-/* Japanese Matcha Cafe Theme */
-[data-theme="matcha-cafe"] {
-  --bg-primary: #f1f0e9;
-  --bg-secondary: #e3e1d9;
-  --bg-tertiary: #d5d3c8;
-  --text-primary: #5c5c50;
-  --text-secondary: #72725e;
-  --text-muted: #8a8a71;
-  --accent-primary: #88b06a;  /* Matcha green */
-  --accent-secondary: #c1d5b3; /* Light matcha */
-  --accent-tertiary: #96704c;  /* Wooden brown */
-  --border-color: #c5c3b8;
-  --success: #7bac5c;
-  --warning: #e0b568;
-  --error: #d16c6c;
 }
 
 /* Apply themes to body */

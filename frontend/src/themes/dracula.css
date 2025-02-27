@@ -1,0 +1,16 @@
+/* Dracula Theme */
+[data-theme="dracula"] {
+  --bg-primary: #282a36;
+  --bg-secondary: #1e1f29;
+  --bg-tertiary: #44475a;
+  --text-primary: #f8f8f2;
+  --text-secondary: #f8f8f2cc;
+  --text-muted: #f8f8f280;
+  --accent-primary: #bd93f9;
+  --accent-secondary: #ff79c6;
+  --accent-tertiary: #ffb86c;
+  --border-color: #44475a;
+  --success: #50fa7b;
+  --warning: #f1fa8c;
+  --error: #ff5555;
+}

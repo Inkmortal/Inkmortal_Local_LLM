@@ -1,0 +1,16 @@
+/* Japanese Matcha Cafe Theme */
+[data-theme="matcha-cafe"] {
+  --bg-primary: #f1f0e9;
+  --bg-secondary: #e3e1d9;
+  --bg-tertiary: #d5d3c8;
+  --text-primary: #5c5c50;
+  --text-secondary: #72725e;
+  --text-muted: #8a8a71;
+  --accent-primary: #88b06a;  /* Matcha green */
+  --accent-secondary: #c1d5b3; /* Light matcha */
+  --accent-tertiary: #96704c;  /* Wooden brown */
+  --border-color: #c5c3b8;
+  --success: #7bac5c;
+  --warning: #e0b568;
+  --error: #d16c6c;
+}

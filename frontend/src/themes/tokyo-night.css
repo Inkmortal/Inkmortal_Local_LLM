@@ -1,0 +1,16 @@
+/* Tokyo Night Theme */
+[data-theme="tokyo-night"] {
+    --bg-primary: #1a1b26;
+    --bg-secondary: #16161e;
+    --bg-tertiary: #24283b;
+    --text-primary: #a9b1d6;
+    --text-secondary: #787c99;
+    --text-muted: #565a7e;
+    --accent-primary: #7aa2f7;
+    --accent-secondary: #bb9af7;
+    --accent-tertiary: #ff9e64;
+    --border-color: #292e42;
+    --success: #9ece6a;
+    --warning: #e0af68;
+    --error: #f7768e;
+}

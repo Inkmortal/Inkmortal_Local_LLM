@@ -44,7 +44,7 @@ const ThemeGallery: React.FC = () => {
       }
     }
 
-   }, []);
+    }, []);
 
   // Function to go back to previous route
   const goBack = () => {
