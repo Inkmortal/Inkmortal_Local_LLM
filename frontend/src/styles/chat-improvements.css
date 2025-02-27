@@ -1,133 +1,118 @@
-/* Chat Improvements for Inkmortal - Cultivator/Dragon Theme */
+/* Minimal Chat UI Improvements - Respects Theme System */
 
-/* 1. Maximum width for chat container */
-.chat-container {
-  max-width: 1000px !important;
-  margin: 0 auto;
-}
-
-/* 2. Improved assistant message styling */
-.assistant-message {
-  background-color: rgba(35, 35, 45, 0.85) !important;
-  border: 1px solid rgba(150, 120, 40, 0.3) !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 
-              inset 0 0 1px rgba(255, 215, 0, 0.2) !important;
-}
-
-.assistant-message::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent);
-}
-
-/* 3. Dragon/Cultivator theme for assistant avatar */
-.assistant-avatar {
-  background: linear-gradient(135deg, #b8860b, #a0522d) !important;
-}
-
-/* 4. Change header logo styling */
-.app-logo {
-  background: linear-gradient(135deg, #d4af37, #a57c1b) !important;
-  -webkit-background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-}
-
-.app-title {
-  color: #d4af37 !important;
-}
-
-/* 5. Dragon avatar SVG */
-.dragon-avatar {
-  color: #ffd700;
-}
-
-/* 6. Ambient effects for cultivator theme */
-.chat-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at 30% 30%, rgba(212, 175, 55, 0.03), transparent 60%),
-              radial-gradient(circle at 70% 70%, rgba(165, 124, 27, 0.03), transparent 60%);
-  pointer-events: none;
-}
-
-/* 7. Improved scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(30, 30, 40, 0.5);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #a57c1b80, #d4af3780);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, #a57c1b, #d4af37);
-  background-clip: content-box;
-}
-
-/* 8. Styled input box */
-.chat-input {
-  border: 1px solid rgba(150, 120, 40, 0.3) !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1), 
-              inset 0 0 1px rgba(255, 215, 0, 0.1) !important;
-}
-
-.chat-input:focus {
-  border-color: rgba(212, 175, 55, 0.5) !important;
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2), 
-              0 4px 15px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* 9. Submit button styling */
-.submit-button {
-  background: linear-gradient(135deg, #d4af37, #a57c1b) !important;
-}
-
-/* 10. Timeline decoration */
-.timeline-decoration {
-  background: linear-gradient(to bottom, 
-    transparent 0%, 
-    rgba(212, 175, 55, 0.2) 15%, 
-    rgba(212, 175, 55, 0.2) 85%, 
-    transparent 100%
-  ) !important;
-}
-
-/* 11. Replace header icon */
-.app-icon svg path {
-  stroke: #d4af37 !important;
-  fill: rgba(212, 175, 55, 0.1) !important;
-}
-
-/* 12. Custom animation for the cultivator theme */
-@keyframes cultivator-glow {
-  0%, 100% { box-shadow: 0 0 5px rgba(212, 175, 55, 0.3); }
-  50% { box-shadow: 0 0 15px rgba(212, 175, 55, 0.6); }
-}
-
-.cultivator-avatar {
-  animation: cultivator-glow 3s infinite ease-in-out;
-}
-
-/* Apply theme universally */
+/* Add RGB variables (fallback) */
 :root {
-  --accent-primary: #d4af37 !important;
-  --accent-primary-rgb: 212, 175, 55 !important;
-  --accent-secondary: #a57c1b !important;
-  --accent-secondary-rgb: 165, 124, 27 !important;
+  --accent-primary-rgb: 138, 173, 244;
+  --accent-secondary-rgb: 198, 160, 246;
+  --bg-secondary-rgb: 30, 32, 48;
+}
+
+/* Logo styling - Override SeaDragon with InkMortal */
+.text-lg.font-semibold:contains('SeaDragon') {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)) !important;
+}
+
+/* Dragon avatar styling for assistant */
+.w-9.h-9.rounded-full.flex-shrink-0.mr-3 svg path {
+  /* Override the assistant avatar with dragon-like styling */
+  fill: currentColor;
+}
+
+/* 1. Set max-width for chat container for better readability */
+.max-w-4xl {
+  max-width: 900px !important;
+}
+
+/* 2. Improve message bubble contrast with subtle enhancements */
+[class*="message-in"] {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(var(--accent-primary-rgb, 138, 173, 244), 0.15) !important;
+  background-color: rgba(var(--bg-secondary-rgb, 30, 32, 48), 0.7) !important;
+  backdrop-filter: blur(5px);
+}
+
+/* 3. Better scrollbar appearance */
+.modern-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--accent-primary-rgb, 138, 173, 244), 0.2);
+  border-radius: 20px;
+}
+
+.modern-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--accent-primary-rgb, 138, 173, 244), 0.4);
+}
+
+/* 4. Enhanced input field focus state */
+textarea:focus {
+  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 138, 173, 244), 0.2) !important;
+}
+
+/* 5. Better message spacing and alignment */
+[class*="justify-end"] > div,
+[class*="justify-start"] > div {
+  margin-bottom: 1.25rem !important;
+}
+
+/* 6. Subtle hover effects for interactive elements */
+button:hover {
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+/* 7. Ambient accents that work with any theme */
+@keyframes subtle-glow {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.1; }
+}
+
+/* 8. Improved readability contrast for chat messages */
+[class*="message-in"] {
+  background-color: rgba(var(--bg-secondary-rgb, 30, 32, 48), 0.92) !important;
+  position: relative;
+}
+
+/* Add a subtle accent top border to assistant messages */
+[class*="message-in"]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, 
+    rgba(var(--accent-primary-rgb, 138, 173, 244), 0.4), 
+    rgba(var(--accent-secondary-rgb, 198, 160, 246), 0.4)
+  );
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  opacity: 0.7;
+}
+
+/* 9. Better visual hierarchy for timestamps */
+[class*="text-xs mt-2 text-right"] {
+  opacity: 0.6;
+  font-size: 0.7rem;
+}
+
+/* 10. Enhanced message transitions */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-fade-in > div {
+  animation: fade-in-up 0.3s ease-out forwards;
 }
