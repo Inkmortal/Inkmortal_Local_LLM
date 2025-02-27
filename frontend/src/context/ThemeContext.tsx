@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 
 // Define the available theme types
-export type ThemeName = 'catppuccin' | 'dracula' | 'matcha-cafe' | 'nord' | 'solarized-light' | 'solarized-dark' | 'github-light' | 'github-dark' | 'tokyo-night' | 'gruvbox' | 'custom' | string;
+export type ThemeName = 'catppuccin' | 'dracula' | 'matcha-cafe' | 'nord' | 'solarized-light' | 'solarized-dark' | 'github-light' | 'github-dark' | 'tokyo-night' | 'gruvbox' | 'cyber-neon' | 'retro-wave' | 'forest' | 'custom' | string;
 
 // Define the theme color structure
 export interface ThemeColors {
@@ -126,6 +126,66 @@ export const themes: Record<string, Theme> = {
       success: '#9ece6a',
       warning: '#e0af68',
       error: '#f7768e'
+    },
+    isDark: true
+  },
+  'cyber-neon': {
+    name: 'cyber-neon',
+    displayName: 'Cyber Neon',
+    colors: {
+      bgPrimary: '#0f1419',
+      bgSecondary: '#121820',
+      bgTertiary: '#1e242c',
+      textPrimary: '#e0e0e0',
+      textSecondary: '#b0b0b0',
+      textMuted: '#808080',
+      accentPrimary: '#00ff9f',
+      accentSecondary: '#ff00a0',
+      accentTertiary: '#00ccff',
+      borderColor: '#252b33',
+      success: '#00ff9f',
+      warning: '#ffcc00',
+      error: '#ff3366'
+    },
+    isDark: true
+  },
+  'retro-wave': {
+    name: 'retro-wave',
+    displayName: 'Retro Wave',
+    colors: {
+      bgPrimary: '#241b2f',
+      bgSecondary: '#1f172a',
+      bgTertiary: '#2d2139',
+      textPrimary: '#f8f8ff',
+      textSecondary: '#d8d8ea',
+      textMuted: '#a9a9c5',
+      accentPrimary: '#f72585',
+      accentSecondary: '#7209b7',
+      accentTertiary: '#4cc9f0',
+      borderColor: '#362b45',
+      success: '#4cc9f0',
+      warning: '#f9c80e',
+      error: '#ff595e'
+    },
+    isDark: true
+  },
+  'forest': {
+    name: 'forest',
+    displayName: 'Forest',
+    colors: {
+      bgPrimary: '#323d43',
+      bgSecondary: '#3c474d',
+      bgTertiary: '#505a60',
+      textPrimary: '#d8caac',
+      textSecondary: '#b8af9c',
+      textMuted: '#859289',
+      accentPrimary: '#7fbbb3',
+      accentSecondary: '#a7c080',
+      accentTertiary: '#d699b6',
+      borderColor: '#5d6b72',
+      success: '#a7c080',
+      warning: '#dbbc7f',
+      error: '#e68183'
     },
     isDark: true
   }
