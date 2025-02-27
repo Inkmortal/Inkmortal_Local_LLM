@@ -29,14 +29,30 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
   console.log(`Fetching from: ${url}`);
   
+  // Create a new headers object from the existing headers (if any)
+  const headers = new Headers(options.headers || {});
+  
+  // Add default Content-Type if not provided
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  
+  // Add authentication token for admin routes
+  if (endpoint.startsWith('/admin')) {
+    const token = localStorage.getItem('adminToken');
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+      console.log('Added authentication token for admin endpoint');
+    } else {
+      console.warn('No admin token found for admin route:', endpoint);
+    }
+  }
+  
   try {
     const response = await fetch(url, {
       ...options,
-      // Add default headers if not provided
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      }
+      // Use our enhanced headers
+      headers
     });
     
     // Log response status for debugging
