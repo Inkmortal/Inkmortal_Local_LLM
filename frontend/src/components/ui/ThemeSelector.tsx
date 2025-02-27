@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme, themes, ThemeName } from '../../context/ThemeContext';
+import { PREVIOUS_ROUTE_KEY } from '../../components/themes/ThemeData';
 
 interface ThemeSelectorProps {
   compact?: boolean;
@@ -74,6 +75,11 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
 
   const navigateToThemeGallery = (e: React.MouseEvent) => {
     e.preventDefault();
+    
+    // Save current path to localStorage before navigating
+    const currentPath = window.location.pathname;
+    localStorage.setItem(PREVIOUS_ROUTE_KEY, currentPath);
+    
     window.navigateTo('/themes');
     setIsOpen(false);
   };

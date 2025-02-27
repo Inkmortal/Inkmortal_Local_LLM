@@ -1,7 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* Import theme files */
 @import './themes/catppuccin.css';
 @import './themes/dracula.css';
@@ -9,31 +5,35 @@
 @import './themes/nord.css';
 @import './themes/tokyo-night.css';
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Theme Variables */
 :root {
-  /* Base font settings */
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+ /* Base font settings */
+ font-family: 'Inter', system-ui, -apple-system, sans-serif;
+ line-height: 1.5;
+ font-weight: 400;
+ font-synthesis: none;
+ text-rendering: optimizeLegibility;
+ -webkit-font-smoothing: antialiased;
+ -moz-osx-font-smoothing: grayscale;
 
-  /* Default to Catppuccin Macchiato */
-  --bg-primary: #24273a;
-  --bg-secondary: #1e2030;
-  --bg-tertiary: #363a4f;
-  --text-primary: #cad3f5;
-  --text-secondary: #b8c0e0;
-  --text-muted: #8087a2;
-  --accent-primary: #8aadf4;
-  --accent-secondary: #c6a0f6;
-  --accent-tertiary: #f5a97f;
-  --border-color: #494d64;
-  --success: #a6da95;
-  --warning: #eed49f;
-  --error: #ed8796;
+ /* Default to Catppuccin Macchiato */
+ --bg-primary: #24273a;
+ --bg-secondary: #1e2030;
+ --bg-tertiary: #363a4f;
+ --text-primary: #cad3f5;
+ --text-secondary: #b8c0e0;
+ --text-muted: #8087a2;
+ --accent-primary: #8aadf4;
+ --accent-secondary: #c6a0f6;
+ --accent-tertiary: #f5a97f;
+ --border-color: #494d64;
+ --success: #a6da95;
+ --warning: #eed49f;
+ --error: #ed8796;
 }
 
 /* Apply themes to body */
