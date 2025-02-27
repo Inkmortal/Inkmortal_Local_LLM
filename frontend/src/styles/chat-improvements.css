@@ -11,22 +11,18 @@
 
 /* Dragon icon styling - make it bigger and more visible */
 .dragon-icon {
-  color: var(--accent-primary);
-  filter: drop-shadow(0 0 4px rgba(var(--accent-primary-rgb), 0.5));
-  width: 20px !important; 
-  height: 20px !important;
+  color: #FFFFFF !important;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.3));
+  width: 16px !important; 
+  height: 16px !important;
 }
 
-/* Make assistant message bubbles brighter and more interesting */
+/* LLM message bubbles with better readability while respecting theme */
 [class*="message-in"] {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 1px rgba(var(--accent-primary-rgb), 0.1) !important;
   border: 1px solid rgba(var(--accent-primary-rgb), 0.35) !important;
-  background: linear-gradient(to bottom right, 
-    rgba(var(--bg-secondary-rgb), 0.6), 
-    rgba(var(--bg-secondary-rgb), 0.75)
-  ) !important;
+  background: var(--bg-secondary) !important;
   position: relative;
-  backdrop-filter: blur(5px);
 }
 
 /* Add a more prominent accent top border and inner glow to assistant messages */
@@ -47,12 +43,11 @@
   box-shadow: 0 0 10px 1px rgba(var(--accent-primary-rgb), 0.3);
 }
 
-/* Add inner glow to message content area */
+/* Improve text readability in message content area */
 .message-in .message-content {
   position: relative;
   z-index: 2;
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: var(--text-primary) !important;
 }
 
 /* Fix code block buttons to not overlap chat input */
@@ -84,6 +79,12 @@ form .text-xs:not(:first-of-type) {
 [class*="justify-end"] > div,
 [class*="justify-start"] > div {
   margin-bottom: 1.25rem !important;
+}
+
+/* Fix navbar button */
+.hover-float {
+  color: var(--text-primary) !important;
+  background-color: transparent !important;
 }
 
 /* SECTION 3: USABILITY IMPROVEMENTS */
