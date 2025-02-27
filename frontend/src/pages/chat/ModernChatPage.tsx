@@ -8,7 +8,6 @@ import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
 import { v4 as uuidv4 } from 'uuid';
 import { MockChatService, ChatRequestParams } from '../../services/chatService';
-import MessageParser from '../../components/chat/MessageParser';
 import CodeBlock from '../../components/education/CodeBlock';
 import MathRenderer from '../../components/education/MathRenderer';
 
@@ -32,6 +31,7 @@ const ModernChatPage: React.FC = () => {
     }
   ]);
   const [loading, setLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
@@ -190,6 +190,7 @@ const ModernChatPage: React.FC = () => {
     
     setMessages(prev => [...prev, userMessage]);
     setLoading(true);
+    setIsGenerating(true);
     
     try {
       // Prepare request params
@@ -236,40 +237,84 @@ const ModernChatPage: React.FC = () => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
+      setIsGenerating(false);
     }
+  };
+  
+  const handleRegenerate = async (messageId: string) => {
+    // Find the last user message
+    const lastUserMessageIndex = [...messages].reverse().findIndex(m => m.role === 'user');
+    if (lastUserMessageIndex === -1) return;
+    
+    const lastUserMessage = [...messages].reverse()[lastUserMessageIndex];
+    
+    // Remove the last assistant message
+    const newMessages = messages.filter(m => m.id !== messageId);
+    setMessages(newMessages);
+    
+    // Regenerate answer
+    setLoading(true);
+    setIsGenerating(true);
+    
+    try {
+      // Call the API again with the same user message
+      const requestParams: ChatRequestParams = {
+        message: lastUserMessage.content,
+        conversation_id: conversationId
+      };
+      
+      const response = await MockChatService.sendMessage(requestParams);
+      
+      // Add new assistant response
+      const assistantMessage: Message = {
+        id: response.id,
+        role: 'assistant',
+        content: response.content,
+        timestamp: new Date(response.created_at)
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error regenerating response:', error);
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: uuidv4(),
+        role: 'system',
+        content: 'Sorry, there was an error regenerating the response. Please try again.',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+      setIsGenerating(false);
+    }
+  };
+  
+  const handleStopGeneration = () => {
+    // In a real application, this would cancel the API request
+    setIsGenerating(false);
+    setLoading(false);
   };
   
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
   };
 
-  // Suggested prompts for quick access
-  const suggestedPrompts = [
-    {
-      title: "Solve Equation",
-      prompt: "Solve the quadratic equation x² - 7x + 10 = 0 and explain each step."
-    },
-    {
-      title: "Explain Code",
-      prompt: "Explain how recursion works in programming with a simple example."
-    },
-    {
-      title: "Science Concept",
-      prompt: "Explain photosynthesis in simple terms, as if you're teaching a middle school student."
-    }
-  ];
-  
   return (
-    <div className="flex flex-col min-h-screen" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
       {/* Header */}
       <header 
-        className="modern-navbar glass-effect py-4 px-6 flex justify-between items-center z-10 sticky top-0"
+        className="py-4 px-6 flex justify-between items-center z-10 sticky top-0"
         style={{ 
-          backgroundColor: `${currentTheme.colors.bgPrimary}90`,
+          backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
+          backdropFilter: 'blur(10px)',
           borderBottom: `1px solid ${currentTheme.colors.borderColor}40`,
+          boxShadow: `0 4px 20px rgba(0, 0, 0, 0.05)`,
         }}
       >
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3">
           <svg 
             className="w-8 h-8" 
             viewBox="0 0 24 24" 
@@ -281,7 +326,10 @@ const ModernChatPage: React.FC = () => {
               stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="text-xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>Seadragon Chat</span>
+          <div>
+            <span className="text-xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>Seadragon Chat</span>
+            <div className="text-xs mt-0.5" style={{ color: currentTheme.colors.textMuted }}>Powered by AI</div>
+          </div>
         </div>
         
         <div className="flex items-center space-x-4">
@@ -308,18 +356,17 @@ const ModernChatPage: React.FC = () => {
       </header>
       
       {/* Main Chat Interface */}
-      <div className="flex flex-grow h-[calc(100vh-73px)] overflow-hidden p-4 md:p-8 relative">
-        {/* Left Sidebar - Conversation History + Prompts */}
+      <div className="flex flex-grow h-[calc(100vh-73px)] overflow-hidden p-4 md:p-6 relative">
+        {/* Left Sidebar - Conversation History */}
         <aside 
-          className="hidden lg:flex flex-col w-64 mr-8 rounded-2xl overflow-hidden shrink-0 animate-fade-in"
+          className="hidden lg:flex flex-col w-64 mr-8 rounded-2xl overflow-hidden shrink-0 animate-fade-in h-full"
           style={{ 
             backgroundImage: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}, ${currentTheme.colors.bgTertiary})`,
             boxShadow: `0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px ${currentTheme.colors.borderColor}40`,
-            height: 'auto'
           }}
         >
           {/* Conversation History Section */}
-          <div>
+          <div className="flex flex-col h-full">
             <div 
               className="px-4 py-3 border-b"
               style={{ 
@@ -338,7 +385,7 @@ const ModernChatPage: React.FC = () => {
               </h3>
             </div>
             
-            <div className="p-4 space-y-3 max-h-[30vh] overflow-y-auto modern-scrollbar">
+            <div className="p-4 space-y-3 overflow-y-auto modern-scrollbar flex-grow">
               {/* This would be populated with actual history - using placeholder for now */}
               {conversations.map((conv, index) => (
                 <div 
@@ -435,123 +482,58 @@ const ModernChatPage: React.FC = () => {
                 </div>
               </button>
             </div>
-          </div>
           
-          {/* Suggested Prompts Section */}
-          <div className="border-t mt-2" style={{ borderColor: `${currentTheme.colors.borderColor}80` }}>
+            {/* Features Section */}
             <div 
-              className="px-4 py-3 border-b"
+              className="p-4 mt-auto border-t" 
               style={{ 
-                borderColor: currentTheme.colors.borderColor,
-                background: `linear-gradient(90deg, ${currentTheme.colors.accentSecondary}20, transparent)`
+                borderColor: `${currentTheme.colors.borderColor}80`,
+                background: `linear-gradient(to top, ${currentTheme.colors.bgTertiary}80, transparent)`
               }}
             >
-              <h3 
-                className="text-lg font-medium flex items-center"
-                style={{ color: currentTheme.colors.accentSecondary }}
+              <h4 
+                className="text-sm font-medium mb-2 flex items-center"
+                style={{ color: currentTheme.colors.textPrimary }}
               >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Suggested Prompts
-              </h3>
-            </div>
-            
-            <div className="p-4 space-y-3 overflow-y-auto modern-scrollbar">
-              {suggestedPrompts.map((item, index) => (
-                <div 
-                  key={index}
-                  className="p-3 rounded-lg cursor-pointer transition-all hover:translate-x-1 relative overflow-hidden"
-                  style={{ 
-                    backgroundColor: index % 3 === 0 
-                      ? `${currentTheme.colors.accentPrimary}15`
-                      : index % 3 === 1
-                        ? `${currentTheme.colors.accentSecondary}15`
-                        : `${currentTheme.colors.accentTertiary}15`,
-                    borderLeft: `3px solid ${
-                      index % 3 === 0 
-                        ? currentTheme.colors.accentPrimary
-                        : index % 3 === 1
-                          ? currentTheme.colors.accentSecondary
-                          : currentTheme.colors.accentTertiary
-                    }`,
-                    boxShadow: `0 2px 8px rgba(0,0,0,0.05)`
-                  }}
-                  onClick={() => handleSendMessage(item.prompt)}
-                >
-                  <h4 
-                    className="text-sm font-medium mb-1"
+                Features
+              </h4>
+              
+              <ul className="space-y-2 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
+                <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentPrimary}10` }}>
+                  <span 
+                    className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
                     style={{ 
-                      color: index % 3 === 0 
-                        ? currentTheme.colors.accentPrimary
-                        : index % 3 === 1
-                          ? currentTheme.colors.accentSecondary
-                          : currentTheme.colors.accentTertiary
+                      backgroundColor: currentTheme.colors.accentPrimary,
+                      boxShadow: `0 0 10px ${currentTheme.colors.accentPrimary}80`
                     }}
-                  >
-                    {item.title}
-                  </h4>
-                  <p 
-                    className="text-xs truncate"
-                    style={{ color: currentTheme.colors.textSecondary }}
-                  >
-                    {item.prompt}
-                  </p>
-                </div>
-              ))}
+                  />
+                  <span>Math equation rendering with LaTeX</span>
+                </li>
+                <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentSecondary}10` }}>
+                  <span 
+                    className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
+                    style={{ 
+                      backgroundColor: currentTheme.colors.accentSecondary,
+                      boxShadow: `0 0 10px ${currentTheme.colors.accentSecondary}80` 
+                    }}
+                  />
+                  <span>Code syntax highlighting</span>
+                </li>
+                <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentTertiary}10` }}>
+                  <span 
+                    className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
+                    style={{ 
+                      backgroundColor: currentTheme.colors.accentTertiary,
+                      boxShadow: `0 0 10px ${currentTheme.colors.accentTertiary}80`
+                    }}
+                  />
+                  <span>Image upload for textbook help</span>
+                </li>
+              </ul>
             </div>
-          </div>
-          
-          {/* Features Section */}
-          <div 
-            className="p-4 mt-auto border-t" 
-            style={{ 
-              borderColor: `${currentTheme.colors.borderColor}80`,
-              background: `linear-gradient(to top, ${currentTheme.colors.bgTertiary}80, transparent)`
-            }}
-          >
-            <h4 
-              className="text-sm font-medium mb-2 flex items-center"
-              style={{ color: currentTheme.colors.textPrimary }}
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Features
-            </h4>
-            
-            <ul className="space-y-2 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentPrimary}10` }}>
-                <span 
-                  className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
-                  style={{ 
-                    backgroundColor: currentTheme.colors.accentPrimary,
-                    boxShadow: `0 0 10px ${currentTheme.colors.accentPrimary}80`
-                  }}
-                />
-                <span>Math equation rendering with LaTeX</span>
-              </li>
-              <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentSecondary}10` }}>
-                <span 
-                  className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
-                  style={{ 
-                    backgroundColor: currentTheme.colors.accentSecondary,
-                    boxShadow: `0 0 10px ${currentTheme.colors.accentSecondary}80` 
-                  }}
-                />
-                <span>Code syntax highlighting</span>
-              </li>
-              <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentTertiary}10` }}>
-                <span 
-                  className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
-                  style={{ 
-                    backgroundColor: currentTheme.colors.accentTertiary,
-                    boxShadow: `0 0 10px ${currentTheme.colors.accentTertiary}80`
-                  }}
-                />
-                <span>Image upload for textbook help</span>
-              </li>
-            </ul>
           </div>
         </aside>
         
@@ -564,164 +546,14 @@ const ModernChatPage: React.FC = () => {
           }}
         >
           {/* Message area */}
-          <div 
-            className="flex-grow overflow-y-auto p-4 modern-scrollbar" 
-            style={{ 
-              backgroundImage: `radial-gradient(circle at 50% 50%, ${currentTheme.colors.bgPrimary}30, ${currentTheme.colors.bgPrimary})`,
-              backgroundSize: '100% 100%'
-            }}
-            ref={scrollContainerRef}
-          >
-            <div className="max-w-4xl mx-auto">
-              {messages.map((message, index) => (
-                <div 
-                  key={message.id} 
-                  className="message-fade-in"
-                  style={{ 
-                    animationDelay: `${index * 0.1}s`,
-                    opacity: 0
-                  }}
-                >
-                  <div 
-                    className={`flex mb-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {message.role !== 'user' && (
-                      <div 
-                        className="flex items-center justify-center h-9 w-9 rounded-full overflow-hidden mr-3 flex-shrink-0"
-                        style={{ 
-                          background: message.role === 'system' 
-                            ? `linear-gradient(135deg, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.warning})` 
-                            : `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                          boxShadow: `0 3px 10px ${message.role === 'system' ? currentTheme.colors.accentSecondary : currentTheme.colors.accentPrimary}40`,
-                          border: `2px solid ${currentTheme.colors.bgSecondary}`
-                        }}
-                      >
-                        {message.role === 'assistant' ? (
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div 
-                      className={`message-bubble ${message.role === 'user' ? 'message-user' : 'message-assistant'} max-w-[80%]`}
-                      style={{ 
-                        backgroundColor: message.role === 'system'
-                          ? `${currentTheme.colors.accentSecondary}20`
-                          : message.role === 'user'
-                            ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary}CC)`
-                            : `${currentTheme.colors.bgSecondary}E6`,
-                        color: message.role === 'user' 
-                          ? '#fff' 
-                          : currentTheme.colors.textPrimary,
-                        border: message.role !== 'user' 
-                          ? `1px solid ${currentTheme.colors.borderColor}50` 
-                          : 'none',
-                        boxShadow: message.role === 'user'
-                          ? `0 3px 12px ${currentTheme.colors.accentPrimary}40`
-                          : `0 3px 12px rgba(0,0,0,0.1)`,
-                        borderRadius: message.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                        padding: '0.75rem 1rem',
-                        position: 'relative',
-                        marginBottom: '0.75rem'
-                      }}
-                    >
-                      {/* Subtle accent top border for assistant messages */}
-                      {message.role === 'assistant' && (
-                        <div 
-                          className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
-                          style={{
-                            background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}50, ${currentTheme.colors.accentSecondary}50)`,
-                            opacity: 0.6
-                          }}
-                        />
-                      )}
-                      
-                      <div 
-                        className="whitespace-pre-wrap break-words"
-                        style={{ 
-                          lineHeight: 1.5
-                        }}
-                      >
-                        {message.role === 'user' ? (
-                          message.content
-                        ) : (
-                          <MessageParser content={message.content} />
-                        )}
-                      </div>
-                      
-                      <div 
-                        className="text-xs mt-2 text-right opacity-70 flex justify-end items-center"
-                        style={{ 
-                          color: message.role === 'user' ? '#fff' : currentTheme.colors.textMuted
-                        }}
-                      >
-                        {message.role === 'assistant' && (
-                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        )}
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    
-                    {message.role === 'user' && (
-                      <div 
-                        className="flex items-center justify-center h-9 w-9 rounded-full overflow-hidden ml-3 flex-shrink-0"
-                        style={{ 
-                          background: `linear-gradient(135deg, ${currentTheme.colors.accentTertiary}, ${currentTheme.colors.accentSecondary})`,
-                          boxShadow: `0 3px 10px ${currentTheme.colors.accentTertiary}40`,
-                          border: `2px solid ${currentTheme.colors.bgSecondary}`
-                        }}
-                      >
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              
-              {loading && (
-                <div className="flex justify-start mb-4 message-fade-in">
-                  <div 
-                    className="message-bubble message-assistant rounded-2xl"
-                    style={{ 
-                      backgroundColor: `${currentTheme.colors.bgSecondary}E6`,
-                      border: `1px solid ${currentTheme.colors.borderColor}50`,
-                      color: currentTheme.colors.textPrimary,
-                      padding: '0.75rem 1rem',
-                      boxShadow: `0 3px 12px rgba(0,0,0,0.1)`,
-                    }}
-                  >
-                    <div className="typing-indicator">
-                      <span style={{ 
-                        backgroundColor: currentTheme.colors.accentPrimary,
-                        boxShadow: `0 0 10px ${currentTheme.colors.accentPrimary}80`
-                      }}></span>
-                      <span style={{ 
-                        backgroundColor: currentTheme.colors.accentSecondary,
-                        boxShadow: `0 0 10px ${currentTheme.colors.accentSecondary}80`
-                      }}></span>
-                      <span style={{ 
-                        backgroundColor: currentTheme.colors.accentTertiary,
-                        boxShadow: `0 0 10px ${currentTheme.colors.accentTertiary}80`
-                      }}></span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-          
+          <ChatWindow 
+            messages={messages} 
+            loading={loading}
+            onRegenerate={handleRegenerate}
+            onStopGeneration={handleStopGeneration}
+            isGenerating={isGenerating}
+          />
+        
           {/* Artifact Display Panel - will show when an artifact is selected */}
           {selectedArtifact && (
             <div 

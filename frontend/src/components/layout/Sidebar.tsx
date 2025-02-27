@@ -66,6 +66,16 @@ const navItems = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     )
+  },
+  {
+    id: 'themes',
+    name: 'Theme Customizer',
+    path: '/admin/themes',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+      </svg>
+    )
   }
 ];
 
@@ -108,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
       {/* Mobile backdrop */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 lg:hidden z-20"
+          className="fixed inset-0 bg-black bg-opacity-50 lg:hidden z-20 backdrop-blur-sm"
           onClick={() => onNavigate(currentPath)} // Close sidebar on backdrop click
         />
       )}
@@ -119,35 +129,48 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{
-          backgroundColor: currentTheme.colors.bgSecondary,
-          borderRight: `1px solid ${currentTheme.colors.borderColor}`
+          background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}, ${currentTheme.colors.bgPrimary}F0)`,
+          borderRight: `1px solid ${currentTheme.colors.borderColor}40`,
+          boxShadow: `4px 0 20px rgba(0, 0, 0, 0.05)`
         }}
       >
-        <nav className="h-full flex flex-col overflow-y-auto py-4">
-          <div className="px-4 mb-4">
+        <nav className="h-full flex flex-col overflow-y-auto admin-scrollbar py-4">
+          <div className="px-4 mb-6">
             <div 
-              className="h-1 w-16 rounded-full mx-auto"
-              style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+              className="h-1 w-20 rounded-full mx-auto"
+              style={{ 
+                background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                boxShadow: `0 2px 8px ${currentTheme.colors.accentPrimary}40` 
+              }}
             />
           </div>
           
           <ul className="space-y-1 px-3 flex-1">
             {navItems.map((item) => {
               const isActive = currentPath === item.path;
-              const activeStyles = {
-                backgroundColor: isActive ? currentTheme.colors.accentPrimary : 'transparent',
-                color: isActive ? getContrastColor(currentTheme.colors.accentPrimary) : currentTheme.colors.textPrimary,
-                borderLeft: isActive ? `3px solid ${currentTheme.colors.accentSecondary}` : '3px solid transparent'
-              };
               
               return (
                 <li key={item.id}>
                   <button
                     onClick={() => handleNavigate(item.path)}
-                    className={`flex items-center w-full px-3 py-2.5 rounded-md transition-colors ${
+                    className={`flex items-center w-full px-3 py-2.5 rounded-lg transition-all ${
                       isActive ? 'font-medium' : 'hover:bg-opacity-10'
                     }`}
-                    style={activeStyles}
+                    style={{ 
+                      background: isActive 
+                        ? `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary}DD)` 
+                        : 'transparent',
+                      color: isActive 
+                        ? '#FFFFFF' 
+                        : currentTheme.colors.textPrimary,
+                      boxShadow: isActive 
+                        ? `0 4px 12px ${currentTheme.colors.accentPrimary}40` 
+                        : 'none',
+                      borderLeft: !isActive 
+                        ? `3px solid transparent` 
+                        : `3px solid ${currentTheme.colors.accentPrimary}`,
+                      transform: isActive ? 'translateX(4px)' : 'none',
+                    }}
                   >
                     <span className="mr-3">{item.icon}</span>
                     <span>{item.name}</span>
@@ -157,17 +180,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
             })}
           </ul>
           
-          <div className="px-4 mt-auto">
+          <div className="px-4 mt-4">
             {/* User info */}
             {username && (
               <div 
-                className="p-3 rounded-md mb-2"
-                style={{ backgroundColor: `${currentTheme.colors.bgTertiary}60` }}
+                className="p-3 rounded-lg mb-3"
+                style={{ 
+                  background: `linear-gradient(135deg, ${currentTheme.colors.bgTertiary}80, ${currentTheme.colors.bgTertiary}40)`,
+                  boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)`,
+                  backdropFilter: 'blur(3px)'
+                }}
               >
                 <div className="flex items-center">
                   <div 
-                    className="w-8 h-8 rounded-full mr-2 flex items-center justify-center"
-                    style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+                    className="w-9 h-9 rounded-full mr-3 flex items-center justify-center"
+                    style={{ 
+                      background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                      boxShadow: `0 2px 8px ${currentTheme.colors.accentPrimary}40` 
+                    }}
                   >
                     <span style={{ color: getContrastColor(currentTheme.colors.accentPrimary) }}>
                       {username.charAt(0).toUpperCase()}
@@ -186,12 +216,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
             )}
             
             {/* System status */}
-            <div className="p-3 rounded-md" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}80` }}>
+            <div 
+              className="p-3 rounded-lg mb-3" 
+              style={{ 
+                background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}70, ${currentTheme.colors.bgTertiary}90)`,
+                boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)`,
+                backdropFilter: 'blur(3px)'
+              }}
+            >
               <div className="flex items-center mb-2">
                 <div 
-                  className="w-2 h-2 rounded-full mr-2"
-                  style={{ backgroundColor: currentTheme.colors.success }}
-                />
+                  className="w-2 h-2 rounded-full mr-2 relative"
+                  style={{ 
+                    backgroundColor: currentTheme.colors.success,
+                    boxShadow: `0 0 6px ${currentTheme.colors.success}`
+                  }}
+                >
+                  <div
+                    className="absolute inset-0 rounded-full animate-ping opacity-75"
+                    style={{ backgroundColor: currentTheme.colors.success }}
+                  />
+                </div>
                 <span className="text-sm font-medium" style={{ color: currentTheme.colors.textSecondary }}>
                   System Status: Online
                 </span>
@@ -199,7 +244,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
               <div className="flex items-center">
                 <div 
                   className="w-2 h-2 rounded-full mr-2"
-                  style={{ backgroundColor: currentTheme.colors.accentTertiary }}
+                  style={{ 
+                    backgroundColor: currentTheme.colors.accentTertiary,
+                    boxShadow: `0 0 6px ${currentTheme.colors.accentTertiary}`
+                  }}
                 />
                 <span className="text-sm font-medium" style={{ color: currentTheme.colors.textSecondary }}>
                   Queue: Active
@@ -211,13 +259,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) =>
             {username && (
               <button
                 onClick={logout}
-                className="mt-4 w-full py-2 text-center rounded-md"
+                className="mt-1 w-full py-2 text-center rounded-lg transition-all hover:scale-102"
                 style={{ 
-                  backgroundColor: `${currentTheme.colors.error}20`,
-                  color: currentTheme.colors.error
+                  background: `linear-gradient(to right, ${currentTheme.colors.error}30, ${currentTheme.colors.error}20)`,
+                  color: currentTheme.colors.error,
+                  boxShadow: `0 2px 8px ${currentTheme.colors.error}15`,
+                  border: `1px solid ${currentTheme.colors.error}30`
                 }}
               >
-                Logout
+                <div className="flex items-center justify-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Logout
+                </div>
               </button>
             )}
           </div>

@@ -14,23 +14,25 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
 
   return (
     <header 
-      className="h-16 fixed w-full flex items-center justify-between px-4 z-10"
+      className="h-16 fixed w-full flex items-center justify-between px-6 z-30"
       style={{
-        backgroundColor: currentTheme.colors.bgSecondary,
-        borderBottom: `1px solid ${currentTheme.colors.borderColor}`
+        backgroundColor: `${currentTheme.colors.bgSecondary}CC`,
+        backdropFilter: 'blur(10px)',
+        borderBottom: `1px solid ${currentTheme.colors.borderColor}40`,
+        boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`
       }}
     >
       <div className="flex items-center">
         <button
           onClick={toggleSidebar}
-          className="mr-4 lg:hidden p-2 rounded-md"
+          className="mr-4 lg:hidden p-2 rounded-lg transition-transform duration-200 hover:scale-105"
           style={{ 
             color: currentTheme.colors.textPrimary,
             backgroundColor: `${currentTheme.colors.bgTertiary}40`
           }}
         >
           <svg 
-            className="w-6 h-6" 
+            className="w-5 h-5" 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24" 
@@ -44,34 +46,63 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
             />
           </svg>
         </button>
-        <h1 className="text-xl font-semibold" style={{ color: currentTheme.colors.accentPrimary }}>
-          Seadragon LLM Admin
-        </h1>
+        <div className="flex items-center">
+          <svg 
+            className="w-8 h-8 mr-3" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ color: currentTheme.colors.accentPrimary }}
+          >
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div>
+            <h1 className="text-xl font-semibold" style={{ color: currentTheme.colors.accentPrimary }}>
+              Seadragon Admin
+            </h1>
+            <div className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+              Management Console
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
         {username && (
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg" 
+            style={{ 
+              backgroundColor: `${currentTheme.colors.bgTertiary}30`,
+              boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)`
+            }}>
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+              style={{ 
+                background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                boxShadow: `0 2px 8px ${currentTheme.colors.accentPrimary}40`
+              }}
             >
               <span style={{ color: 'white' }}>
                 {username.charAt(0).toUpperCase()}
               </span>
             </div>
-            <span className="font-medium">{username}</span>
+            <div className="flex flex-col">
+              <span className="font-medium text-sm">{username}</span>
+              <span className="text-xs" style={{ color: currentTheme.colors.textMuted }}>Administrator</span>
+            </div>
           </div>
         )}
         <ThemeSelector compact={true} />
         {username && (
           <button
             onClick={logout}
-            className="p-2 rounded-md"
+            className="p-2 rounded-lg transition-all duration-200 hover:scale-105"
             title="Logout"
             style={{ 
               color: currentTheme.colors.error,
-              backgroundColor: `${currentTheme.colors.error}10`
+              backgroundColor: `${currentTheme.colors.error}15`,
+              boxShadow: `0 2px 8px ${currentTheme.colors.error}15`
             }}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
