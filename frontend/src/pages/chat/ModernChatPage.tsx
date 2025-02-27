@@ -925,9 +925,7 @@ function example() {
                             fontFamily: 'monospace'
                           }}
                         >
-                          function fibonacci(n) {<br />
-                          &nbsp;&nbsp;if (n &lt;= 1) return n;<br />
-                          &nbsp;&nbsp;return fibonacci(n-1) + ...<br />
+                          {"function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + ..."}
                         </div>
                       </div>
                       
