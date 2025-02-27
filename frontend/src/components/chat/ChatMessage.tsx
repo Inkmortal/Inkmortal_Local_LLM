@@ -30,12 +30,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   
   return (
     <div 
-      className={`flex mb-4 ${isUser ? 'justify-end' : 'justify-start'} relative group`}
+      className={`flex mb-6 ${isUser ? 'justify-end' : 'justify-start'} relative group`}
       onMouseEnter={() => isAssistant && setShowControls(true)}
       onMouseLeave={() => isAssistant && setShowControls(false)}
     >
       <div 
-        className={`rounded-lg px-4 py-2 max-w-[80%] relative ${
+        className={`rounded-xl px-5 py-3 max-w-[95%] relative ${
           isUser 
             ? 'rounded-tr-none' 
             : 'rounded-tl-none'

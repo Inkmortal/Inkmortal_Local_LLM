@@ -315,7 +315,7 @@ const ModernChatPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
-      {/* Modern Glass Header */}
+      {/* Modern Glass Header - Reduced glow effect */}
       <header 
         className="py-3 px-4 md:px-6 flex justify-between items-center z-10 sticky top-0"
         style={{ 
@@ -328,10 +328,10 @@ const ModernChatPage: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className="relative group">
             <div 
-              className="absolute -inset-1 rounded-full opacity-70 group-hover:opacity-100 transition-all blur-sm"
+              className="absolute -inset-1 rounded-full opacity-40 group-hover:opacity-70 transition-all blur-sm"
               style={{ 
                 background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                filter: 'blur(8px)'
+                filter: 'blur(6px)'
               }}
             />
             <div className="relative p-2 rounded-full"
@@ -375,38 +375,7 @@ const ModernChatPage: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <div className="flex -space-x-2 mr-1">
-            <Button 
-              size="sm"
-              variant="ghost"
-              className="rounded-full p-1.5 transition-all hover:bg-opacity-10"
-              style={{
-                color: currentTheme.colors.textSecondary,
-                backgroundColor: 'transparent',
-              }}
-              title="New chat"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </Button>
-            
-            <Button 
-              size="sm"
-              variant="ghost"
-              className="rounded-full p-1.5 transition-all hover:bg-opacity-10"
-              style={{
-                color: currentTheme.colors.textSecondary,
-                backgroundColor: 'transparent',
-              }}
-              title="Your chats"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </Button>
-          </div>
-          
+          {/* Removed redundant buttons */}
           {isAuthenticated && (
             <Button 
               size="sm"
@@ -456,8 +425,8 @@ const ModernChatPage: React.FC = () => {
           />
         </div>
         
-        {/* Main container */}
-        <div className="flex flex-grow max-w-6xl mx-auto w-full px-4 md:px-6 py-4 relative z-1">
+        {/* Main container - full width */}
+        <div className="flex flex-grow w-full px-4 md:px-6 py-4 relative z-1">
           {/* Left Sidebar - Conversation History */}
           <aside 
             className="hidden lg:flex flex-col w-64 mr-8 rounded-xl overflow-hidden shrink-0 animate-fade-in h-full transition-all"
@@ -488,6 +457,21 @@ const ModernChatPage: React.FC = () => {
                   Recent Conversations
                 </h3>
               </div>
+              
+              {/* New chat button - moved to top for better visibility */}
+              <button 
+                className="w-[calc(100%-1rem)] mx-auto mt-3 p-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
+                style={{ 
+                  background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}20, ${currentTheme.colors.accentSecondary}20)`,
+                  color: currentTheme.colors.textSecondary,
+                  border: `1px solid ${currentTheme.colors.borderColor}40`,
+                }}
+              >
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                New Conversation
+              </button>
               
               <div className="p-2 space-y-1.5 overflow-y-auto modern-scrollbar flex-grow">
                 {/* Conversations list */}
@@ -541,21 +525,6 @@ const ModernChatPage: React.FC = () => {
                     </p>
                   </div>
                 ))}
-                
-                {/* New chat button */}
-                <button 
-                  className="w-full mt-2 p-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
-                  style={{ 
-                    background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}20, ${currentTheme.colors.accentSecondary}20)`,
-                    color: currentTheme.colors.textSecondary,
-                    border: `1px solid ${currentTheme.colors.borderColor}40`,
-                  }}
-                >
-                  <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  New Conversation
-                </button>
               </div>
             
               {/* Features Section */}
@@ -736,7 +705,7 @@ const ModernChatPage: React.FC = () => {
               </div>
             )}
             
-            {/* Action bar */}
+            {/* Action bar - simplified */}
             <div 
               className="px-4 py-2 border-t flex items-center justify-between"
               style={{ 
@@ -763,44 +732,6 @@ const ModernChatPage: React.FC = () => {
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                </Button>
-                
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  className="rounded-full p-1.5 transition-all"
-                  style={{
-                    color: currentTheme.colors.textSecondary,
-                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
-                  }}
-                  title="View code example"
-                  onClick={() => setSelectedArtifact({
-                    type: 'code',
-                    content: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\n\nconsole.log(fibonacci(10));'
-                  })}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                  </svg>
-                </Button>
-                
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  className="rounded-full p-1.5 transition-all"
-                  style={{
-                    color: currentTheme.colors.textSecondary,
-                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
-                  }}
-                  title="View math example"
-                  onClick={() => setSelectedArtifact({
-                    type: 'math',
-                    content: 'f(x) = \\int_{-\\infty}^{\\infty}\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi'
-                  })}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
                   </svg>
                 </Button>
                 
