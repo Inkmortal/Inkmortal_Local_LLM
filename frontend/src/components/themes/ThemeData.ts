@@ -189,3 +189,24 @@ export const popularThemes = [
 
 // Key for tracking previous route
 export const PREVIOUS_ROUTE_KEY = 'theme-gallery-previous-route';
+
+export const DEFAULT_THEME: Theme = {
+    name: 'custom',
+    displayName: 'Custom Theme',
+    isDark: true,
+    colors: {
+        bgPrimary: '#24273a',
+        bgSecondary: '#1e2030',
+        bgTertiary: '#363a4f',
+        textPrimary: '#cad3f5',
+        textSecondary: '#b8c0e0',
+        textMuted: '#8087a2',
+        accentPrimary: '#8aadf4',
+        accentSecondary: '#c6a0f6',
+        accentTertiary: '#f5a97f',
+        borderColor: '#494d64',
+        success: '#a6da95',
+        warning: '#eed49f',
+        error: '#ed8796'
+    }
+}

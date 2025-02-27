@@ -3,13 +3,18 @@ import { useTheme, Theme, ThemeName, themes } from '../../context/ThemeContext';
 import Button from '../../components/ui/Button';
 import ThemeCard from '../../components/themes/ThemeCard';
 import ThemeCustomizer from '../../components/themes/ThemeCustomizer';
-import { popularThemes, PREVIOUS_ROUTE_KEY } from '../../components/themes/ThemeData';
+import { popularThemes, PREVIOUS_ROUTE_KEY, DEFAULT_THEME } from '../../components/themes/ThemeData';
 
 const ThemeGallery: React.FC = () => {
   const { currentTheme, setTheme, customThemes, addCustomTheme } = useTheme();
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [workingTheme, setWorkingTheme] = useState<Theme | null>(null);
   const [previousRoute, setPreviousRoute] = useState<string | null>(null);
+
+    // Handler function to create new custom theme
+  const handleCreateCustomTheme = () => {
+    setWorkingTheme(DEFAULT_THEME);
+  }
 
   // Combine built-in themes with popular themes
   const allThemes = { ...themes };
@@ -166,9 +171,15 @@ const saveTheme = () => {
         >
           Explore different themes for your Seadragon LLM experience or create your own
         </p>
+
+        <div className="mb-8">
+          <Button onClick={handleCreateCustomTheme}>
+            Create Custom Theme
+          </Button>
+        </div>
         
         <div className="mb-8">
-          <h2 
+          <h2
             className="text-2xl font-semibold mb-6"
             style={{ color: currentTheme.colors.accentSecondary }}
           >
