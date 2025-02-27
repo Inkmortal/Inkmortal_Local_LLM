@@ -1,5 +1,17 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 
+// Import theme CSS files
+import '../themes/catppuccin.css';
+import '../themes/dracula.css';
+import '../themes/matcha-cafe.css';
+import '../themes/nord.css';
+import '../themes/tokyo-night.css';
+import '../themes/solarized-dark.css';
+import '../themes/solarized-light.css';
+import '../themes/github-dark.css';
+import '../themes/github-light.css';
+import '../themes/gruvbox.css';
+
 // Define the available theme types
 export type ThemeName = 'catppuccin' | 'dracula' | 'matcha-cafe' | 'nord' | 'solarized-light' | 'solarized-dark' | 'github-light' | 'github-dark' | 'tokyo-night' | 'gruvbox' | 'custom' | string;
 
@@ -126,6 +138,106 @@ export const themes: Record<string, Theme> = {
       success: '#9ece6a',
       warning: '#e0af68',
       error: '#f7768e'
+    },
+    isDark: true
+  },
+  'solarized-light': {
+    name: 'solarized-light',
+    displayName: 'Solarized Light',
+    colors: {
+      bgPrimary: '#fdf6e3',
+      bgSecondary: '#eee8d5',
+      bgTertiary: '#93a1a1',
+      textPrimary: '#657b83',
+      textSecondary: '#586e75',
+      textMuted: '#839496',
+      accentPrimary: '#268bd2',
+      accentSecondary: '#6c71c4',
+      accentTertiary: '#cb4b16',
+      borderColor: '#93a1a1',
+      success: '#859900',
+      warning: '#b58900',
+      error: '#dc322f'
+    },
+    isDark: false
+  },
+  'solarized-dark': {
+    name: 'solarized-dark',
+    displayName: 'Solarized Dark',
+    colors: {
+      bgPrimary: '#002b36',
+      bgSecondary: '#073642',
+      bgTertiary: '#586e75',
+      textPrimary: '#93a1a1',
+      textSecondary: '#839496',
+      textMuted: '#657b83',
+      accentPrimary: '#268bd2',
+      accentSecondary: '#6c71c4',
+      accentTertiary: '#cb4b16',
+      borderColor: '#586e75',
+      success: '#859900',
+      warning: '#b58900',
+      error: '#dc322f'
+    },
+    isDark: true
+  },
+  'github-light': {
+    name: 'github-light',
+    displayName: 'GitHub Light',
+    colors: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#f6f8fa',
+      bgTertiary: '#eaeef2',
+      textPrimary: '#24292e',
+      textSecondary: '#586069',
+      textMuted: '#6a737d',
+      accentPrimary: '#0366d6',
+      accentSecondary: '#6f42c1',
+      accentTertiary: '#f97583',
+      borderColor: '#e1e4e8',
+      success: '#22863a',
+      warning: '#b08800',
+      error: '#cb2431'
+    },
+    isDark: false
+  },
+  'github-dark': {
+    name: 'github-dark',
+    displayName: 'GitHub Dark',
+    colors: {
+      bgPrimary: '#0d1117',
+      bgSecondary: '#161b22',
+      bgTertiary: '#30363d',
+      textPrimary: '#c9d1d9',
+      textSecondary: '#8b949e',
+      textMuted: '#6e7681',
+      accentPrimary: '#58a6ff',
+      accentSecondary: '#bc8cff',
+      accentTertiary: '#f07178',
+      borderColor: '#30363d',
+      success: '#3fb950',
+      warning: '#d29922',
+      error: '#f85149'
+    },
+    isDark: true
+  },
+  'gruvbox': {
+    name: 'gruvbox',
+    displayName: 'Gruvbox',
+    colors: {
+      bgPrimary: '#282828',
+      bgSecondary: '#32302f',
+      bgTertiary: '#3c3836',
+      textPrimary: '#ebdbb2',
+      textSecondary: '#d5c4a1',
+      textMuted: '#bdae93',
+      accentPrimary: '#83a598',
+      accentSecondary: '#b16286',
+      accentTertiary: '#fe8019',
+      borderColor: '#504945',
+      success: '#b8bb26',
+      warning: '#fabd2f',
+      error: '#fb4934'
     },
     isDark: true
   }

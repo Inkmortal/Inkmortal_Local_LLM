@@ -32,7 +32,14 @@ const ModernChatPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  
+  // Chat history state
+  const [conversations, setConversations] = useState<{id: string, title: string, date: Date}[]>([]);
+  const [selectedArtifact, setSelectedArtifact] = useState<{content: string, type: 'code' | 'math' | 'image'} | null>(null);
+  
+  // Refs for scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Initialize conversation when component mounts
   useEffect(() => {
@@ -40,6 +47,25 @@ const ModernChatPage: React.FC = () => {
       try {
         const { conversation_id } = await MockChatService.createConversation();
         setConversationId(conversation_id);
+        
+        // Mock loading previous conversations for demo
+        setConversations([
+          {
+            id: conversation_id,
+            title: "Current Conversation",
+            date: new Date()
+          },
+          {
+            id: `conv_${Date.now() - 86400000}_abc123`,
+            title: "Math Discussion",
+            date: new Date(Date.now() - 86400000)
+          },
+          {
+            id: `conv_${Date.now() - 172800000}_def456`,
+            title: "Python Examples",
+            date: new Date(Date.now() - 172800000)
+          }
+        ]);
       } catch (error) {
         console.error('Error creating conversation:', error);
       }
@@ -61,12 +87,77 @@ const ModernChatPage: React.FC = () => {
         100% { box-shadow: 0 0 5px rgba(0, 0, 0, 0.1); }
       }
       
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      
+      @keyframes shimmer {
+        0% { background-position: -100% 0; }
+        100% { background-position: 100% 0; }
+      }
+      
       .message-fade-in {
         animation: fadeUp 0.5s ease forwards;
       }
       
       .chat-container-shadow {
         animation: pulseGlow 3s infinite ease-in-out;
+      }
+      
+      .typing-indicator span {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+        animation: bounce 1.4s infinite ease-in-out both;
+      }
+      
+      .typing-indicator span:nth-child(1) {
+        animation-delay: -0.32s;
+      }
+      
+      .typing-indicator span:nth-child(2) {
+        animation-delay: -0.16s;
+      }
+      
+      @keyframes bounce {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1); }
+      }
+      
+      .hover-grow {
+        transition: all 0.2s ease;
+      }
+      
+      .hover-grow:hover {
+        transform: scale(1.02);
+      }
+      
+      .modern-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      .modern-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      .modern-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(155, 155, 155, 0.5);
+        border-radius: 20px;
+      }
+      
+      .artifact-display {
+        backdrop-filter: blur(8px);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
       }
     `;
     document.head.appendChild(style);
@@ -75,6 +166,13 @@ const ModernChatPage: React.FC = () => {
       document.head.removeChild(style);
     };
   }, []);
+  
+  // Auto-scroll when messages change
+  useEffect(() => {
+    if (messagesEndRef.current && scrollContainerRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
   
   const handleSendMessage = async (messageText: string) => {
     if (messageText.trim() === '') return;
@@ -207,107 +305,275 @@ const ModernChatPage: React.FC = () => {
       </header>
       
       {/* Main Chat Interface */}
-      <div className="flex flex-grow overflow-hidden p-4 md:p-8 relative">
-        {/* Left Sidebar - Educational context */}
+      <div className="flex flex-grow h-[calc(100vh-73px)] overflow-hidden p-4 md:p-8 relative">
+        {/* Left Sidebar - Conversation History + Prompts */}
         <aside 
-          className="hidden lg:block w-64 mr-8 rounded-2xl overflow-hidden shrink-0 animate-fade-in"
+          className="hidden lg:flex flex-col w-64 mr-8 rounded-2xl overflow-hidden shrink-0 animate-fade-in"
           style={{ 
-            backgroundColor: currentTheme.colors.bgSecondary,
-            border: `1px solid ${currentTheme.colors.borderColor}30`,
-            height: 'fit-content'
+            backgroundImage: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}, ${currentTheme.colors.bgTertiary})`,
+            boxShadow: `0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px ${currentTheme.colors.borderColor}40`,
+            height: 'auto'
           }}
         >
-          <div 
-            className="p-4 border-b"
-            style={{ borderColor: currentTheme.colors.borderColor }}
-          >
-            <h3 
-              className="text-lg font-medium"
-              style={{ color: currentTheme.colors.accentSecondary }}
+          {/* Conversation History Section */}
+          <div>
+            <div 
+              className="px-4 py-3 border-b"
+              style={{ 
+                borderColor: currentTheme.colors.borderColor,
+                background: `linear-gradient(90deg, ${currentTheme.colors.accentPrimary}20, transparent)`
+              }}
             >
-              Suggested Prompts
-            </h3>
+              <h3 
+                className="text-lg font-medium flex items-center"
+                style={{ color: currentTheme.colors.accentPrimary }}
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                </svg>
+                Chat History
+              </h3>
+            </div>
+            
+            <div className="p-4 space-y-3 max-h-[30vh] overflow-y-auto modern-scrollbar">
+              {/* This would be populated with actual history - using placeholder for now */}
+              {conversations.map((conv, index) => (
+                <div 
+                  key={conv.id}
+                  className="p-3 rounded-lg cursor-pointer transition-all hover:scale-102 relative overflow-hidden group"
+                  style={{ 
+                    backgroundColor: conv.id === conversationId 
+                      ? `${currentTheme.colors.accentPrimary}20` 
+                      : `${currentTheme.colors.bgPrimary}90`,
+                    borderLeft: conv.id === conversationId 
+                      ? `3px solid ${currentTheme.colors.accentPrimary}` 
+                      : `1px solid ${currentTheme.colors.borderColor}50`,
+                    boxShadow: conv.id === conversationId 
+                      ? `0 2px 10px ${currentTheme.colors.accentPrimary}20` 
+                      : 'none'
+                  }}
+                  onClick={() => {/* Load conversation */}}
+                >
+                  {/* Visual indicator for current chat */}
+                  {conv.id === conversationId && (
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 w-1" 
+                      style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+                    />
+                  )}
+                  
+                  <h4 
+                    className="text-sm font-medium mb-1 flex items-center"
+                    style={{ 
+                      color: conv.id === conversationId 
+                        ? currentTheme.colors.accentPrimary
+                        : currentTheme.colors.textPrimary
+                    }}
+                  >
+                    {index === 0 ? (
+                      <>
+                        <span className="relative flex h-3 w-3 mr-2">
+                          <span 
+                            className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
+                            style={{ backgroundColor: currentTheme.colors.success }}
+                          />
+                          <span 
+                            className="relative inline-flex rounded-full h-3 w-3" 
+                            style={{ backgroundColor: currentTheme.colors.success }}
+                          />
+                        </span>
+                        {conv.title}
+                      </>
+                    ) : (
+                      conv.title
+                    )}
+                  </h4>
+                  <p 
+                    className="text-xs truncate"
+                    style={{ color: currentTheme.colors.textSecondary }}
+                  >
+                    {index === 0 
+                      ? 'Active conversation' 
+                      : `Started on ${conv.date.toLocaleDateString()}`}
+                  </p>
+                  
+                  {/* Delete button that appears on hover */}
+                  <button 
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full"
+                    style={{ 
+                      backgroundColor: `${currentTheme.colors.error}20`,
+                      color: currentTheme.colors.error
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Delete conversation logic would go here
+                    }}
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              
+              <button 
+                className="w-full p-2 rounded-lg text-sm mt-2 transition-all hover:scale-105"
+                style={{ 
+                  background: `linear-gradient(to right, ${currentTheme.colors.accentTertiary}, ${currentTheme.colors.accentSecondary})`,
+                  color: '#fff',
+                  boxShadow: `0 2px 10px ${currentTheme.colors.accentTertiary}40`
+                }}
+              >
+                <div className="flex items-center justify-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  New Chat
+                </div>
+              </button>
+            </div>
           </div>
           
-          <div className="p-4 space-y-4">
-            {suggestedPrompts.map((item, index) => (
-              <div 
-                key={index}
-                className="p-3 rounded-lg cursor-pointer hover-grow"
-                style={{ 
-                  backgroundColor: `${currentTheme.colors.accentPrimary}10`,
-                  border: `1px solid ${currentTheme.colors.borderColor}30`
-                }}
-                onClick={() => handleSendMessage(item.prompt)}
+          {/* Suggested Prompts Section */}
+          <div className="border-t mt-2" style={{ borderColor: `${currentTheme.colors.borderColor}80` }}>
+            <div 
+              className="px-4 py-3 border-b"
+              style={{ 
+                borderColor: currentTheme.colors.borderColor,
+                background: `linear-gradient(90deg, ${currentTheme.colors.accentSecondary}20, transparent)`
+              }}
+            >
+              <h3 
+                className="text-lg font-medium flex items-center"
+                style={{ color: currentTheme.colors.accentSecondary }}
               >
-                <h4 
-                  className="text-sm font-medium mb-1"
-                  style={{ color: currentTheme.colors.accentPrimary }}
-                >
-                  {item.title}
-                </h4>
-                <p 
-                  className="text-xs truncate"
-                  style={{ color: currentTheme.colors.textSecondary }}
-                >
-                  {item.prompt}
-                </p>
-              </div>
-            ))}
-            
-            <div className="pt-4 border-t" style={{ borderColor: currentTheme.colors.borderColor }}>
-              <h4 
-                className="text-sm font-medium mb-2"
-                style={{ color: currentTheme.colors.textPrimary }}
-              >
-                Features
-              </h4>
-              
-              <ul className="space-y-2 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-                <li className="flex items-center">
-                  <span 
-                    className="inline-block w-2 h-2 rounded-full mr-2"
-                    style={{ backgroundColor: currentTheme.colors.accentPrimary }}
-                  />
-                  Math equation rendering with LaTeX
-                </li>
-                <li className="flex items-center">
-                  <span 
-                    className="inline-block w-2 h-2 rounded-full mr-2"
-                    style={{ backgroundColor: currentTheme.colors.accentSecondary }}
-                  />
-                  Code syntax highlighting
-                </li>
-                <li className="flex items-center">
-                  <span 
-                    className="inline-block w-2 h-2 rounded-full mr-2"
-                    style={{ backgroundColor: currentTheme.colors.accentTertiary }}
-                  />
-                  Image upload for textbook help
-                </li>
-              </ul>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Suggested Prompts
+              </h3>
             </div>
+            
+            <div className="p-4 space-y-3 overflow-y-auto modern-scrollbar">
+              {suggestedPrompts.map((item, index) => (
+                <div 
+                  key={index}
+                  className="p-3 rounded-lg cursor-pointer transition-all hover:translate-x-1 relative overflow-hidden"
+                  style={{ 
+                    backgroundColor: index % 3 === 0 
+                      ? `${currentTheme.colors.accentPrimary}15`
+                      : index % 3 === 1
+                        ? `${currentTheme.colors.accentSecondary}15`
+                        : `${currentTheme.colors.accentTertiary}15`,
+                    borderLeft: `3px solid ${
+                      index % 3 === 0 
+                        ? currentTheme.colors.accentPrimary
+                        : index % 3 === 1
+                          ? currentTheme.colors.accentSecondary
+                          : currentTheme.colors.accentTertiary
+                    }`,
+                    boxShadow: `0 2px 8px rgba(0,0,0,0.05)`
+                  }}
+                  onClick={() => handleSendMessage(item.prompt)}
+                >
+                  <h4 
+                    className="text-sm font-medium mb-1"
+                    style={{ 
+                      color: index % 3 === 0 
+                        ? currentTheme.colors.accentPrimary
+                        : index % 3 === 1
+                          ? currentTheme.colors.accentSecondary
+                          : currentTheme.colors.accentTertiary
+                    }}
+                  >
+                    {item.title}
+                  </h4>
+                  <p 
+                    className="text-xs truncate"
+                    style={{ color: currentTheme.colors.textSecondary }}
+                  >
+                    {item.prompt}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Features Section */}
+          <div 
+            className="p-4 mt-auto border-t" 
+            style={{ 
+              borderColor: `${currentTheme.colors.borderColor}80`,
+              background: `linear-gradient(to top, ${currentTheme.colors.bgTertiary}80, transparent)`
+            }}
+          >
+            <h4 
+              className="text-sm font-medium mb-2 flex items-center"
+              style={{ color: currentTheme.colors.textPrimary }}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Features
+            </h4>
+            
+            <ul className="space-y-2 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
+              <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentPrimary}10` }}>
+                <span 
+                  className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
+                  style={{ 
+                    backgroundColor: currentTheme.colors.accentPrimary,
+                    boxShadow: `0 0 10px ${currentTheme.colors.accentPrimary}80`
+                  }}
+                />
+                <span>Math equation rendering with LaTeX</span>
+              </li>
+              <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentSecondary}10` }}>
+                <span 
+                  className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
+                  style={{ 
+                    backgroundColor: currentTheme.colors.accentSecondary,
+                    boxShadow: `0 0 10px ${currentTheme.colors.accentSecondary}80` 
+                  }}
+                />
+                <span>Code syntax highlighting</span>
+              </li>
+              <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentTertiary}10` }}>
+                <span 
+                  className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
+                  style={{ 
+                    backgroundColor: currentTheme.colors.accentTertiary,
+                    boxShadow: `0 0 10px ${currentTheme.colors.accentTertiary}80`
+                  }}
+                />
+                <span>Image upload for textbook help</span>
+              </li>
+            </ul>
           </div>
         </aside>
         
         {/* Main Chat Window */}
         <div 
-          className="flex-grow flex flex-col overflow-hidden rounded-2xl chat-container-shadow animate-fade-in"
+          className="flex-grow flex flex-col h-full overflow-hidden rounded-2xl chat-container-shadow animate-fade-in"
           style={{ 
-            backgroundColor: currentTheme.colors.bgSecondary,
-            border: `1px solid ${currentTheme.colors.borderColor}30`,
+            backgroundImage: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}, ${currentTheme.colors.bgPrimary})`,
+            boxShadow: `0 4px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
           }}
         >
           {/* Message area */}
           <div 
-            className="flex-grow overflow-y-auto p-4 modern-scrollbar"
-            style={{ backgroundColor: currentTheme.colors.bgPrimary }}
+            className="flex-grow overflow-y-auto p-4 modern-scrollbar" 
+            style={{ 
+              backgroundImage: `radial-gradient(circle at 50% 50%, ${currentTheme.colors.bgPrimary}30, ${currentTheme.colors.bgPrimary})`,
+              backgroundSize: '100% 100%'
+            }}
+            ref={scrollContainerRef}
           >
             <div className="max-w-4xl mx-auto">
               {messages.map((message, index) => (
                 <div 
                   key={message.id} 
-                  className={`message-fade-in`}
+                  className="message-fade-in"
                   style={{ 
                     animationDelay: `${index * 0.1}s`,
                     opacity: 0
@@ -318,11 +584,13 @@ const ModernChatPage: React.FC = () => {
                   >
                     {message.role !== 'user' && (
                       <div 
-                        className="flex items-center justify-center h-8 w-8 rounded-full overflow-hidden mr-2 flex-shrink-0"
+                        className="flex items-center justify-center h-9 w-9 rounded-full overflow-hidden mr-3 flex-shrink-0"
                         style={{ 
-                          backgroundColor: message.role === 'system' 
-                            ? currentTheme.colors.accentSecondary 
-                            : currentTheme.colors.accentPrimary 
+                          background: message.role === 'system' 
+                            ? `linear-gradient(135deg, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.warning})` 
+                            : `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                          boxShadow: `0 3px 10px ${message.role === 'system' ? currentTheme.colors.accentSecondary : currentTheme.colors.accentPrimary}40`,
+                          border: `2px solid ${currentTheme.colors.bgSecondary}`
                         }}
                       >
                         {message.role === 'assistant' ? (
@@ -343,43 +611,70 @@ const ModernChatPage: React.FC = () => {
                         backgroundColor: message.role === 'system'
                           ? `${currentTheme.colors.accentSecondary}20`
                           : message.role === 'user'
-                            ? currentTheme.colors.accentPrimary
-                            : currentTheme.colors.bgSecondary,
+                            ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary}CC)`
+                            : `${currentTheme.colors.bgSecondary}E6`,
                         color: message.role === 'user' 
                           ? '#fff' 
                           : currentTheme.colors.textPrimary,
                         border: message.role !== 'user' 
                           ? `1px solid ${currentTheme.colors.borderColor}50` 
                           : 'none',
-                        borderRadius: '18px',
+                        boxShadow: message.role === 'user'
+                          ? `0 3px 12px ${currentTheme.colors.accentPrimary}40`
+                          : `0 3px 12px rgba(0,0,0,0.1)`,
+                        borderRadius: message.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                         padding: '0.75rem 1rem',
                         position: 'relative',
                         marginBottom: '0.75rem'
                       }}
                     >
+                      {/* Subtle accent top border for assistant messages */}
+                      {message.role === 'assistant' && (
+                        <div 
+                          className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
+                          style={{
+                            background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}50, ${currentTheme.colors.accentSecondary}50)`,
+                            opacity: 0.6
+                          }}
+                        />
+                      )}
+                      
                       <div 
                         className="whitespace-pre-wrap break-words"
                         style={{ 
                           lineHeight: 1.5
                         }}
                       >
-                        {message.content}
+                        {message.role === 'user' ? (
+                          message.content
+                        ) : (
+                          <MessageParser content={message.content} />
+                        )}
                       </div>
                       
                       <div 
-                        className="text-xs mt-1 text-right opacity-70"
+                        className="text-xs mt-2 text-right opacity-70 flex justify-end items-center"
                         style={{ 
                           color: message.role === 'user' ? '#fff' : currentTheme.colors.textMuted
                         }}
                       >
+                        {message.role === 'assistant' && (
+                          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                     
                     {message.role === 'user' && (
                       <div 
-                        className="flex items-center justify-center h-8 w-8 rounded-full overflow-hidden ml-2 flex-shrink-0"
-                        style={{ backgroundColor: currentTheme.colors.accentTertiary }}
+                        className="flex items-center justify-center h-9 w-9 rounded-full overflow-hidden ml-3 flex-shrink-0"
+                        style={{ 
+                          background: `linear-gradient(135deg, ${currentTheme.colors.accentTertiary}, ${currentTheme.colors.accentSecondary})`,
+                          boxShadow: `0 3px 10px ${currentTheme.colors.accentTertiary}40`,
+                          border: `2px solid ${currentTheme.colors.bgSecondary}`
+                        }}
                       >
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -393,19 +688,28 @@ const ModernChatPage: React.FC = () => {
               {loading && (
                 <div className="flex justify-start mb-4 message-fade-in">
                   <div 
-                    className="message-bubble message-assistant"
+                    className="message-bubble message-assistant rounded-2xl"
                     style={{ 
-                      backgroundColor: currentTheme.colors.bgSecondary,
+                      backgroundColor: `${currentTheme.colors.bgSecondary}E6`,
                       border: `1px solid ${currentTheme.colors.borderColor}50`,
                       color: currentTheme.colors.textPrimary,
-                      borderRadius: '18px',
                       padding: '0.75rem 1rem',
+                      boxShadow: `0 3px 12px rgba(0,0,0,0.1)`,
                     }}
                   >
                     <div className="typing-indicator">
-                      <span style={{ backgroundColor: currentTheme.colors.accentPrimary }}></span>
-                      <span style={{ backgroundColor: currentTheme.colors.accentPrimary }}></span>
-                      <span style={{ backgroundColor: currentTheme.colors.accentPrimary }}></span>
+                      <span style={{ 
+                        backgroundColor: currentTheme.colors.accentPrimary,
+                        boxShadow: `0 0 10px ${currentTheme.colors.accentPrimary}80`
+                      }}></span>
+                      <span style={{ 
+                        backgroundColor: currentTheme.colors.accentSecondary,
+                        boxShadow: `0 0 10px ${currentTheme.colors.accentSecondary}80`
+                      }}></span>
+                      <span style={{ 
+                        backgroundColor: currentTheme.colors.accentTertiary,
+                        boxShadow: `0 0 10px ${currentTheme.colors.accentTertiary}80`
+                      }}></span>
                     </div>
                   </div>
                 </div>
@@ -415,11 +719,128 @@ const ModernChatPage: React.FC = () => {
             </div>
           </div>
           
+          {/* Artifact Display Panel - will show when an artifact is selected */}
+          {selectedArtifact && (
+            <div 
+              className="p-5 border-t artifact-display"
+              style={{ 
+                borderColor: `${currentTheme.colors.accentPrimary}30`,
+                background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}F0, ${currentTheme.colors.bgTertiary}F0)`,
+                backdropFilter: 'blur(10px)',
+                boxShadow: `0 -10px 20px ${currentTheme.colors.accentPrimary}10`
+              }}
+            >
+              <div className="flex justify-between items-center mb-3">
+                <h3 
+                  className="text-md font-medium flex items-center"
+                  style={{ 
+                    color: selectedArtifact.type === 'code' 
+                      ? currentTheme.colors.accentPrimary 
+                      : selectedArtifact.type === 'math' 
+                        ? currentTheme.colors.accentSecondary 
+                        : currentTheme.colors.accentTertiary
+                  }}
+                >
+                  {selectedArtifact.type === 'code' && (
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                  )}
+                  {selectedArtifact.type === 'math' && (
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                    </svg>
+                  )}
+                  {selectedArtifact.type === 'image' && (
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                  {selectedArtifact.type === 'code' ? 'Code Snippet' : 
+                   selectedArtifact.type === 'math' ? 'Mathematical Expression' : 'Image'}
+                </h3>
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="hover-grow"
+                    style={{
+                      borderColor: currentTheme.colors.accentPrimary,
+                      color: currentTheme.colors.accentPrimary
+                    }}
+                    onClick={() => {/* Share logic */}}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                    Share
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="hover-grow"
+                    onClick={() => setSelectedArtifact(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+              
+              <div 
+                className="rounded-xl overflow-hidden"
+                style={{ 
+                  boxShadow: `0 5px 20px rgba(0,0,0,0.15), 0 0 0 1px ${
+                    selectedArtifact.type === 'code' 
+                      ? `${currentTheme.colors.accentPrimary}20` 
+                      : selectedArtifact.type === 'math' 
+                        ? `${currentTheme.colors.accentSecondary}20` 
+                        : `${currentTheme.colors.accentTertiary}20`
+                  }`
+                }}
+              >
+                {selectedArtifact.type === 'code' && (
+                  <CodeBlock 
+                    code={selectedArtifact.content}
+                    language="javascript" 
+                  />
+                )}
+                {selectedArtifact.type === 'math' && (
+                  <div 
+                    className="p-6 text-center"
+                    style={{ 
+                      backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
+                      borderTop: `3px solid ${currentTheme.colors.accentSecondary}50` 
+                    }}
+                  >
+                    <MathRenderer 
+                      latex={selectedArtifact.content}
+                      display={true}
+                    />
+                  </div>
+                )}
+                {selectedArtifact.type === 'image' && (
+                  <div className="p-4 text-center" style={{ backgroundColor: `${currentTheme.colors.bgPrimary}E6` }}>
+                    <img
+                      src={selectedArtifact.content}
+                      alt="Shared content"
+                      className="max-w-full mx-auto rounded-lg"
+                      style={{ maxHeight: '300px' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        
           {/* File upload area */}
           {showFileUpload && (
             <div 
-              className="p-4 border-t animate-slide-up"
-              style={{ borderColor: currentTheme.colors.borderColor }}
+              className="p-5 border-t animate-slide-up"
+              style={{ 
+                borderTop: `1px dashed ${currentTheme.colors.accentTertiary}50`,
+                background: `linear-gradient(to top, ${currentTheme.colors.bgTertiary}90, ${currentTheme.colors.bgSecondary}90)`,
+                boxShadow: `0 -4px 16px ${currentTheme.colors.accentTertiary}10`
+              }}
             >
               <FileUpload
                 onFileSelect={handleFileSelect}
@@ -430,31 +851,90 @@ const ModernChatPage: React.FC = () => {
           
           {/* Input area */}
           <div 
-            className="p-4 border-t"
-            style={{ borderColor: currentTheme.colors.borderColor }}
+            className="p-5 border-t"
+            style={{ 
+              borderColor: `${currentTheme.colors.borderColor}40`,
+              background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}CC, ${currentTheme.colors.bgTertiary}CC)`,
+              backdropFilter: 'blur(8px)'
+            }}
           >
             <div className="max-w-4xl mx-auto">
-              <div className="flex justify-between items-center mb-2">
-                <Button
-                  size="sm"
-                  variant={showFileUpload ? "default" : "outline"}
-                  className="button-shimmer"
-                  onClick={() => setShowFileUpload(!showFileUpload)}
-                >
-                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                  {showFileUpload ? "Hide Upload" : "Attach File"}
-                </Button>
+              <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={showFileUpload ? "default" : "outline"}
+                    className="hover-grow transition-all"
+                    style={{
+                      backgroundColor: showFileUpload 
+                        ? `${currentTheme.colors.accentTertiary}` 
+                        : 'transparent',
+                      borderColor: currentTheme.colors.accentTertiary,
+                      color: showFileUpload ? '#fff' : currentTheme.colors.accentTertiary,
+                      boxShadow: showFileUpload 
+                        ? `0 2px 10px ${currentTheme.colors.accentTertiary}40` 
+                        : 'none'
+                    }}
+                    onClick={() => setShowFileUpload(!showFileUpload)}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    {showFileUpload ? "Hide Upload" : "Attach File"}
+                  </Button>
+                  
+                  {/* Demo Artifact Buttons */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="hover-grow transition-all"
+                    style={{
+                      borderColor: currentTheme.colors.accentPrimary,
+                      color: currentTheme.colors.accentPrimary
+                    }}
+                    onClick={() => setSelectedArtifact({
+                      type: 'code',
+                      content: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\n\nconsole.log(fibonacci(10));'
+                    })}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    Code Example
+                  </Button>
+                  
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="hover-grow transition-all"
+                    style={{
+                      borderColor: currentTheme.colors.accentSecondary,
+                      color: currentTheme.colors.accentSecondary
+                    }}
+                    onClick={() => setSelectedArtifact({
+                      type: 'math',
+                      content: 'f(x) = \\int_{-\\infty}^{\\infty}\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi'
+                    })}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                    </svg>
+                    Math Example
+                  </Button>
+                </div>
                 
                 {selectedFile && (
                   <div 
-                    className="text-xs px-2 py-1 rounded-lg animate-fade-in"
+                    className="text-xs px-3 py-1.5 rounded-full animate-fade-in flex items-center"
                     style={{ 
-                      backgroundColor: `${currentTheme.colors.accentPrimary}20`,
-                      color: currentTheme.colors.textPrimary
+                      background: `linear-gradient(to right, ${currentTheme.colors.accentTertiary}30, ${currentTheme.colors.accentPrimary}30)`,
+                      color: currentTheme.colors.textPrimary,
+                      border: `1px solid ${currentTheme.colors.accentTertiary}40`
                     }}
                   >
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
                     {selectedFile.name} attached
                   </div>
                 )}
@@ -467,10 +947,18 @@ const ModernChatPage: React.FC = () => {
               />
               
               <div 
-                className="text-xs mt-2 text-center opacity-70"
-                style={{ color: currentTheme.colors.textMuted }}
+                className="text-xs mt-2 text-center px-3 py-1.5 rounded-lg mx-auto w-auto inline-block"
+                style={{ 
+                  color: currentTheme.colors.textSecondary,
+                  backgroundColor: `${currentTheme.colors.bgTertiary}50`,
+                  border: `1px dashed ${currentTheme.colors.borderColor}40`
+                }}
               >
-                Try using LaTeX equations like $E=mc^2$ or code snippets using ```language code blocks
+                <span style={{ color: currentTheme.colors.accentPrimary }}>Pro tip:</span> Try using 
+                <span style={{ color: currentTheme.colors.accentSecondary }}> LaTeX equations</span> like 
+                <span style={{ color: currentTheme.colors.success }}> $E=mc^2$</span> or 
+                <span style={{ color: currentTheme.colors.accentTertiary }}> code snippets</span> using 
+                <span style={{ color: currentTheme.colors.warning }}> ```language code blocks</span>
               </div>
             </div>
           </div>

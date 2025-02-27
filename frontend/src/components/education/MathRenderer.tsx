@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 
 interface MathRendererProps {
   latex: string;
@@ -6,67 +6,32 @@ interface MathRendererProps {
   className?: string;
 }
 
-declare global {
-  interface Window {
-    MathJax: any;
-  }
-}
-
+// Simple placeholder for MathRenderer until proper implementation
 const MathRenderer: React.FC<MathRendererProps> = ({ 
   latex, 
   display = false,
   className = ''
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Ensure MathJax is loaded
-    if (!window.MathJax) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';
-      script.async = true;
-      script.onload = () => {
-        window.MathJax = {
-          tex: {
-            inlineMath: [['$', '$'], ['\\(', '\\)']],
-            displayMath: [['$$', '$$'], ['\\[', '\\]']],
-            processEscapes: true,
-          },
-          svg: {
-            fontCache: 'global'
-          },
-          options: {
-            enableMenu: false
-          }
-        };
-        renderMath();
-      };
-      document.head.appendChild(script);
-    } else {
-      renderMath();
-    }
-  }, [latex]);
-
-  const renderMath = () => {
-    if (containerRef.current && window.MathJax?.typesetPromise) {
-      // Format the LaTeX based on display mode
-      const formattedLatex = display 
-        ? `$$${latex}$$` 
-        : `$${latex}$`;
-      
-      containerRef.current.innerHTML = formattedLatex;
-      
-      // Render with MathJax
-      window.MathJax.typesetPromise([containerRef.current])
-        .catch((err: any) => console.error('MathJax error:', err));
-    }
-  };
-
+  // For now, just render the LaTeX in a formatted way
   return (
     <div 
-      ref={containerRef} 
       className={`math-renderer ${display ? 'my-2 text-center' : 'inline'} ${className}`}
-    />
+      style={{
+        fontFamily: 'Georgia, serif',
+        padding: display ? '1rem' : '0.25rem',
+        backgroundColor: display ? 'rgba(0, 0, 0, 0.05)' : 'transparent',
+        borderRadius: '4px'
+      }}
+    >
+      {display ? (
+        <div>
+          <div style={{ fontSize: '0.8rem', marginBottom: '0.5rem', opacity: 0.6 }}>LaTeX Equation</div>
+          <code>{latex}</code>
+        </div>
+      ) : (
+        <code>{latex}</code>
+      )}
+    </div>
   );
 };
 
