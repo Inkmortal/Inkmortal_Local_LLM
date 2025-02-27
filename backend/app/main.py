@@ -11,10 +11,15 @@ import os
 from dotenv import load_dotenv
 
 # Import local modules
-from .auth.router import router as auth_router
+from .auth.router import router as auth_router, generate_setup_token, check_admin_exists
+from .auth.activities import router as activities_router
+from .admin.ip_whitelist import router as ip_whitelist_router
+from .admin.registration_tokens import router as registration_tokens_router
+from .admin.api_keys import router as api_keys_router
 from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
+from .admin.router import router as admin_router
 from .db import engine, Base, get_db
 from .queue import get_queue_manager
 from .config import settings
@@ -75,6 +80,29 @@ async def startup_event():
         if not connected:
             logger.error(f"Failed to connect to message queue after {max_retries} attempts")
             # Don't crash the app, but log the error
+    
+    # Generate admin setup token if needed
+    from contextlib import asynccontextmanager
+    
+    @asynccontextmanager
+    async def get_db_context():
+        db = next(get_db())
+        try:
+            yield db
+        finally:
+            db.close()
+    
+    async with get_db_context() as db:
+        admin_exists = await check_admin_exists(db)
+        if not admin_exists:
+            logger.warning("No admin user found. Generating admin setup token...")
+            token = await generate_setup_token(db)
+            if token:
+                logger.warning(f"[ADMIN SETUP] Initial admin setup token: {token}")
+                logger.warning("Use this token to create the first admin account through the admin setup page.")
+                logger.warning("This token will expire in 24 hours.")
+            else:
+                logger.error("Failed to generate admin setup token.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -89,7 +117,17 @@ async def shutdown_event():
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(activities_router)
 app.include_router(api_router)
+app.include_router(admin_router)
+app.include_router(ip_whitelist_router)
+app.include_router(registration_tokens_router)
+app.include_router(api_keys_router)
+# Include new admin monitoring routers
+from .admin.queue_monitor import router as queue_monitor_router
+from .admin.system_stats import router as system_stats_router
+app.include_router(queue_monitor_router)
+app.include_router(system_stats_router)
 
 # Root endpoint
 @app.get("/")
@@ -99,6 +137,16 @@ async def root():
         "docs": "/docs",
         "version": "0.1.0",
         "environment": settings.environment.name
+    }
+
+# Health check endpoint - simpler and more reliable than the one previously added in Login.tsx
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint to verify server is responding"""
+    return {
+        "status": "healthy",
+        "message": "Server is running",
+        "version": "0.1.0"
     }
 
 # Protected endpoint example
@@ -115,12 +163,4 @@ async def admin_route(current_user: User = Depends(get_current_admin_user)):
     return {
         "message": f"Hello, Admin {current_user.username}!",
         "admin_id": current_user.id
-    }
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "environment": settings.environment.name
     }

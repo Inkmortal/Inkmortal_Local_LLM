@@ -1,0 +1,15 @@
+[data-theme="gruvbox"] {
+  --bg-primary: #282828;
+  --bg-secondary: #32302f;
+  --bg-tertiary: #45403d;
+  --text-primary: #ebdbb2;
+  --text-secondary: #d5c4a1;
+  --text-muted: #bdae93;
+  --accent-primary: #83a598;
+  --accent-secondary: #d3869b;
+  --accent-tertiary: #fabd2f;
+  --border-color: #3c3836;
+  --success: #b8bb26;
+  --warning: #fe8019;
+  --error: #fb4934;
+}

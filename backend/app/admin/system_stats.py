@@ -1,0 +1,252 @@
+"""
+System statistics endpoints for admin panel
+"""
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Dict, Any, Optional
+import logging
+import time
+from datetime import datetime
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
+from ..db import get_db
+from ..auth.utils import get_current_admin_user
+from ..auth.models import User
+from ..queue import get_queue_manager, QueueManagerInterface
+from ..config import settings
+
+# Configure logging
+logger = logging.getLogger("admin.system_stats")
+
+# Create router
+router = APIRouter(prefix="/admin/system", tags=["admin", "system"])
+
+@router.get("/stats")
+async def get_system_stats(
+    current_user: User = Depends(get_current_admin_user),
+    queue_manager: QueueManagerInterface = Depends(get_queue_manager)
+) -> Dict[str, Any]:
+    """Get detailed system statistics"""
+    try:
+        # CPU info
+        cpu_info = get_cpu_info()
+        
+        # Memory info
+        memory_info = get_memory_info()
+        
+        # Storage info
+        storage_info = get_storage_info()
+        
+        # Network info
+        network_info = get_network_info()
+        
+        # Uptime info
+        uptime_info = get_uptime_info()
+        
+        # Ollama info
+        ollama_info = await get_ollama_info(queue_manager)
+        
+        return {
+            "cpu": cpu_info,
+            "memory": memory_info,
+            "storage": storage_info,
+            "network": network_info,
+            "uptime": uptime_info,
+            "ollama": ollama_info
+        }
+    except Exception as e:
+        logger.error(f"Error getting system stats: {e}")
+        # Return a minimal response with default values
+        return {
+            "cpu": {"usage": 0, "cores": 0, "model": "Unknown"},
+            "memory": {"total": 0, "used": 0, "percentage": 0},
+            "storage": {"total": 0, "used": 0, "percentage": 0},
+            "network": {"incoming": 0, "outgoing": 0, "connections": 0},
+            "uptime": {"days": 0, "hours": 0, "minutes": 0},
+            "ollama": {
+                "status": "Offline",
+                "model": settings.default_model,
+                "version": "Unknown",
+                "requests": 0,
+                "avgResponseTime": 0
+            }
+        }
+
+def get_cpu_info() -> Dict[str, Any]:
+    """Get CPU information"""
+    if not PSUTIL_AVAILABLE:
+        return {"usage": 0, "cores": 0, "model": "Unknown"}
+    
+    try:
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=0.5)
+        
+        # CPU cores
+        cpu_count = psutil.cpu_count(logical=True)
+        
+        # CPU model (platform dependent)
+        cpu_model = "Unknown"
+        try:
+            import platform
+            if platform.system() == "Linux":
+                with open("/proc/cpuinfo") as f:
+                    for line in f:
+                        if line.strip().startswith("model name"):
+                            cpu_model = line.split(":")[1].strip()
+                            break
+            elif platform.system() == "Darwin":  # macOS
+                import subprocess
+                output = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"]).decode().strip()
+                cpu_model = output
+            elif platform.system() == "Windows":
+                import subprocess
+                output = subprocess.check_output(["wmic", "cpu", "get", "name"]).decode().strip()
+                lines = output.split("\n")
+                if len(lines) > 1:
+                    cpu_model = lines[1].strip()
+        except Exception as e:
+            logger.error(f"Error getting CPU model: {e}")
+            cpu_model = "Unknown"
+        
+        return {
+            "usage": cpu_percent,
+            "cores": cpu_count,
+            "model": cpu_model
+        }
+    except Exception as e:
+        logger.error(f"Error getting CPU info: {e}")
+        return {"usage": 0, "cores": 0, "model": "Unknown"}
+
+def get_memory_info() -> Dict[str, Any]:
+    """Get memory information"""
+    if not PSUTIL_AVAILABLE:
+        return {"total": 0, "used": 0, "percentage": 0}
+    
+    try:
+        # Memory info
+        memory = psutil.virtual_memory()
+        
+        # Convert to GB
+        total_gb = memory.total / (1024**3)
+        used_gb = memory.used / (1024**3)
+        
+        return {
+            "total": round(total_gb),
+            "used": round(used_gb, 1),
+            "percentage": memory.percent
+        }
+    except Exception as e:
+        logger.error(f"Error getting memory info: {e}")
+        return {"total": 0, "used": 0, "percentage": 0}
+
+def get_storage_info() -> Dict[str, Any]:
+    """Get storage information"""
+    if not PSUTIL_AVAILABLE:
+        return {"total": 0, "used": 0, "percentage": 0}
+    
+    try:
+        # Disk usage for root path
+        disk = psutil.disk_usage('/')
+        
+        # Convert to GB
+        total_gb = disk.total / (1024**3)
+        used_gb = disk.used / (1024**3)
+        
+        return {
+            "total": round(total_gb),
+            "used": round(used_gb),
+            "percentage": disk.percent
+        }
+    except Exception as e:
+        logger.error(f"Error getting storage info: {e}")
+        return {"total": 0, "used": 0, "percentage": 0}
+
+def get_network_info() -> Dict[str, Any]:
+    """Get network information"""
+    if not PSUTIL_AVAILABLE:
+        return {"incoming": 0, "outgoing": 0, "connections": 0}
+    
+    try:
+        # Network io counters
+        net_io = psutil.net_io_counters()
+        
+        # Network connections
+        connections = len(psutil.net_connections())
+        
+        # Estimate throughput (this is just an estimation)
+        # For real-time values, you would need to calculate deltas over time
+        incoming = round(net_io.bytes_recv / 1024 / 1024, 1)  # Convert to MB
+        outgoing = round(net_io.bytes_sent / 1024 / 1024, 1)  # Convert to MB
+        
+        # Divide by uptime to get per-second rate
+        uptime = time.time() - psutil.boot_time()
+        if uptime > 0:
+            incoming = round(incoming / uptime, 1)
+            outgoing = round(outgoing / uptime, 1)
+        
+        return {
+            "incoming": incoming,
+            "outgoing": outgoing,
+            "connections": connections
+        }
+    except Exception as e:
+        logger.error(f"Error getting network info: {e}")
+        return {"incoming": 0, "outgoing": 0, "connections": 0}
+
+def get_uptime_info() -> Dict[str, Any]:
+    """Get system uptime information"""
+    if not PSUTIL_AVAILABLE:
+        return {"days": 0, "hours": 0, "minutes": 0}
+    
+    try:
+        # System uptime
+        uptime_seconds = time.time() - psutil.boot_time()
+        days, remainder = divmod(uptime_seconds, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, _ = divmod(remainder, 60)
+        
+        return {
+            "days": int(days),
+            "hours": int(hours),
+            "minutes": int(minutes)
+        }
+    except Exception as e:
+        logger.error(f"Error getting uptime info: {e}")
+        return {"days": 0, "hours": 0, "minutes": 0}
+
+async def get_ollama_info(queue_manager: QueueManagerInterface) -> Dict[str, Any]:
+    """Get Ollama statistics"""
+    try:
+        # Get queue status (includes Ollama info)
+        status = await queue_manager.get_status()
+        ollama_connected = status.get("ollama_connected", False)
+        
+        # Get queue stats
+        stats = await queue_manager.get_stats()
+        
+        # Get total requests from stats
+        total_requests = stats.total_requests
+        
+        # Calculate average response time
+        avg_response_time = stats.avg_processing_time
+        
+        return {
+            "status": "Running" if ollama_connected else "Offline",
+            "model": settings.default_model,
+            "version": "0.2.1",  # This should be dynamic in production
+            "requests": total_requests,
+            "avgResponseTime": round(avg_response_time, 1) if avg_response_time else 0
+        }
+    except Exception as e:
+        logger.error(f"Error getting Ollama info: {e}")
+        return {
+            "status": "Offline",
+            "model": settings.default_model,
+            "version": "Unknown",
+            "requests": 0,
+            "avgResponseTime": 0
+        }

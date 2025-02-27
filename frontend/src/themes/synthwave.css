@@ -1,0 +1,15 @@
+[data-theme="synthwave"] {
+  --bg-primary: #262335;
+  --bg-secondary: #241b2f;
+  --bg-tertiary: #2a2139;
+  --text-primary: #f5f5f7;
+  --text-secondary: #d8e0f0;
+  --text-muted: #a09bb3;
+  --accent-primary: #f97e72;
+  --accent-secondary: #ff7edb;
+  --accent-tertiary: #36f9f6;
+  --border-color: #3c2e58;
+  --success: #72f1b8;
+  --warning: #fede5d;
+  --error: #fe4450;
+}

@@ -1,0 +1,15 @@
+[data-theme="solarized-light"] {
+  --bg-primary: #fdf6e3;
+  --bg-secondary: #eee8d5;
+  --bg-tertiary: #93a1a1;
+  --text-primary: #586e75;
+  --text-secondary: #657b83;
+  --text-muted: #839496;
+  --accent-primary: #268bd2;
+  --accent-secondary: #6c71c4;
+  --accent-tertiary: #d33682;
+  --border-color: #eee8d5;
+  --success: #859900;
+  --warning: #b58900;
+  --error: #dc322f;
+}

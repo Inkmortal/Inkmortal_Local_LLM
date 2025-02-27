@@ -1,0 +1,16 @@
+/* Nord Theme */
+[data-theme="nord"] {
+    --bg-primary: #2e3440;
+    --bg-secondary: #3b4252;
+    --bg-tertiary: #434c5e;
+    --text-primary: #eceff4;
+    --text-secondary: #e5e9f0;
+    --text-muted: #d8dee9;
+    --accent-primary: #88c0d0;
+    --accent-secondary: #81a1c1;
+    --accent-tertiary: #5e81ac;
+    --border-color: #4c566a;
+    --success: #a3be8c;
+    --warning: #ebcb8b;
+    --error: #bf616a;
+}
