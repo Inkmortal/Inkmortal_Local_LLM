@@ -9,35 +9,67 @@
 
 /* SECTION 1: ASSISTANT STYLING */
 
-/* Dragon icon styling */
+/* Dragon icon styling - make it bigger and more visible */
 .dragon-icon {
   color: var(--accent-primary);
+  filter: drop-shadow(0 0 4px rgba(var(--accent-primary-rgb), 0.5));
+  width: 20px !important; 
+  height: 20px !important;
 }
 
-/* Add glow to assistant message bubbles */
+/* Make assistant message bubbles brighter and more interesting */
 [class*="message-in"] {
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 1px rgba(var(--accent-primary-rgb), 0.05) !important;
-  border: 1px solid rgba(var(--accent-primary-rgb), 0.15) !important;
-  background-color: rgba(var(--bg-secondary-rgb), 0.92) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 1px rgba(var(--accent-primary-rgb), 0.1) !important;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.35) !important;
+  background: linear-gradient(to bottom right, 
+    rgba(var(--bg-secondary-rgb), 0.6), 
+    rgba(var(--bg-secondary-rgb), 0.75)
+  ) !important;
   position: relative;
   backdrop-filter: blur(5px);
 }
 
-/* Add a subtle accent top border to assistant messages */
+/* Add a more prominent accent top border and inner glow to assistant messages */
 [class*="message-in"]::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 3px;
   background: linear-gradient(to right, 
-    rgba(var(--accent-primary-rgb), 0.4), 
-    rgba(var(--accent-secondary-rgb), 0.4)
+    rgba(var(--accent-primary-rgb), 0.7), 
+    rgba(var(--accent-secondary-rgb), 0.7)
   );
   border-top-left-radius: inherit;
   border-top-right-radius: inherit;
-  opacity: 0.7;
+  opacity: 0.9;
+  box-shadow: 0 0 10px 1px rgba(var(--accent-primary-rgb), 0.3);
+}
+
+/* Add inner glow to message content area */
+.message-in .message-content {
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Fix code block buttons to not overlap chat input */
+.message-content pre {
+  position: relative;
+  z-index: 10; 
+  margin-bottom: 1rem !important;
+}
+
+.message-content button {
+  position: relative;
+  z-index: 20;
+}
+
+/* Remove duplicate 'Shift+Enter for line break' messages */
+form .text-xs:not(:first-of-type) {
+  display: none;
 }
 
 /* SECTION 2: LAYOUT & CONTAINER */
