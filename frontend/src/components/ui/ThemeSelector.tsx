@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTheme, themes, ThemeName } from '../../context/ThemeContext';
+import { useTheme, themes, ThemeName, Theme } from '../../context/ThemeContext';
 
 interface ThemeSelectorProps {
   compact?: boolean;
@@ -10,7 +10,7 @@ const RECENT_THEMES_KEY = 'seadragon-recent-themes';
 const MAX_RECENT_THEMES = 3;
 
 const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
-  const { currentTheme, themeName, setTheme, isCustomThemeActive, customTheme } = useTheme();
+  const { currentTheme, themeName, setTheme, customThemes } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [recentThemes, setRecentThemes] = useState<ThemeName[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -47,8 +47,8 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
   }, []);
 
   const getThemeDisplayName = (name: ThemeName) => {
-    if (name === 'custom' && isCustomThemeActive) {
-      return 'Custom Theme';
+    if (customThemes[name]) {
+        return customThemes[name].displayName;
     }
     return themes[name]?.displayName || name.replace(/-/g, ' ');
   };
@@ -81,21 +81,13 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
     setIsOpen(false);
   };
 
-  const renderThemeButton = (name: ThemeName) => {
-    // Handle both built-in themes and custom theme
-    const theme = name === 'custom' && isCustomThemeActive 
-      ? customTheme 
-      : themes[name];
-      
-    // Skip if theme doesn't exist (shouldn't happen, but just in case)
-    if (!theme) return null;
-    
-    const isActive = themeName === name || (name === 'custom' && isCustomThemeActive);
+  const renderThemeButton = (theme: Theme) => {      
+    const isActive = themeName === theme.name;
     
     return (
       <button
-        key={name}
-        onClick={() => handleThemeChange(name)}
+        key={theme.name}
+        onClick={() => handleThemeChange(theme.name)}
         className={`flex items-center w-full text-left px-3 py-2 rounded-md ${isActive ? 'bg-opacity-20' : 'bg-opacity-0'} hover:bg-opacity-10 transition-colors`}
         style={{
           backgroundColor: isActive ? theme.colors.accentPrimary : 'transparent',
@@ -166,9 +158,23 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
               <h3 className="font-medium" style={{ color: currentTheme.colors.textPrimary }}>Recent Themes</h3>
             </div>
             
-            {/* Show only recent themes */}
+            {/* Show recent themes */}
             <div className="space-y-1 px-2 mb-2">
-              {recentThemes.map(name => renderThemeButton(name))}
+              {recentThemes.map(name => {
+                const theme = customThemes[name] || themes[name];
+                return theme ? renderThemeButton(theme) : null;
+              })}
+            </div>
+
+            {/* Show all available themes */}
+            <div className="px-3 py-2 mb-1 border-b border-t" style={{ borderColor: currentTheme.colors.borderColor }}>
+              <h3 className="font-medium" style={{ color: currentTheme.colors.textPrimary }}>All Themes</h3>
+            </div>
+            <div className="space-y-1 px-2">
+                {Object.values(themes).map(theme => renderThemeButton(theme))}
+                {Object.entries(customThemes).map(([themeName, theme]) => (
+                    renderThemeButton(theme)
+                ))}
             </div>
 
             <div className="px-3 py-2 mt-1 border-t" style={{ borderColor: currentTheme.colors.borderColor }}>

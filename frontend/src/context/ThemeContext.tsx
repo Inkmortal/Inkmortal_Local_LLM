@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 
 // Define the available theme types
-export type ThemeName = 'catppuccin' | 'dracula' | 'matcha-cafe' | 'nord' | 'solarized-light' | 'solarized-dark' | 'github-light' | 'github-dark' | 'tokyo-night' | 'gruvbox' | 'custom';
+export type ThemeName = 'catppuccin' | 'dracula' | 'matcha-cafe' | 'nord' | 'solarized-light' | 'solarized-dark' | 'github-light' | 'github-dark' | 'tokyo-night' | 'gruvbox' | 'custom' | string;
 
 // Define the theme color structure
 export interface ThemeColors {
@@ -136,9 +136,8 @@ interface ThemeContextType {
   currentTheme: Theme;
   themeName: ThemeName;
   setTheme: (themeName: ThemeName) => void;
-  customTheme: Theme | null;
-  setCustomTheme: (theme: Theme) => void;
-  isCustomThemeActive: boolean;
+  customThemes: Record<string, Theme>;
+  addCustomTheme: (theme: Theme) => void;
 }
 
 // Create the context
@@ -146,40 +145,33 @@ const ThemeContext = createContext<ThemeContextType>({
   currentTheme: themes.catppuccin,
   themeName: 'catppuccin',
   setTheme: () => {},
-  customTheme: null,
-  setCustomTheme: () => {},
-  isCustomThemeActive: false
+  customThemes: {},
+  addCustomTheme: () => {}
 });
 
 // Create the provider component
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [themeName, setThemeName] = useState<ThemeName>('catppuccin');
-  const [customTheme, setCustomTheme] = useState<Theme | null>(null);
-  const [isCustomThemeActive, setIsCustomThemeActive] = useState(false);
+  const [customThemes, setCustomThemes] = useState<Record<string, Theme>>({});
 
   // Determine the current theme
-  const currentTheme = isCustomThemeActive && customTheme ? customTheme : themes[themeName] || themes.catppuccin;
+  const currentTheme = customThemes[themeName] || themes[themeName] || themes.catppuccin;
 
   // Load theme from localStorage on initial render
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
-    const savedCustomTheme = localStorage.getItem('customTheme');
-    
-    if (savedTheme && themes[savedTheme]) {
+    const savedCustomThemes = localStorage.getItem('customThemes');
+
+    if (savedTheme) {
       setThemeName(savedTheme as ThemeName);
     }
-    
-    if (savedCustomTheme) {
+
+    if (savedCustomThemes) {
       try {
-        const parsedTheme = JSON.parse(savedCustomTheme) as Theme;
-        setCustomTheme(parsedTheme);
-        
-        // If the saved theme is 'custom', activate the custom theme
-        if (savedTheme === 'custom') {
-          setIsCustomThemeActive(true);
-        }
+        const parsedThemes = JSON.parse(savedCustomThemes) as Record<string, Theme>;
+        setCustomThemes(parsedThemes);
       } catch (e) {
-        console.error('Failed to parse custom theme', e);
+        console.error('Failed to parse custom themes', e);
       }
     }
   }, []);
@@ -188,10 +180,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     // Get the theme to apply
     const themeToApply = currentTheme;
-    
+
     // Apply data-theme attribute
     document.documentElement.setAttribute('data-theme', themeToApply.name);
-    
+
     // Apply CSS variables
     document.documentElement.style.setProperty('--bg-primary', themeToApply.colors.bgPrimary);
     document.documentElement.style.setProperty('--bg-secondary', themeToApply.colors.bgSecondary);
@@ -206,35 +198,35 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     document.documentElement.style.setProperty('--success', themeToApply.colors.success);
     document.documentElement.style.setProperty('--warning', themeToApply.colors.warning);
     document.documentElement.style.setProperty('--error', themeToApply.colors.error);
-    
+
     // Save theme preference to localStorage
-    localStorage.setItem('theme', isCustomThemeActive ? 'custom' : themeName);
-    
-    // If using custom theme, save it as well
-    if (isCustomThemeActive && customTheme) {
-      localStorage.setItem('customTheme', JSON.stringify(customTheme));
-    }
-  }, [themeName, customTheme, isCustomThemeActive, currentTheme]);
+    localStorage.setItem('theme', themeName);
+
+    // Save custom themes
+    localStorage.setItem('customThemes', JSON.stringify(customThemes));
+
+  }, [themeName, customThemes, currentTheme]);
 
   // Set theme function
   const setTheme = (newThemeName: ThemeName) => {
-    if (newThemeName === 'custom' && customTheme) {
-      setIsCustomThemeActive(true);
-    } else {
-      setIsCustomThemeActive(false);
-      setThemeName(newThemeName);
-    }
+    setThemeName(newThemeName);
   };
 
+  const addCustomTheme = (theme: Theme) => {
+    setCustomThemes(prevThemes => ({
+      ...prevThemes,
+      [theme.name]: theme,
+    }));
+  }
+
   return (
-    <ThemeContext.Provider 
-      value={{ 
-        currentTheme, 
-        themeName: isCustomThemeActive ? 'custom' : themeName, 
-        setTheme, 
-        customTheme, 
-        setCustomTheme, 
-        isCustomThemeActive 
+    <ThemeContext.Provider
+      value={{
+        currentTheme,
+        themeName,
+        setTheme,
+        customThemes,
+        addCustomTheme
       }}
     >
       {children}

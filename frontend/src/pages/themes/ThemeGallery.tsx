@@ -6,7 +6,7 @@ import ThemeCustomizer from '../../components/themes/ThemeCustomizer';
 import { popularThemes, PREVIOUS_ROUTE_KEY } from '../../components/themes/ThemeData';
 
 const ThemeGallery: React.FC = () => {
-  const { currentTheme, setTheme, customTheme, setCustomTheme } = useTheme();
+  const { currentTheme, setTheme, customThemes, addCustomTheme } = useTheme();
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [workingTheme, setWorkingTheme] = useState<Theme | null>(null);
   const [previousRoute, setPreviousRoute] = useState<string | null>(null);
@@ -66,24 +66,42 @@ const ThemeGallery: React.FC = () => {
     });
   };
 
-  // Save the custom theme
-  const saveTheme = () => {
-    if (workingTheme) {
-      const themeToSave: Theme = {
-        ...workingTheme,
-        name: 'custom' as ThemeName
-      };
-
-      setCustomTheme(themeToSave);
+ // Save the custom theme
+const saveTheme = () => {
+  if (workingTheme) {
+    let themeToSave: Theme;
+    if (workingTheme.name === 'custom') {
+      // Modifying existing custom theme
+      themeToSave = { ...workingTheme };
+      addCustomTheme(themeToSave);
       setTheme('custom');
-
-      // After saving, go back to previous page if user wants to
-      const shouldNavigateBack = window.confirm('Theme saved! Return to previous page?');
-      if (shouldNavigateBack) {
-        goBack();
+    } else {
+      // Creating a new theme
+      let newThemeName = workingTheme.displayName.toLowerCase().replace(/\s+/g, '-');
+      let counter = 1;
+      while (allThemes[newThemeName]) {
+        newThemeName = `${workingTheme.displayName.toLowerCase().replace(/\s+/g, '-')}-${counter}`;
+        counter++;
       }
-    }
-  };
+
+     themeToSave = {
+       ...workingTheme,
+       name: newThemeName as ThemeName,
+     };
+
+     // Add to allThemes (Need to update context for this)
+     allThemes[newThemeName] = themeToSave;
+     addCustomTheme(themeToSave);
+     setTheme(newThemeName as ThemeName);
+   }
+
+   // After saving, go back to previous page if user wants to
+   const shouldNavigateBack = window.confirm('Theme saved! Return to previous page?');
+   if (shouldNavigateBack) {
+     goBack();
+   }
+ }
+};
 
   // Export theme as JSON
   const exportTheme = () => {
@@ -188,34 +206,39 @@ const ThemeGallery: React.FC = () => {
             ))}
           </div>
         </div>
-        
-        {customTheme && (
+
+        {Object.keys(customThemes).length > 0 && (
           <div className="mb-8">
-            <h2 
+            <h2
               className="text-2xl font-semibold mb-6"
               style={{ color: currentTheme.colors.accentSecondary }}
             >
-              Your Custom Theme
+              Your Custom Themes
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              <ThemeCard
-                theme={customTheme}
-                currentTheme={currentTheme}
-                onClick={handleThemeCardClick}
-                isActive={currentTheme.name === 'custom'}
-              />
+              {Object.entries(customThemes).map(([themeName, theme]) => (
+                <ThemeCard
+                  key={themeName}
+                  theme={theme}
+                  currentTheme={currentTheme}
+                  onClick={handleThemeCardClick}
+                  isActive={currentTheme.name === themeName}
+                />
+              ))}
             </div>
           </div>
         )}
-        
-        <ThemeCustomizer
-          workingTheme={workingTheme}
-          setWorkingTheme={setWorkingTheme}
-          currentTheme={currentTheme}
-          saveTheme={saveTheme}
-          exportTheme={exportTheme}
-          handleImport={handleImport}
-        />
+
+        {workingTheme && (
+          <ThemeCustomizer
+            workingTheme={workingTheme}
+            setWorkingTheme={setWorkingTheme}
+            currentTheme={currentTheme}
+            saveTheme={saveTheme}
+            exportTheme={exportTheme}
+            handleImport={handleImport}
+          />
+        )}
       </div>
     </div>
   );
