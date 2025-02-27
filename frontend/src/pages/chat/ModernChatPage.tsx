@@ -110,7 +110,8 @@ const ModernChatPage: React.FC = () => {
       }
       
       .chat-container-shadow {
-        animation: pulseGlow 3s infinite ease-in-out;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+        transition: all 0.5s ease;
       }
       
       .typing-indicator span {
@@ -150,7 +151,7 @@ const ModernChatPage: React.FC = () => {
       }
       
       .modern-scrollbar::-webkit-scrollbar {
-        width: 6px;
+        width: 5px;
       }
       
       .modern-scrollbar::-webkit-scrollbar-track {
@@ -158,8 +159,12 @@ const ModernChatPage: React.FC = () => {
       }
       
       .modern-scrollbar::-webkit-scrollbar-thumb {
-        background-color: rgba(155, 155, 155, 0.5);
+        background-color: rgba(155, 155, 155, 0.3);
         border-radius: 20px;
+      }
+      
+      .modern-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(155, 155, 155, 0.5);
       }
       
       .artifact-display {
@@ -310,49 +315,108 @@ const ModernChatPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
-      {/* Header */}
+      {/* Modern Glass Header */}
       <header 
-        className="py-4 px-6 flex justify-between items-center z-10 sticky top-0"
+        className="py-3 px-4 md:px-6 flex justify-between items-center z-10 sticky top-0"
         style={{ 
-          backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
+          background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}CC, ${currentTheme.colors.bgPrimary}BF)`,
           backdropFilter: 'blur(10px)',
-          borderBottom: `1px solid ${currentTheme.colors.borderColor}40`,
-          boxShadow: `0 4px 20px rgba(0, 0, 0, 0.05)`,
+          borderBottom: `1px solid ${currentTheme.colors.borderColor}30`,
+          boxShadow: `0 4px 16px rgba(0, 0, 0, 0.08)`,
         }}
       >
         <div className="flex items-center space-x-3">
-          <svg 
-            className="w-8 h-8" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ color: currentTheme.colors.accentPrimary }}
-          >
-            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <div className="relative group">
+            <div 
+              className="absolute -inset-1 rounded-full opacity-70 group-hover:opacity-100 transition-all blur-sm"
+              style={{ 
+                background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                filter: 'blur(8px)'
+              }}
+            />
+            <div className="relative p-2 rounded-full"
+              style={{ 
+                background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+              }}
+            >
+              <svg 
+                className="w-6 h-6" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                xmlns="http://www.w3.org/2000/svg"
+                style={{ color: '#fff' }}
+              >
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
           <div>
-            <span className="text-xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>Seadragon Chat</span>
-            <div className="text-xs mt-0.5" style={{ color: currentTheme.colors.textMuted }}>Powered by AI</div>
+            <div className="flex items-baseline">
+              <span 
+                className="text-lg font-semibold" 
+                style={{ 
+                  background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                SeaDragon
+              </span>
+              <span className="ml-1.5 text-sm font-medium" style={{ color: currentTheme.colors.textPrimary }}>
+                Chat
+              </span>
+            </div>
+            <div className="text-xs font-light" style={{ color: currentTheme.colors.textMuted }}>
+              Powered by Artificial Intelligence
+            </div>
           </div>
         </div>
         
-        <div className="flex items-center space-x-4">
-          <Button 
-            size="sm"
-            variant="ghost"
-            onClick={() => window.navigateTo('/')}
-            className="hover-float"
-          >
-            Home
-          </Button>
+        <div className="flex items-center space-x-3">
+          <div className="flex -space-x-2 mr-1">
+            <Button 
+              size="sm"
+              variant="ghost"
+              className="rounded-full p-1.5 transition-all hover:bg-opacity-10"
+              style={{
+                color: currentTheme.colors.textSecondary,
+                backgroundColor: 'transparent',
+              }}
+              title="New chat"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </Button>
+            
+            <Button 
+              size="sm"
+              variant="ghost"
+              className="rounded-full p-1.5 transition-all hover:bg-opacity-10"
+              style={{
+                color: currentTheme.colors.textSecondary,
+                backgroundColor: 'transparent',
+              }}
+              title="Your chats"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </Button>
+          </div>
+          
           {isAuthenticated && (
             <Button 
               size="sm"
               variant="ghost"
               onClick={() => window.navigateTo('/admin')}
-              className="hover-float"
+              className="text-sm transition-all rounded-lg"
+              style={{
+                color: currentTheme.colors.textSecondary,
+                background: `${currentTheme.colors.bgTertiary}60`,
+              }}
             >
               Admin
             </Button>
@@ -362,447 +426,446 @@ const ModernChatPage: React.FC = () => {
       </header>
       
       {/* Main Chat Interface */}
-      <div className="flex flex-grow h-[calc(100vh-73px)] overflow-hidden p-4 md:p-6 relative">
-        {/* Left Sidebar - Conversation History */}
-        <aside 
-          className="hidden lg:flex flex-col w-64 mr-8 rounded-2xl overflow-hidden shrink-0 animate-fade-in h-full"
-          style={{ 
-            backgroundImage: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}, ${currentTheme.colors.bgTertiary})`,
-            boxShadow: `0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 1px ${currentTheme.colors.borderColor}40`,
-          }}
-        >
-          {/* Conversation History Section */}
-          <div className="flex flex-col h-full">
-            <div 
-              className="px-4 py-3 border-b"
-              style={{ 
-                borderColor: currentTheme.colors.borderColor,
-                background: `linear-gradient(90deg, ${currentTheme.colors.accentPrimary}20, transparent)`
-              }}
-            >
-              <h3 
-                className="text-lg font-medium flex items-center"
-                style={{ color: currentTheme.colors.accentPrimary }}
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
-                </svg>
-                Chat History
-              </h3>
-            </div>
-            
-            <div className="p-4 space-y-3 overflow-y-auto modern-scrollbar flex-grow">
-              {/* This would be populated with actual history - using placeholder for now */}
-              {conversations.map((conv, index) => (
-                <div 
-                  key={conv.id}
-                  className="p-3 rounded-lg cursor-pointer transition-all hover:scale-102 relative overflow-hidden group"
-                  style={{ 
-                    backgroundColor: conv.id === conversationId 
-                      ? `${currentTheme.colors.accentPrimary}20` 
-                      : `${currentTheme.colors.bgPrimary}90`,
-                    borderLeft: conv.id === conversationId 
-                      ? `3px solid ${currentTheme.colors.accentPrimary}` 
-                      : `1px solid ${currentTheme.colors.borderColor}50`,
-                    boxShadow: conv.id === conversationId 
-                      ? `0 2px 10px ${currentTheme.colors.accentPrimary}20` 
-                      : 'none'
-                  }}
-                  onClick={() => {/* Load conversation */}}
-                >
-                  {/* Visual indicator for current chat */}
-                  {conv.id === conversationId && (
-                    <div 
-                      className="absolute left-0 top-0 bottom-0 w-1" 
-                      style={{ backgroundColor: currentTheme.colors.accentPrimary }}
-                    />
-                  )}
-                  
-                  <h4 
-                    className="text-sm font-medium mb-1 flex items-center"
-                    style={{ 
-                      color: conv.id === conversationId 
-                        ? currentTheme.colors.accentPrimary
-                        : currentTheme.colors.textPrimary
-                    }}
-                  >
-                    {index === 0 ? (
-                      <>
-                        <span className="relative flex h-3 w-3 mr-2">
-                          <span 
-                            className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
-                            style={{ backgroundColor: currentTheme.colors.success }}
-                          />
-                          <span 
-                            className="relative inline-flex rounded-full h-3 w-3" 
-                            style={{ backgroundColor: currentTheme.colors.success }}
-                          />
-                        </span>
-                        {conv.title}
-                      </>
-                    ) : (
-                      conv.title
-                    )}
-                  </h4>
-                  <p 
-                    className="text-xs truncate"
-                    style={{ color: currentTheme.colors.textSecondary }}
-                  >
-                    {index === 0 
-                      ? 'Active conversation' 
-                      : `Started on ${conv.date.toLocaleDateString()}`}
-                  </p>
-                  
-                  {/* Delete button that appears on hover */}
-                  <button 
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full"
-                    style={{ 
-                      backgroundColor: `${currentTheme.colors.error}20`,
-                      color: currentTheme.colors.error
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Delete conversation logic would go here
-                    }}
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-              
-              <button 
-                className="w-full p-2 rounded-lg text-sm mt-2 transition-all hover:scale-105"
+      <div className="flex flex-grow overflow-hidden relative">
+        {/* Decorative background elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          {/* Gradient sphere 1 */}
+          <div 
+            className="absolute rounded-full opacity-20 blur-3xl" 
+            style={{
+              width: '40vw',
+              height: '40vw',
+              top: '20%',
+              left: '-10%',
+              background: `radial-gradient(circle, ${currentTheme.colors.accentPrimary}40, transparent 70%)`,
+              filter: 'blur(120px)',
+            }}
+          />
+          
+          {/* Gradient sphere 2 */}
+          <div 
+            className="absolute rounded-full opacity-10 blur-3xl" 
+            style={{
+              width: '45vw',
+              height: '45vw',
+              bottom: '-10%',
+              right: '-5%',
+              background: `radial-gradient(circle, ${currentTheme.colors.accentSecondary}30, transparent 70%)`,
+              filter: 'blur(120px)',
+            }}
+          />
+        </div>
+        
+        {/* Main container */}
+        <div className="flex flex-grow max-w-6xl mx-auto w-full px-4 md:px-6 py-4 relative z-1">
+          {/* Left Sidebar - Conversation History */}
+          <aside 
+            className="hidden lg:flex flex-col w-64 mr-8 rounded-xl overflow-hidden shrink-0 animate-fade-in h-full transition-all"
+            style={{ 
+              background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
+              backdropFilter: 'blur(10px)',
+              boxShadow: `0 4px 20px rgba(0, 0, 0, 0.07), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
+              borderRight: `1px solid ${currentTheme.colors.borderColor}30`,
+              transition: 'all 0.3s ease',
+            }}
+          >
+            {/* Conversation History Section */}
+            <div className="flex flex-col h-full">
+              <div 
+                className="px-4 py-3 border-b"
                 style={{ 
-                  background: `linear-gradient(to right, ${currentTheme.colors.accentTertiary}, ${currentTheme.colors.accentSecondary})`,
-                  color: '#fff',
-                  boxShadow: `0 2px 10px ${currentTheme.colors.accentTertiary}40`
+                  borderColor: `${currentTheme.colors.borderColor}40`,
+                  background: `linear-gradient(90deg, ${currentTheme.colors.accentPrimary}10, transparent)`,
                 }}
               >
-                <div className="flex items-center justify-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <h3 
+                  className="text-base font-medium flex items-center"
+                  style={{ color: currentTheme.colors.textPrimary }}
+                >
+                  <svg className="w-4 h-4 mr-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Recent Conversations
+                </h3>
+              </div>
+              
+              <div className="p-2 space-y-1.5 overflow-y-auto modern-scrollbar flex-grow">
+                {/* Conversations list */}
+                {conversations.map((conv, index) => (
+                  <div 
+                    key={conv.id}
+                    className="p-2.5 rounded-lg cursor-pointer transition-all relative overflow-hidden group"
+                    style={{ 
+                      backgroundColor: conv.id === conversationId 
+                        ? `${currentTheme.colors.accentPrimary}15` 
+                        : 'transparent',
+                      borderLeft: conv.id === conversationId 
+                        ? `2px solid ${currentTheme.colors.accentPrimary}` 
+                        : `2px solid transparent`,
+                    }}
+                    onClick={() => {/* Load conversation */}}
+                  >
+                    <h4 
+                      className="text-sm font-medium mb-1 flex items-center"
+                      style={{ 
+                        color: conv.id === conversationId 
+                          ? currentTheme.colors.textPrimary
+                          : currentTheme.colors.textSecondary
+                      }}
+                    >
+                      {index === 0 ? (
+                        <>
+                          <span className="relative flex h-2 w-2 mr-2">
+                            <span 
+                              className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
+                              style={{ backgroundColor: currentTheme.colors.success }}
+                            />
+                            <span 
+                              className="relative inline-flex rounded-full h-2 w-2" 
+                              style={{ backgroundColor: currentTheme.colors.success }}
+                            />
+                          </span>
+                          {conv.title}
+                        </>
+                      ) : (
+                        conv.title
+                      )}
+                    </h4>
+                    <p 
+                      className="text-xs truncate"
+                      style={{ color: currentTheme.colors.textMuted }}
+                    >
+                      {index === 0 
+                        ? 'Active conversation' 
+                        : `Started on ${conv.date.toLocaleDateString()}`}
+                    </p>
+                  </div>
+                ))}
+                
+                {/* New chat button */}
+                <button 
+                  className="w-full mt-2 p-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
+                  style={{ 
+                    background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}20, ${currentTheme.colors.accentSecondary}20)`,
+                    color: currentTheme.colors.textSecondary,
+                    border: `1px solid ${currentTheme.colors.borderColor}40`,
+                  }}
+                >
+                  <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  New Chat
-                </div>
-              </button>
-            </div>
-          
-            {/* Features Section */}
-            <div 
-              className="p-4 mt-auto border-t" 
-              style={{ 
-                borderColor: `${currentTheme.colors.borderColor}80`,
-                background: `linear-gradient(to top, ${currentTheme.colors.bgTertiary}80, transparent)`
-              }}
-            >
-              <h4 
-                className="text-sm font-medium mb-2 flex items-center"
-                style={{ color: currentTheme.colors.textPrimary }}
+                  New Conversation
+                </button>
+              </div>
+            
+              {/* Features Section */}
+              <div 
+                className="px-4 py-3 mt-auto border-t" 
+                style={{ 
+                  borderColor: `${currentTheme.colors.borderColor}40`,
+                  background: `linear-gradient(to bottom, transparent, ${currentTheme.colors.bgTertiary}40)`,
+                }}
               >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Features
-              </h4>
-              
-              <ul className="space-y-2 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-                <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentPrimary}10` }}>
-                  <span 
-                    className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
-                    style={{ 
-                      backgroundColor: currentTheme.colors.accentPrimary,
-                      boxShadow: `0 0 10px ${currentTheme.colors.accentPrimary}80`
-                    }}
-                  />
-                  <span>Math equation rendering with LaTeX</span>
-                </li>
-                <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentSecondary}10` }}>
-                  <span 
-                    className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
-                    style={{ 
-                      backgroundColor: currentTheme.colors.accentSecondary,
-                      boxShadow: `0 0 10px ${currentTheme.colors.accentSecondary}80` 
-                    }}
-                  />
-                  <span>Code syntax highlighting</span>
-                </li>
-                <li className="flex items-center p-1 rounded-md" style={{ backgroundColor: `${currentTheme.colors.accentTertiary}10` }}>
-                  <span 
-                    className="inline-block w-3 h-3 rounded-full mr-2 p-1 flex-shrink-0"
-                    style={{ 
-                      backgroundColor: currentTheme.colors.accentTertiary,
-                      boxShadow: `0 0 10px ${currentTheme.colors.accentTertiary}80`
-                    }}
-                  />
-                  <span>Image upload for textbook help</span>
-                </li>
-              </ul>
+                <h4 
+                  className="text-xs uppercase tracking-wider font-medium mb-2 opacity-70"
+                  style={{ color: currentTheme.colors.textSecondary }}
+                >
+                  Capabilities
+                </h4>
+                
+                <div className="space-y-1.5 text-xs" style={{ color: currentTheme.colors.textSecondary }}>
+                  <div className="flex items-center gap-1.5">
+                    <span 
+                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+                    />
+                    <span>Mathematical expression rendering</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span 
+                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: currentTheme.colors.accentSecondary }}
+                    />
+                    <span>Code syntax highlighting & execution</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span 
+                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: currentTheme.colors.accentTertiary }}
+                    />
+                    <span>Document uploading & analysis</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </aside>
-        
-        {/* Main Chat Window */}
-        <div 
-          className="flex-grow flex flex-col h-full overflow-hidden rounded-2xl chat-container-shadow animate-fade-in"
-          style={{ 
-            backgroundImage: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}, ${currentTheme.colors.bgPrimary})`,
-            boxShadow: `0 4px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
-          }}
-        >
-          {/* Message area */}
-          <ChatWindow 
-            messages={messages} 
-            loading={loading}
-            onRegenerate={handleRegenerate}
-            onStopGeneration={handleStopGeneration}
-            isGenerating={isGenerating}
-          />
-        
-          {/* Artifact Display Panel - will show when an artifact is selected */}
-          {selectedArtifact && (
-            <div 
-              className="p-5 border-t artifact-display"
-              style={{ 
-                borderColor: `${currentTheme.colors.accentPrimary}30`,
-                background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}F0, ${currentTheme.colors.bgTertiary}F0)`,
-                backdropFilter: 'blur(10px)',
-                boxShadow: `0 -10px 20px ${currentTheme.colors.accentPrimary}10`
-              }}
-            >
-              <div className="flex justify-between items-center mb-3">
-                <h3 
-                  className="text-md font-medium flex items-center"
+          </aside>
+          
+          {/* Main Chat Window */}
+          <div 
+            className="flex-grow flex flex-col overflow-hidden rounded-xl"
+            style={{ 
+              background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}90, ${currentTheme.colors.bgPrimary}90)`,
+              backdropFilter: 'blur(12px)',
+              boxShadow: `0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px ${currentTheme.colors.borderColor}20`,
+              border: `1px solid ${currentTheme.colors.borderColor}30`,
+              transition: 'all 0.3s ease',
+            }}
+          >
+            {/* Message area */}
+            <ChatWindow 
+              messages={messages} 
+              loading={loading}
+              onRegenerate={handleRegenerate}
+              onStopGeneration={handleStopGeneration}
+              isGenerating={isGenerating}
+            />
+          
+            {/* Artifact Display Panel - will show when an artifact is selected */}
+            {selectedArtifact && (
+              <div 
+                className="p-5 border-t artifact-display"
+                style={{ 
+                  borderColor: `${currentTheme.colors.borderColor}30`,
+                  background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}E6, ${currentTheme.colors.bgTertiary}E6)`,
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: `0 -4px 20px rgba(0, 0, 0, 0.06)`
+                }}
+              >
+                <div className="flex justify-between items-center mb-3">
+                  <h3 
+                    className="text-sm font-medium flex items-center"
+                    style={{ 
+                      color: selectedArtifact.type === 'code' 
+                        ? currentTheme.colors.accentPrimary 
+                        : selectedArtifact.type === 'math' 
+                          ? currentTheme.colors.accentSecondary 
+                          : currentTheme.colors.accentTertiary
+                    }}
+                  >
+                    {selectedArtifact.type === 'code' && (
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                    )}
+                    {selectedArtifact.type === 'math' && (
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                      </svg>
+                    )}
+                    {selectedArtifact.type === 'image' && (
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                    {selectedArtifact.type === 'code' ? 'Code Snippet' : 
+                     selectedArtifact.type === 'math' ? 'Mathematical Expression' : 'Image'}
+                  </h3>
+                  
+                  <div className="flex space-x-2">
+                    <Button 
+                      size="xs" 
+                      variant="outline"
+                      className="text-xs"
+                      style={{
+                        borderColor: currentTheme.colors.borderColor,
+                        color: currentTheme.colors.textSecondary
+                      }}
+                      onClick={() => setSelectedArtifact(null)}
+                    >
+                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+                
+                <div 
+                  className="rounded-lg overflow-hidden"
                   style={{ 
-                    color: selectedArtifact.type === 'code' 
-                      ? currentTheme.colors.accentPrimary 
-                      : selectedArtifact.type === 'math' 
-                        ? currentTheme.colors.accentSecondary 
-                        : currentTheme.colors.accentTertiary
+                    boxShadow: `0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
                   }}
                 >
                   {selectedArtifact.type === 'code' && (
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
+                    <CodeBlock 
+                      code={selectedArtifact.content}
+                      language="javascript" 
+                    />
                   )}
                   {selectedArtifact.type === 'math' && (
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
-                    </svg>
+                    <div 
+                      className="p-5 text-center"
+                      style={{ 
+                        backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
+                      }}
+                    >
+                      <MathRenderer 
+                        latex={selectedArtifact.content}
+                        display={true}
+                      />
+                    </div>
                   )}
                   {selectedArtifact.type === 'image' && (
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                    <div className="p-4 text-center" style={{ backgroundColor: `${currentTheme.colors.bgPrimary}E6` }}>
+                      <img
+                        src={selectedArtifact.content}
+                        alt="Shared content"
+                        className="max-w-full mx-auto rounded-lg"
+                        style={{ maxHeight: '300px' }}
+                      />
+                    </div>
                   )}
-                  {selectedArtifact.type === 'code' ? 'Code Snippet' : 
-                   selectedArtifact.type === 'math' ? 'Mathematical Expression' : 'Image'}
-                </h3>
-                <div className="flex space-x-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="hover-grow"
-                    style={{
-                      borderColor: currentTheme.colors.accentPrimary,
-                      color: currentTheme.colors.accentPrimary
-                    }}
-                    onClick={() => {/* Share logic */}}
-                  >
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                    </svg>
-                    Share
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="hover-grow"
-                    onClick={() => setSelectedArtifact(null)}
-                  >
-                    Close
-                  </Button>
                 </div>
               </div>
-              
+            )}
+          
+            {/* File upload area */}
+            {showFileUpload && (
               <div 
-                className="rounded-xl overflow-hidden"
+                className="px-5 py-4 border-t animate-slideUp"
                 style={{ 
-                  boxShadow: `0 5px 20px rgba(0,0,0,0.15), 0 0 0 1px ${
-                    selectedArtifact.type === 'code' 
-                      ? `${currentTheme.colors.accentPrimary}20` 
-                      : selectedArtifact.type === 'math' 
-                        ? `${currentTheme.colors.accentSecondary}20` 
-                        : `${currentTheme.colors.accentTertiary}20`
-                  }`
+                  borderColor: `${currentTheme.colors.borderColor}30`,
+                  background: `linear-gradient(to top, ${currentTheme.colors.bgSecondary}90, ${currentTheme.colors.bgTertiary}90)`,
+                  backdropFilter: 'blur(10px)',
                 }}
               >
-                {selectedArtifact.type === 'code' && (
-                  <CodeBlock 
-                    code={selectedArtifact.content}
-                    language="javascript" 
-                  />
-                )}
-                {selectedArtifact.type === 'math' && (
-                  <div 
-                    className="p-6 text-center"
-                    style={{ 
-                      backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
-                      borderTop: `3px solid ${currentTheme.colors.accentSecondary}50` 
-                    }}
-                  >
-                    <MathRenderer 
-                      latex={selectedArtifact.content}
-                      display={true}
-                    />
-                  </div>
-                )}
-                {selectedArtifact.type === 'image' && (
-                  <div className="p-4 text-center" style={{ backgroundColor: `${currentTheme.colors.bgPrimary}E6` }}>
-                    <img
-                      src={selectedArtifact.content}
-                      alt="Shared content"
-                      className="max-w-full mx-auto rounded-lg"
-                      style={{ maxHeight: '300px' }}
-                    />
-                  </div>
-                )}
+                <FileUpload
+                  onFileSelect={handleFileSelect}
+                  label="Upload an image or PDF to analyze"
+                />
               </div>
-            </div>
-          )}
-        
-          {/* File upload area */}
-          {showFileUpload && (
+            )}
+            
+            {/* Action bar */}
             <div 
-              className="p-5 border-t animate-slide-up"
+              className="px-4 py-2 border-t flex items-center justify-between"
               style={{ 
-                borderTop: `1px dashed ${currentTheme.colors.accentTertiary}50`,
-                background: `linear-gradient(to top, ${currentTheme.colors.bgTertiary}90, ${currentTheme.colors.bgSecondary}90)`,
-                boxShadow: `0 -4px 16px ${currentTheme.colors.accentTertiary}10`
+                borderColor: `${currentTheme.colors.borderColor}20`,
+                background: `linear-gradient(to bottom, ${currentTheme.colors.bgPrimary}80, ${currentTheme.colors.bgSecondary}80)`,
+                backdropFilter: 'blur(10px)',
               }}
             >
-              <FileUpload
-                onFileSelect={handleFileSelect}
-                label="Upload an image or PDF to analyze"
-              />
-            </div>
-          )}
-          
-          {/* Input area */}
-          <div 
-            className="p-5 border-t"
-            style={{ 
-              borderColor: `${currentTheme.colors.borderColor}40`,
-              background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}CC, ${currentTheme.colors.bgTertiary}CC)`,
-              backdropFilter: 'blur(8px)'
-            }}
-          >
-            <div className="max-w-4xl mx-auto">
-              <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant={showFileUpload ? "default" : "outline"}
-                    className="hover-grow transition-all"
-                    style={{
-                      backgroundColor: showFileUpload 
-                        ? `${currentTheme.colors.accentTertiary}` 
-                        : 'transparent',
-                      borderColor: currentTheme.colors.accentTertiary,
-                      color: showFileUpload ? '#fff' : currentTheme.colors.accentTertiary,
-                      boxShadow: showFileUpload 
-                        ? `0 2px 10px ${currentTheme.colors.accentTertiary}40` 
-                        : 'none'
-                    }}
-                    onClick={() => setShowFileUpload(!showFileUpload)}
-                  >
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
-                    {showFileUpload ? "Hide Upload" : "Attach File"}
-                  </Button>
-                  
-                  {/* Demo Artifact Buttons */}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="hover-grow transition-all"
-                    style={{
-                      borderColor: currentTheme.colors.accentPrimary,
-                      color: currentTheme.colors.accentPrimary
-                    }}
-                    onClick={() => setSelectedArtifact({
-                      type: 'code',
-                      content: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\n\nconsole.log(fibonacci(10));'
-                    })}
-                  >
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    Code Example
-                  </Button>
-                  
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="hover-grow transition-all"
-                    style={{
-                      borderColor: currentTheme.colors.accentSecondary,
-                      color: currentTheme.colors.accentSecondary
-                    }}
-                    onClick={() => setSelectedArtifact({
-                      type: 'math',
-                      content: 'f(x) = \\int_{-\\infty}^{\\infty}\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi'
-                    })}
-                  >
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
-                    </svg>
-                    Math Example
-                  </Button>
-                </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="xs"
+                  variant={showFileUpload ? "default" : "ghost"}
+                  className="rounded-full p-1.5 transition-all"
+                  style={{
+                    color: showFileUpload 
+                      ? '#fff'
+                      : currentTheme.colors.textSecondary,
+                    backgroundColor: showFileUpload 
+                      ? currentTheme.colors.accentTertiary
+                      : `${currentTheme.colors.bgTertiary}40`,
+                  }}
+                  title={showFileUpload ? "Hide file upload" : "Attach file"}
+                  onClick={() => setShowFileUpload(!showFileUpload)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </Button>
+                
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="rounded-full p-1.5 transition-all"
+                  style={{
+                    color: currentTheme.colors.textSecondary,
+                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+                  }}
+                  title="View code example"
+                  onClick={() => setSelectedArtifact({
+                    type: 'code',
+                    content: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\n\nconsole.log(fibonacci(10));'
+                  })}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                </Button>
+                
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="rounded-full p-1.5 transition-all"
+                  style={{
+                    color: currentTheme.colors.textSecondary,
+                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+                  }}
+                  title="View math example"
+                  onClick={() => setSelectedArtifact({
+                    type: 'math',
+                    content: 'f(x) = \\int_{-\\infty}^{\\infty}\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi'
+                  })}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                  </svg>
+                </Button>
                 
                 {selectedFile && (
                   <div 
-                    className="text-xs px-3 py-1.5 rounded-full animate-fade-in flex items-center"
+                    className="text-xs px-2 py-1 rounded-full animate-fade-in flex items-center ml-1"
                     style={{ 
-                      background: `linear-gradient(to right, ${currentTheme.colors.accentTertiary}30, ${currentTheme.colors.accentPrimary}30)`,
-                      color: currentTheme.colors.textPrimary,
-                      border: `1px solid ${currentTheme.colors.accentTertiary}40`
+                      backgroundColor: `${currentTheme.colors.accentTertiary}15`,
+                      color: currentTheme.colors.textSecondary,
+                      border: `1px solid ${currentTheme.colors.accentTertiary}30`
                     }}
                   >
                     <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
-                    {selectedFile.name} attached
+                    {selectedFile.name}
+                    <button 
+                      className="ml-1.5 hover:text-red-500 transition-colors"
+                      onClick={() => setSelectedFile(null)}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 )}
               </div>
               
-              <ChatInput 
-                onSend={handleSendMessage} 
-                disabled={loading}
-                placeholder="Type your educational question..."
-                isGenerating={isGenerating}
-              />
-              
-              <div 
-                className="text-xs mt-2 text-center px-3 py-1.5 rounded-lg mx-auto w-auto inline-block"
-                style={{ 
-                  color: currentTheme.colors.textSecondary,
-                  backgroundColor: `${currentTheme.colors.bgTertiary}50`,
-                  border: `1px dashed ${currentTheme.colors.borderColor}40`
-                }}
-              >
-                <span style={{ color: currentTheme.colors.accentPrimary }}>Pro tip:</span> Try using 
-                <span style={{ color: currentTheme.colors.accentSecondary }}> LaTeX equations</span> like 
-                <span style={{ color: currentTheme.colors.success }}> $E=mc^2$</span> or 
-                <span style={{ color: currentTheme.colors.accentTertiary }}> code snippets</span> using 
-                <span style={{ color: currentTheme.colors.warning }}> ```language code blocks</span>
+              <div className="flex items-center">
+                <div 
+                  className="text-xs mr-2 select-none"
+                  style={{ color: currentTheme.colors.textMuted }}
+                >
+                  <span className="hidden sm:inline">Press </span>
+                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-0.5"
+                    style={{
+                      backgroundColor: `${currentTheme.colors.bgTertiary}80`,
+                      color: currentTheme.colors.textSecondary,
+                      border: `1px solid ${currentTheme.colors.borderColor}40`,
+                    }}
+                  >
+                    Shift
+                  </kbd>
+                  <span className="hidden sm:inline-block mx-0.5">+</span>
+                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-0.5"
+                    style={{
+                      backgroundColor: `${currentTheme.colors.bgTertiary}80`,
+                      color: currentTheme.colors.textSecondary,
+                      border: `1px solid ${currentTheme.colors.borderColor}40`,
+                    }}
+                  >
+                    ↵
+                  </kbd>
+                  <span className="hidden sm:inline"> for line break</span>
+                </div>
               </div>
             </div>
+            
+            {/* Chat input */}
+            <ChatInput 
+              onSend={handleSendMessage} 
+              disabled={loading}
+              placeholder="Ask me anything..."
+              isGenerating={isGenerating}
+            />
           </div>
         </div>
       </div>
