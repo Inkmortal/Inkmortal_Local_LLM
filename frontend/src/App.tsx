@@ -170,15 +170,6 @@ const HomePage: React.FC = () => {
             </p>
           </Card>
         </section>
-        
-        <div className="text-center">
-          <Button 
-            size="lg"
-            onClick={() => window.navigateTo('/themes')}
-          >
-            Explore Themes
-          </Button>
-        </div>
       </main>
       
       <footer 
