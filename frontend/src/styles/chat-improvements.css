@@ -1,0 +1,133 @@
+/* Chat Improvements for Inkmortal - Cultivator/Dragon Theme */
+
+/* 1. Maximum width for chat container */
+.chat-container {
+  max-width: 1000px !important;
+  margin: 0 auto;
+}
+
+/* 2. Improved assistant message styling */
+.assistant-message {
+  background-color: rgba(35, 35, 45, 0.85) !important;
+  border: 1px solid rgba(150, 120, 40, 0.3) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 
+              inset 0 0 1px rgba(255, 215, 0, 0.2) !important;
+}
+
+.assistant-message::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent);
+}
+
+/* 3. Dragon/Cultivator theme for assistant avatar */
+.assistant-avatar {
+  background: linear-gradient(135deg, #b8860b, #a0522d) !important;
+}
+
+/* 4. Change header logo styling */
+.app-logo {
+  background: linear-gradient(135deg, #d4af37, #a57c1b) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.app-title {
+  color: #d4af37 !important;
+}
+
+/* 5. Dragon avatar SVG */
+.dragon-avatar {
+  color: #ffd700;
+}
+
+/* 6. Ambient effects for cultivator theme */
+.chat-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(212, 175, 55, 0.03), transparent 60%),
+              radial-gradient(circle at 70% 70%, rgba(165, 124, 27, 0.03), transparent 60%);
+  pointer-events: none;
+}
+
+/* 7. Improved scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 30, 40, 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #a57c1b80, #d4af3780);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #a57c1b, #d4af37);
+  background-clip: content-box;
+}
+
+/* 8. Styled input box */
+.chat-input {
+  border: 1px solid rgba(150, 120, 40, 0.3) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1), 
+              inset 0 0 1px rgba(255, 215, 0, 0.1) !important;
+}
+
+.chat-input:focus {
+  border-color: rgba(212, 175, 55, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2), 
+              0 4px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 9. Submit button styling */
+.submit-button {
+  background: linear-gradient(135deg, #d4af37, #a57c1b) !important;
+}
+
+/* 10. Timeline decoration */
+.timeline-decoration {
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    rgba(212, 175, 55, 0.2) 15%, 
+    rgba(212, 175, 55, 0.2) 85%, 
+    transparent 100%
+  ) !important;
+}
+
+/* 11. Replace header icon */
+.app-icon svg path {
+  stroke: #d4af37 !important;
+  fill: rgba(212, 175, 55, 0.1) !important;
+}
+
+/* 12. Custom animation for the cultivator theme */
+@keyframes cultivator-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(212, 175, 55, 0.3); }
+  50% { box-shadow: 0 0 15px rgba(212, 175, 55, 0.6); }
+}
+
+.cultivator-avatar {
+  animation: cultivator-glow 3s infinite ease-in-out;
+}
+
+/* Apply theme universally */
+:root {
+  --accent-primary: #d4af37 !important;
+  --accent-primary-rgb: 212, 175, 55 !important;
+  --accent-secondary: #a57c1b !important;
+  --accent-secondary-rgb: 165, 124, 27 !important;
+}

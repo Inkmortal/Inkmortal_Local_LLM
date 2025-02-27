@@ -17,6 +17,7 @@
 @import './styles/animations.css';
 @import './styles/modern-ui.css';
 @import './styles/enhanced-animations.css';
+@import './styles/chat-improvements.css';
 
 @tailwind base;
 @tailwind components;
@@ -33,19 +34,19 @@
  -webkit-font-smoothing: antialiased;
  -moz-osx-font-smoothing: grayscale;
 
- /* Default to Catppuccin Macchiato */
+ /* Default to Catppuccin Macchiato with Gold/Amber accent for Inkmortal */
  --bg-primary: #24273a;
  --bg-secondary: #1e2030;
  --bg-tertiary: #363a4f;
  --text-primary: #cad3f5;
  --text-secondary: #b8c0e0;
  --text-muted: #8087a2;
- --accent-primary: #8aadf4;
- --accent-primary-rgb: 138, 173, 244;
- --accent-secondary: #c6a0f6;
- --accent-secondary-rgb: 198, 160, 246;
- --accent-tertiary: #f5a97f;
- --accent-tertiary-rgb: 245, 169, 127;
+ --accent-primary: #d4af37; /* Golden/amber color for Inkmortal */
+ --accent-primary-rgb: 212, 175, 55;
+ --accent-secondary: #a57c1b; /* Darker gold for secondary */
+ --accent-secondary-rgb: 165, 124, 27;
+ --accent-tertiary: #d2b48c; /* Tan color for tertiary */
+ --accent-tertiary-rgb: 210, 180, 140;
  --border-color: #494d64;
  --success: #a6da95;
  --warning: #eed49f;
@@ -110,14 +111,14 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--accent-tertiary);
+  background: linear-gradient(to bottom, var(--accent-secondary), var(--accent-primary));
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-primary);
+  background: linear-gradient(to bottom, var(--accent-primary), var(--accent-secondary));
   background-clip: content-box;
 }
 
@@ -134,4 +135,15 @@ body {
 /* Floating animation for components */
 .floating-ui {
   animation: float-subtle 4s ease-in-out infinite;
+}
+
+/* Dragon icon for assistant */
+.dragon-icon {
+  color: var(--accent-primary);
+}
+
+/* Maximum width container */
+.max-w-chat {
+  max-width: 1000px !important;
+  margin: 0 auto;
 }
