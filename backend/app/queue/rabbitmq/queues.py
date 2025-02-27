@@ -104,7 +104,24 @@ class QueueManager:
                             durable=True,
                             passive=True  # Just check if queue exists, don't create if not
                         )
-                        result[priority] = queue_info.message_count
+                        
+                        # Handle message count attribute safely
+                        try:
+                            # Try different ways to access message count based on aio_pika version
+                            if hasattr(queue_info, 'message_count'):
+                                result[priority] = queue_info.message_count
+                            elif hasattr(queue_info, 'declaration_result') and hasattr(queue_info.declaration_result, 'message_count'):
+                                result[priority] = queue_info.declaration_result.message_count
+                            elif isinstance(queue_info, dict) and 'message_count' in queue_info:
+                                result[priority] = queue_info['message_count']
+                            else:
+                                # If we can't determine message count, default to 0
+                                logger.warning(f"Could not determine message count format for queue {queue_name}, defaulting to 0")
+                                result[priority] = 0
+                        except Exception as e:
+                            logger.error(f"Error extracting message count for queue {queue_name}: {e}")
+                            result[priority] = 0
+                            
                     except Exception as e:
                         logger.error(f"Error getting message count for queue {queue_name}: {e}")
                         result[priority] = 0
