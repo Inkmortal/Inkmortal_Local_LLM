@@ -236,20 +236,20 @@ function App() {
     }
     
     switch (currentRoute) {
-      case 'admin':
-        return <ProtectedAdminDashboard />;
+     case 'admin':
+        return <ProtectedAdminDashboard currentRoute={currentRoute} />;
       case 'admin/ip-whitelist':
-        return <ProtectedIPWhitelist />;
+        return <ProtectedIPWhitelist currentRoute={currentRoute} />;
       case 'admin/tokens':
-        return <ProtectedRegistrationTokens />;
+        return <ProtectedRegistrationTokens currentRoute={currentRoute} />;
       case 'admin/api-keys':
-        return <ProtectedAPIKeys />;
+        return <ProtectedAPIKeys currentRoute={currentRoute} />;
       case 'admin/queue':
-        return <ProtectedQueueMonitor />;
+        return <ProtectedQueueMonitor currentRoute={currentRoute} />;
       case 'admin/theme':
-        return <ProtectedThemeCustomizer />;
+        return <ProtectedThemeCustomizer currentRoute={currentRoute} />;
       case 'admin/stats':
-        return <ProtectedSystemStats />;
+        return <ProtectedSystemStats currentRoute={currentRoute} />;
       case 'admin/login':
         return <AdminLogin />;
       case 'themes':

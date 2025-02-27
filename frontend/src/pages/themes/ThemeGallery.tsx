@@ -44,11 +44,7 @@ const ThemeGallery: React.FC = () => {
       }
     }
 
-    // Clean up the storage on component unmount
-    return () => {
-      localStorage.removeItem(PREVIOUS_ROUTE_KEY);
-    };
-  }, []);
+   }, []);
 
   // Function to go back to previous route
   const goBack = () => {

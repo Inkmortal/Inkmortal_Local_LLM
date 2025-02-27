@@ -109,19 +109,19 @@ const AdminDashboard: React.FC = () => {
                 )}
               </div>
             </div>
-            <button 
-              className="mt-auto py-2 text-center rounded-md w-full"
-              style={{ 
-                backgroundColor: `${currentTheme.colors.accentPrimary}20`,
-                color: currentTheme.colors.accentPrimary
-              }}
-              onClick={() => window.location.href = card.path}
-            >
-              View Details
-            </button>
-          </Card>
-        ))}
-      </div>
+           <button
+             className="mt-auto py-2 text-center rounded-md w-full"
+             style={{
+               backgroundColor: `${currentTheme.colors.accentPrimary}20`,
+               color: currentTheme.colors.accentPrimary
+             }}
+             onClick={() => window.navigateTo(card.path)}
+           >
+             View Details
+           </button>
+         </Card>
+       ))}
+     </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* System Stats */}

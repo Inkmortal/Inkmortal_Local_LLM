@@ -20,7 +20,7 @@ const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
   currentTheme,
   saveTheme,
   exportTheme,
-  handleImport
+ handleImport
 }) => {
   const [themeName, setThemeName] = useState<string>(workingTheme?.displayName || 'Custom Theme');
 
@@ -50,17 +50,17 @@ const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
 
   if (!workingTheme) return null;
 
-  return (
-    <div className="mt-12 mb-20">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold">Customize Theme</h2>
-        <Button variant="outline" onClick={() => setWorkingTheme(null)}>
-          Close Customizer
-        </Button>
-      </div>
-      <p className="mb-6 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-        Create your own version of the selected theme by adjusting the colors below.
-      </p>
+ return (
+   <div className="mt-12 mb-20">
+     <div className="flex items-center justify-between mb-4">
+       <h2 className="text-2xl font-semibold">Customize Theme</h2>
+       <Button variant="outline" onClick={() => setWorkingTheme(null)}>
+         Close Customizer
+       </Button>
+     </div>
+     <p className="mb-6 text-sm" style={{ color: currentTheme.colors.textSecondary }}>
+       Create your own version of the selected theme by adjusting the colors below.
+     </p>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Color Settings Panel */}
@@ -161,10 +161,10 @@ const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
         {/* Preview Panel */}
         <div className="lg:col-span-1">
           <ThemePreview theme={workingTheme} />
-        </div>
-      </div>
-    </div>
-  );
+       </div>
+     </div>
+   </div>
+ );
 };
 
 export default ThemeCustomizer;

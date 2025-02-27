@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { fetchApi, checkBackendConnection } from '../config/api';
 
 interface AuthContextType {
@@ -148,7 +148,7 @@ export const useAuth = () => useContext(AuthContext);
 // Higher-order component for protected routes
 export const withAuth = <P extends object>(
   Component: React.ComponentType<P>
-): React.FC<P> => {
+) => {
   return (props: P) => {
     const { isAuthenticated, loading } = useAuth();
     
