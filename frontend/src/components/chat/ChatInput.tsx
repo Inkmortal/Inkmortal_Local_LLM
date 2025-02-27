@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Button from '../ui/Button';
 
@@ -17,60 +17,89 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const [message, setMessage] = useState<string>('');
-  const localInputRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLTextAreaElement>(null);
   
   // Combine refs
   const combinedRef = inputRef || localInputRef;
   
-  // Auto-focus the input field when the component mounts or updates
-  useEffect(() => {
-    // Focus immediately on mount
+  // Focus management function
+  const forceFocus = useCallback(() => {
     if (combinedRef.current) {
+      // Using direct DOM focus method
       combinedRef.current.focus();
     }
-  }, []);
+  }, [combinedRef]);
 
-  // Re-focus after sending to ensure focus is maintained
+  // Set autofocus and handle initial focus
   useEffect(() => {
-    const focusInput = () => {
-      if (combinedRef.current) {
-        combinedRef.current.focus();
-      }
-    };
+    // Initial focus on mount with a slight delay to ensure rendering is complete
+    const timer = setTimeout(() => {
+      forceFocus();
+    }, 100);
     
-    // Set up an interval to try to focus the input
-    // This helps ensure focus even if other elements try to take focus
-    const focusInterval = setInterval(focusInput, 100);
-    
-    // Clear the interval after a short time
-    setTimeout(() => {
-      clearInterval(focusInterval);
-    }, 500);
-    
-    return () => {
-      clearInterval(focusInterval);
-    };
-  }, [message]); // This will re-run when message changes (like after sending)
+    return () => clearTimeout(timer);
+  }, [forceFocus]);
 
-  const handleSend = () => {
+  // Focus after sending a message
+  const handleSend = useCallback(() => {
     if (message.trim() && !disabled) {
       onSend(message);
       setMessage('');
-      // Attempt immediate refocus
-      setTimeout(() => {
-        if (combinedRef.current) {
-          combinedRef.current.focus();
-        }
-      }, 10);
+      
+      // Focus using multiple timers with different delays to ensure it works
+      // This combats various edge cases where focus might be lost
+      requestAnimationFrame(() => {
+        forceFocus();
+        
+        // Additional focus attempts with varying delays
+        setTimeout(forceFocus, 0);
+        setTimeout(forceFocus, 50);
+        setTimeout(forceFocus, 100);
+      });
     }
-  };
+  }, [message, disabled, onSend, forceFocus]);
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Handle Enter keypress
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
+
+  // Adjust textarea height based on content
+  const adjustHeight = useCallback(() => {
+    const element = combinedRef.current;
+    if (!element) return;
+    
+    // Reset height to calculate proper scrollHeight
+    element.style.height = 'auto';
+    
+    // Set to scrollHeight, but limit max height
+    const maxHeight = 120; // Maximum height in pixels
+    const newHeight = Math.min(element.scrollHeight, maxHeight);
+    element.style.height = `${newHeight}px`;
+    
+    // Add scrollbar if content exceeds maxHeight
+    element.style.overflowY = element.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [combinedRef]);
+
+  // Adjust height when content changes
+  useEffect(() => {
+    adjustHeight();
+  }, [message, adjustHeight]);
+
+  // Force focus when window gains focus to improve usability
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      forceFocus();
+    };
+    
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [forceFocus]);
 
   return (
     <div className="relative">
@@ -82,26 +111,32 @@ const ChatInput: React.FC<ChatInputProps> = ({
           boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)` 
         }}
       >
-        <input
-          ref={combinedRef}
-          type="text"
-          className="flex-grow py-3 px-4 outline-none"
+        <textarea
+          ref={combinedRef as React.RefObject<HTMLTextAreaElement>}
+          className="flex-grow py-3 px-4 outline-none resize-none min-h-[42px]"
           placeholder={placeholder}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            adjustHeight();
+          }}
+          onKeyDown={handleKeyPress}
           disabled={disabled}
+          rows={1}
+          spellCheck={true}
+          autoComplete="off"
           autoFocus={true}
           style={{
             backgroundColor: 'transparent',
             color: currentTheme.colors.textPrimary,
+            overflowY: 'hidden',
           }}
         />
         <Button
           onClick={handleSend}
           disabled={disabled || !message.trim()}
           variant="default"
-          className="m-1.5 transition-all hover:scale-105"
+          className="m-1.5 transition-all hover:scale-105 self-end mb-2 mr-2"
           style={{
             background: message.trim() 
               ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 

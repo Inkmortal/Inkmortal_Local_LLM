@@ -29,6 +29,11 @@ const AdminLogin: React.FC = () => {
   const [showSecretQuestion, setShowSecretQuestion] = useState(false);
   const [setupTokenFetched, setSetupTokenFetched] = useState('');
 
+  // Navigate to home
+  const handleHomeClick = () => {
+    window.location.href = '/';  // Direct navigation to ensure it works
+  };
+
   // Check backend connection and admin setup status on component mount
   useEffect(() => {
     const initialize = async () => {
@@ -257,21 +262,59 @@ const AdminLogin: React.FC = () => {
       style={{
         backgroundColor: currentTheme.colors.bgPrimary,
         color: currentTheme.colors.textPrimary,
+        backgroundImage: `radial-gradient(circle at 10% 10%, ${currentTheme.colors.bgSecondary}20, transparent 800px)`,
       }}
     >
-      <div className="fixed top-4 right-4">
-        <ThemeSelector />
+      {/* Navigation Bar at Top */}
+      <div className="fixed top-0 left-0 right-0 flex justify-between items-center p-4 z-10" 
+        style={{ 
+          backgroundColor: `${currentTheme.colors.bgSecondary}CC`,
+          backdropFilter: 'blur(10px)',
+          borderBottom: `1px solid ${currentTheme.colors.borderColor}40`,
+          boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`
+        }}>
+        <div className="flex items-center cursor-pointer" onClick={handleHomeClick}>
+          <svg 
+            className="w-8 h-8 mr-3" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ color: currentTheme.colors.accentPrimary }}
+          >
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>Seadragon LLM</span>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button 
+            className="p-2 rounded-lg transition-all duration-200 hover:scale-105 flex items-center gap-1.5"
+            onClick={handleHomeClick}
+            style={{ 
+              backgroundColor: `${currentTheme.colors.accentPrimary}15`,
+              color: currentTheme.colors.accentPrimary
+            }}
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7m-7-7v14" />
+            </svg>
+            Home
+          </button>
+          <ThemeSelector />
+        </div>
       </div>
 
-      <div className="mb-8 text-center">
+      <div className="mb-8 text-center mt-16">
         <h1
           className="text-4xl font-bold mb-2"
           style={{ color: currentTheme.colors.accentPrimary }}
         >
-          Seadragon LLM
+          Admin Portal
         </h1>
         <h2 className="text-xl" style={{ color: currentTheme.colors.textSecondary }}>
-          {mode === 'login' ? 'Admin Login' : 'Admin Setup'}
+          {mode === 'login' ? 'Sign In' : 'Admin Setup'}
         </h2>
       </div>
 
@@ -291,7 +334,7 @@ const AdminLogin: React.FC = () => {
 
       {/* Secret Question Form */}
       {mode === 'setup' && needsSetup && !setupTokenFetched && (
-        <Card className="w-full max-w-md mb-4">
+        <Card className="w-full max-w-md mb-4" hoverEffect>
           <h3 
             className="text-lg font-medium mb-4"
             style={{ color: currentTheme.colors.accentSecondary }}
@@ -338,7 +381,7 @@ const AdminLogin: React.FC = () => {
       )}
 
       {/* Main Form (Login or Setup) */}
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md" hoverEffect>
         {mode === 'login' ? (
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -391,6 +434,10 @@ const AdminLogin: React.FC = () => {
               type="submit"
               fullWidth
               disabled={isLoading}
+              style={{
+                background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                boxShadow: `0 4px 15px ${currentTheme.colors.accentPrimary}40`,
+              }}
             >
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
@@ -512,6 +559,10 @@ const AdminLogin: React.FC = () => {
                   type="submit"
                   fullWidth
                   disabled={isLoading}
+                  style={{
+                    background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                    boxShadow: `0 4px 15px ${currentTheme.colors.accentPrimary}40`,
+                  }}
                 >
                   {isLoading ? 'Setting up...' : 'Create Admin Account'}
                 </Button>
