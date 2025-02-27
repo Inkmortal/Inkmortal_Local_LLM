@@ -207,43 +207,92 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }, [focusTextarea]);
 
   return (
-    <div className="relative w-full" style={{ maxWidth: '800px', margin: '0 auto' }}>
-      {/* Form wrapper to match Claude.ai interface */}
+    <div className="relative w-full mx-auto px-4 pb-4 z-10">
+      {/* Streaming indicator above input */}
+      {isGenerating && (
+        <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
+          <div 
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs animate-pulse"
+            style={{ 
+              background: `linear-gradient(135deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
+              border: `1px solid ${currentTheme.colors.borderColor}40`,
+              backdropFilter: 'blur(8px)',
+              boxShadow: `0 2px 12px ${currentTheme.colors.accentPrimary}30`,
+              color: currentTheme.colors.textSecondary,
+            }}
+          >
+            <div className="relative flex h-2 w-2">
+              <span 
+                className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" 
+                style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+              />
+              <span 
+                className="relative inline-flex rounded-full h-2 w-2" 
+                style={{ backgroundColor: currentTheme.colors.accentPrimary }}
+              />
+            </div>
+            AI is generating a response...
+          </div>
+        </div>
+      )}
+      
+      {/* Form wrapper with bottom cloud effect */}
       <form 
         ref={formRef}
         onSubmit={handleSubmit}
         className="relative"
+        style={{ 
+          filter: isGenerating ? 'none' : 'drop-shadow(0 -2px 10px rgba(0,0,0,0.1))',
+        }}
       >
-        {/* Loading indicator - matches Claude.ai style */}
-        {isGenerating && (
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full">
-            <div className="text-xs opacity-60 bg-opacity-80 px-2 py-1 rounded-t-md" style={{ 
-              color: currentTheme.colors.textSecondary, 
-              backgroundColor: `${currentTheme.colors.bgSecondary}80` 
-            }}>
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                <span>AI is thinking...</span>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Main input container - matches Claude.ai style */}
-        <div className="flex flex-col">
-          <div 
-            className="border rounded-lg overflow-hidden transition-all bg-opacity-90"
-            style={{ 
-              borderColor: `${currentTheme.colors.borderColor}80`,
-              backgroundColor: currentTheme.colors.bgSecondary,
-              boxShadow: `0 2px 6px rgba(0, 0, 0, 0.1)`,
-            }}
-          >
-            {/* Textarea wrapper */}
-            <div className="flex items-center px-3 py-2">
+        {/* Beautiful frosted glass input container */}
+        <div 
+          className="relative rounded-xl overflow-hidden border transition-all"
+          style={{ 
+            borderColor: isGenerating 
+              ? `${currentTheme.colors.accentSecondary}60`
+              : `${currentTheme.colors.borderColor}60`,
+            background: `linear-gradient(135deg, ${currentTheme.colors.bgSecondary}90, ${currentTheme.colors.bgPrimary}90)`,
+            backdropFilter: 'blur(10px)',
+            boxShadow: isGenerating
+              ? `0 0 0 1px ${currentTheme.colors.accentSecondary}40, 0 2px 20px ${currentTheme.colors.accentSecondary}20`
+              : `0 0 0 1px ${currentTheme.colors.borderColor}20, 0 2px 12px rgba(0,0,0,0.04)`,
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {/* Glowing border effect when streaming */}
+          {isGenerating && (
+            <div 
+              className="absolute inset-0 pointer-events-none" 
+              style={{
+                background: 'transparent',
+                boxShadow: `0 0 8px ${currentTheme.colors.accentPrimary}50, 0 0 20px ${currentTheme.colors.accentSecondary}20 inset`,
+                borderRadius: 'inherit',
+                opacity: 0.7,
+                animation: 'pulse 2s infinite ease-in-out'
+              }}
+            />
+          )}
+          
+          {/* Progress indicator */}
+          {isGenerating && (
+            <div 
+              className="absolute top-0 left-0 h-0.5 w-full"
+              style={{
+                background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
+                animation: 'indeterminateProgress 2s ease infinite',
+                opacity: 0.8,
+              }}
+            />
+          )}
+          
+          {/* Main input container */}
+          <div className="flex flex-col">
+            {/* Textarea wrapper with natural padding */}
+            <div className="px-4 pt-3 pb-2">
               <textarea
                 ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
-                className="flex-grow outline-none resize-none min-h-[24px] bg-transparent placeholder-opacity-60 mx-1"
+                className="w-full outline-none resize-none min-h-[24px] bg-transparent text-base"
                 placeholder={placeholder}
                 value={message}
                 onChange={handleChange}
@@ -262,49 +311,123 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 style={{
                   color: currentTheme.colors.textPrimary,
                   overflowY: 'hidden',
-                  fontFamily: "'SF Pro Text', system-ui, sans-serif",
-                  fontSize: '0.95rem',
+                  fontFamily: "'Inter', system-ui, sans-serif",
                   lineHeight: '1.5',
                 }}
               />
             </div>
             
-            {/* Button bar - matches Claude.ai style */}
+            {/* Input actions bar with gradient separator */}
             <div 
-              className="flex items-center justify-between px-3 py-2 border-t"
-              style={{ 
-                borderColor: `${currentTheme.colors.borderColor}40`
+              className="flex items-center justify-between py-2 px-3 border-t"
+              style={{
+                borderColor: `${currentTheme.colors.borderColor}30`,
+                background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}40, ${currentTheme.colors.bgTertiary}20)`,
               }}
             >
-              <div className="text-xs opacity-70" style={{ color: currentTheme.colors.textSecondary }}>
-                <span>Press Enter to send, Shift+Enter for new line</span>
+              {/* Input features and shortcuts */}
+              <div className="flex items-center gap-1.5 text-xs" style={{ color: currentTheme.colors.textSecondary }}>
+                <button
+                  type="button"
+                  className="opacity-60 hover:opacity-100 transition-opacity p-1.5 rounded hover:bg-black hover:bg-opacity-5 focus:outline-none"
+                  onClick={() => {/* File upload logic */}}
+                  title="Attach file"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                
+                <div className="text-xs opacity-70 select-none">
+                  <span>⏎ to send</span>
+                  <span className="mx-1.5 opacity-40">•</span>
+                  <span>Shift+⏎ for line break</span>
+                </div>
               </div>
               
-              <button
-                type="submit"
-                disabled={disabled || !message.trim()}
-                className="px-4 py-1 rounded-md text-sm font-medium transition-all"
-                style={{
-                  backgroundColor: message.trim() && !disabled
-                    ? currentTheme.colors.accentPrimary
-                    : `${currentTheme.colors.bgTertiary}80`,
-                  color: message.trim() && !disabled
-                    ? '#fff'
-                    : currentTheme.colors.textMuted,
-                  opacity: disabled ? 0.5 : 1,
-                  cursor: message.trim() && !disabled ? 'pointer' : 'default'
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSubmit();
-                }}
-              >
-                Send
-              </button>
+              {/* Dynamic send button */}
+              <div className="flex items-center">
+                {message.trim() && (
+                  <button
+                    type="button"
+                    className="mr-2 opacity-60 hover:opacity-100 transition-opacity p-1 rounded hover:bg-black hover:bg-opacity-5"
+                    onClick={() => {
+                      setMessage('');
+                      if (textareaRef.current) {
+                        textareaRef.current.style.height = '48px';
+                        textareaRef.current.focus();
+                      }
+                    }}
+                    title="Clear message"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                
+                <button
+                  type="submit"
+                  disabled={disabled || !message.trim()}
+                  className="relative group overflow-hidden rounded-md transition-all p-0.5"
+                  style={{
+                    opacity: disabled || !message.trim() ? 0.5 : 1,
+                    background: message.trim() && !disabled
+                      ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`
+                      : 'transparent',
+                    border: message.trim() && !disabled ? 'none' : `1px solid ${currentTheme.colors.borderColor}40`,
+                  }}
+                >
+                  {/* Beautiful gradient inner effect */}
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity"
+                    style={{
+                      background: message.trim() && !disabled 
+                        ? `radial-gradient(circle at center, ${currentTheme.colors.accentSecondary}90, transparent 70%)`
+                        : 'none',
+                    }}
+                  />
+                  
+                  {/* Button content */}
+                  <span 
+                    className="flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-[3px] transition-colors"
+                    style={{
+                      color: message.trim() && !disabled ? '#fff' : currentTheme.colors.textSecondary,
+                      background: message.trim() && !disabled ? 'transparent' : 'transparent',
+                    }}
+                  >
+                    <span className="mr-1.5">Send</span>
+                    <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </form>
+      
+      {/* Add keyframe animation */}
+      <style jsx>{`
+        @keyframes indeterminateProgress {
+          0% {
+            transform: translateX(-100%);
+          }
+          50% {
+            transform: translateX(0%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+        
+        @keyframes pulse {
+          0% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+          100% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 };
