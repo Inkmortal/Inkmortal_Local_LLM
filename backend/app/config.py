@@ -45,7 +45,12 @@ class Settings:
         # Auth settings
         self.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
         self.token_expire_minutes = int(os.getenv("TOKEN_EXPIRE_MINUTES", "60"))
-        self.whitelisted_ips = os.getenv("WHITELISTED_IPS", "127.0.0.1").split(",")
+        
+        # IP Whitelist management
+        self.whitelisted_ips_env = os.getenv("WHITELISTED_IPS", "127.0.0.1")
+        self.whitelisted_ips = self.whitelisted_ips_env.split(",")
+        # Remove empty entries
+        self.whitelisted_ips = [ip.strip() for ip in self.whitelisted_ips if ip.strip()]
         
         # Base domain and CORS settings
         self.base_domain = os.getenv("BASE_DOMAIN", "seadragoninkmortal.com")
@@ -84,6 +89,24 @@ class Settings:
         return self.environment == EnvironmentType.PRODUCTION
     
     # This approach allows flexibility to change URLs without changing code
+    def add_ip_to_whitelist(self, ip: str) -> None:
+        """Add an IP address to the whitelist"""
+        if ip not in self.whitelisted_ips:
+            self.whitelisted_ips.append(ip)
+            # Warning: this change is only in memory and won't persist through server restart
+            # In a production system, this should update the environment variable or a config file
+            if not self.is_testing:
+                print(f"Warning: IP {ip} added to whitelist in memory only. Changes won't persist through restart.")
+    
+    def remove_ip_from_whitelist(self, ip: str) -> None:
+        """Remove an IP address from the whitelist"""
+        if ip in self.whitelisted_ips:
+            self.whitelisted_ips.remove(ip)
+            # Warning: this change is only in memory and won't persist through server restart
+            # In a production system, this should update the environment variable or a config file
+            if not self.is_testing:
+                print(f"Warning: IP {ip} removed from whitelist in memory only. Changes won't persist through restart.")
+    
     @property
     def queue_manager_class(self) -> str:
         """Get the queue manager class to use"""

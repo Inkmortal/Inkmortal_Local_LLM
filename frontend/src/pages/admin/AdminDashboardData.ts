@@ -143,3 +143,173 @@ export const fetchIpWhitelist = async () => {
     return [];
   }
 };
+
+/**
+ * Fetch registration tokens from the API
+ */
+export const fetchRegistrationTokens = async () => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi('/admin/tokens', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch registration tokens: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching registration tokens:', error);
+    return [];
+  }
+};
+
+/**
+ * Generate a new registration token
+ */
+export const generateRegistrationToken = async (expiryDays: number) => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi('/admin/tokens', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ expires_days: expiryDays })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate token: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error generating registration token:', error);
+    throw error;
+  }
+};
+
+/**
+ * Revoke a registration token
+ */
+export const revokeRegistrationToken = async (tokenId: number) => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi(`/admin/tokens/${tokenId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to revoke token: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error revoking registration token:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch API keys from the server
+ */
+export const fetchApiKeys = async () => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi('/admin/api-keys', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch API keys: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching API keys:', error);
+    return [];
+  }
+};
+
+/**
+ * Create a new API key
+ */
+export const createApiKey = async (description: string, priority: number) => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi('/admin/api-keys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ description, priority })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create API key: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating API key:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete/revoke an API key
+ */
+export const deleteApiKey = async (keyId: number) => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi(`/admin/api-keys/${keyId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete API key: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting API key:', error);
+    throw error;
+  }
+};

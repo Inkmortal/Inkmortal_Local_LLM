@@ -32,31 +32,4 @@ async def admin_dashboard(
     """Get statistics for the admin dashboard"""
     return await get_dashboard_stats(db, queue_manager, current_user)
 
-@router.get("/ip-whitelist")
-async def get_ip_whitelist(
-    current_user: User = Depends(get_current_admin_user)
-) -> List[Dict[str, Any]]:
-    """Get all whitelisted IP addresses"""
-    # Get IP whitelist from settings
-    whitelist = settings.whitelisted_ips
-    
-    # Format the response
-    ip_list = []
-    for i, ip in enumerate(whitelist):
-        ip_list.append({
-            "id": i + 1,
-            "ip": ip,
-            "added": "2025-02-20",  # Mock data since we don't store this
-            "lastUsed": None  # Mock data since we don't track this
-        })
-    
-    return ip_list
-
-@router.get("/client-ip")
-async def get_client_ip(
-    request: Request,
-    current_user: User = Depends(get_current_admin_user)
-) -> Dict[str, str]:
-    """Get the client's IP address"""
-    client_ip = request.client.host
-    return {"ip": client_ip}
+# IP whitelist endpoints moved to admin/ip_whitelist.py

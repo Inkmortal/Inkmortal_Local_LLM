@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 # Import local modules
 from .auth.router import router as auth_router, generate_setup_token, check_admin_exists
 from .auth.activities import router as activities_router
+from .admin.ip_whitelist import router as ip_whitelist_router
+from .admin.registration_tokens import router as registration_tokens_router
+from .admin.api_keys import router as api_keys_router
 from .auth.utils import get_current_user, get_current_admin_user
 from .auth.models import User
 from .api.gateway import router as api_router
@@ -117,6 +120,9 @@ app.include_router(auth_router)
 app.include_router(activities_router)
 app.include_router(api_router)
 app.include_router(admin_router)
+app.include_router(ip_whitelist_router)
+app.include_router(registration_tokens_router)
+app.include_router(api_keys_router)
 
 # Root endpoint
 @app.get("/")

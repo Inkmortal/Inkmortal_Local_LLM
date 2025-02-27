@@ -49,7 +49,7 @@ async def get_dashboard_stats(
     ollama_status = await get_ollama_status(queue_manager)
     
     # Get real activity logs from database
-    recent_activities = get_recent_activities(db)
+    recent_activities = await get_recent_activities(db)
     
     return {
         "dashboard_cards": get_dashboard_cards(
@@ -148,7 +148,7 @@ async def get_ollama_status(queue_manager: QueueManagerInterface) -> Dict[str, A
         "version": "0.2.1"  # This would be dynamically retrieved in production
     }
 
-def get_recent_activities(db: Session) -> List[Dict[str, Any]]:
+async def get_recent_activities(db: Session) -> List[Dict[str, Any]]:
     """Get recent activities from the database"""
     # Get most recent activity logs (limit to 10)
     activities = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(10).all()

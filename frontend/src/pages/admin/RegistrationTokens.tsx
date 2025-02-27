@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import { fetchRegistrationTokens, generateRegistrationToken, revokeRegistrationToken } from './AdminDashboardData';
 
 interface Token {
   id: number;
@@ -18,83 +19,52 @@ const RegistrationTokens: React.FC = () => {
   const { currentTheme } = useTheme();
   const [newTokenGenerated, setNewTokenGenerated] = useState<string | null>(null);
   const [expiryDays, setExpiryDays] = useState<number>(30);
-  
-  // Mock data for tokens
-  const [tokens, setTokens] = useState<Token[]>([
-    { 
-      id: 1, 
-      token: 'TKN_a1b2c3d4e5f6', 
-      created: '2025-02-10', 
-      expires: '2025-03-10', 
-      used: true, 
-      usedBy: 'user@example.com', 
-      usedOn: '2025-02-15' 
-    },
-    { 
-      id: 2, 
-      token: 'TKN_f6e5d4c3b2a1', 
-      created: '2025-02-15', 
-      expires: '2025-03-15', 
-      used: false, 
-      usedBy: null, 
-      usedOn: null 
-    },
-    { 
-      id: 3, 
-      token: 'TKN_1a2b3c4d5e6f', 
-      created: '2025-02-20', 
-      expires: '2025-03-20', 
-      used: false, 
-      usedBy: null, 
-      usedOn: null 
-    },
-    { 
-      id: 4, 
-      token: 'TKN_6f5e4d3c2b1a', 
-      created: '2025-02-25', 
-      expires: null, 
-      used: false, 
-      usedBy: null, 
-      usedOn: null 
-    }
-  ]);
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load tokens from API
+  useEffect(() => {
+    const loadTokens = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchRegistrationTokens();
+        setTokens(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error loading registration tokens:', err);
+        setError('Failed to load registration tokens');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTokens();
+  }, []);
 
   // Generate a new token
-  const generateToken = () => {
-    // In a real application, this would make an API call
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let token = 'TKN_';
-    for (let i = 0; i < 12; i++) {
-      token += characters.charAt(Math.floor(Math.random() * characters.length));
+  const generateToken = async () => {
+    try {
+      const newToken = await generateRegistrationToken(expiryDays);
+      setTokens([newToken, ...tokens]);
+      setNewTokenGenerated(newToken.token);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error generating token:', err);
+      setError(`Failed to generate token: ${err.message}`);
     }
-    
-    const today = new Date();
-    let expires: string | null = null;
-    
-    if (expiryDays > 0) {
-      const expiryDate = new Date(today);
-      expiryDate.setDate(today.getDate() + expiryDays);
-      expires = expiryDate.toISOString().split('T')[0];
-    }
-    
-    const newToken: Token = {
-      id: tokens.length + 1,
-      token,
-      created: today.toISOString().split('T')[0],
-      expires,
-      used: false,
-      usedBy: null,
-      usedOn: null
-    };
-    
-    setTokens([newToken, ...tokens]);
-    setNewTokenGenerated(token);
   };
 
   // Revoke a token
-  const revokeToken = (id: number) => {
-    // In a real application, this would make an API call
-    setTokens(tokens.filter(token => token.id !== id));
+  const revokeToken = async (id: number) => {
+    try {
+      await revokeRegistrationToken(id);
+      setTokens(tokens.filter(token => token.id !== id));
+      setError(null);
+    } catch (err: any) {
+      console.error('Error revoking token:', err);
+      setError(`Failed to revoke token: ${err.message}`);
+    }
   };
 
   // Copy token to clipboard
@@ -170,14 +140,26 @@ const RegistrationTokens: React.FC = () => {
               </div>
             </div>
 
-            <Button 
-              onClick={generateToken} 
+            {error && (
+              <div
+                className="p-3 rounded-md mb-2"
+                style={{ backgroundColor: `${currentTheme.colors.error}20` }}
+              >
+                <p className="text-sm" style={{ color: currentTheme.colors.error }}>
+                  {error}
+                </p>
+              </div>
+            )}
+
+            <Button
+              onClick={generateToken}
               fullWidth
               style={{
                 backgroundColor: currentTheme.colors.accentPrimary
               }}
+              disabled={loading}
             >
-              Generate Token
+              {loading ? 'Loading...' : 'Generate Token'}
             </Button>
 
             <div className="p-3 rounded-md" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}40` }}>
