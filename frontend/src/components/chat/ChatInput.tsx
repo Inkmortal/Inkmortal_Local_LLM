@@ -15,6 +15,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const [message, setMessage] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -53,11 +54,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div 
-      className="flex items-end border rounded-lg p-2 focus-within:ring-2"
+      className={`flex items-end rounded-xl p-2 transition-all duration-300 ${isFocused ? 'ring-2' : 'border'}`}
       style={{ 
         backgroundColor: currentTheme.colors.bgSecondary,
-        borderColor: currentTheme.colors.borderColor,
-        color: currentTheme.colors.textPrimary 
+        borderColor: `${currentTheme.colors.borderColor}70`,
+        boxShadow: isFocused ? '0 0 0 2px rgba(255, 255, 255, 0.1)' : 'none',
+        color: currentTheme.colors.textPrimary,
+        ringColor: `${currentTheme.colors.accentPrimary}50`
       }}
     >
       <textarea
@@ -65,22 +68,48 @@ const ChatInput: React.FC<ChatInputProps> = ({
         value={message}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         disabled={disabled}
         rows={1}
-        className="flex-grow resize-none bg-transparent outline-none p-2 min-h-[40px]"
+        className="flex-grow resize-none bg-transparent outline-none p-3 min-h-[40px] modern-input"
         style={{ 
-          color: currentTheme.colors.textPrimary 
+          color: currentTheme.colors.textPrimary,
+          backgroundColor: 'transparent',
+          border: 'none'
         }}
       />
+      
       <Button
         onClick={handleSend}
         disabled={!message.trim() || disabled}
-        className="self-end ml-2"
+        className={`self-end ml-2 rounded-full transition-all duration-300 ${message.trim() && !disabled ? 'button-shimmer' : ''}`}
+        style={{
+          width: '40px',
+          height: '40px',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 'unset',
+          transform: message.trim() && !disabled ? 'scale(1.05)' : 'scale(1)'
+        }}
         size="sm"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        <svg 
+          className={`w-5 h-5 transition-transform duration-300 ${message.trim() && !disabled ? 'scale-110' : 'scale-100'}`} 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" 
+          />
         </svg>
       </Button>
     </div>
