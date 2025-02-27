@@ -60,8 +60,10 @@ class Settings:
             self.allowed_origins = [
                 f"https://chat.{self.base_domain}",
                 f"https://admin.{self.base_domain}",
-                "http://localhost:3000",
-                "http://localhost:8000",
+                "http://localhost:3000",  # Frontend dev server
+                "http://127.0.0.1:3000",  # Alternative frontend address
+                "http://localhost:8000",  # Backend dev server
+                "http://127.0.0.1:8000",  # Alternative backend address
             ]
         else:  # Testing
             self.allowed_origins = ["*"]  # Allow all origins in test mode

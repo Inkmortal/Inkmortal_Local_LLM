@@ -24,8 +24,8 @@ const ProtectedThemeCustomizer = withAuth(ThemeCustomizer);
 const ProtectedSystemStats = withAuth(SystemStats);
 
 // Simple routing mechanism (to be replaced with React Router in a real app)
-type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys' 
-          | 'admin/queue' | 'admin/themes' | 'admin/stats' | 'admin/login' | 'home';
+type Route = 'admin' | 'admin/ip-whitelist' | 'admin/tokens' | 'admin/api-keys'
+          | 'admin/queue' | 'admin/theme' | 'admin/stats' | 'admin/login' | 'home';
 
 // Loader component
 const Loader: React.FC = () => {
@@ -81,7 +81,14 @@ const HomePage: React.FC = () => {
   
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: currentTheme.colors.bgPrimary, color: currentTheme.colors.textPrimary }}>
-      <div className="fixed top-4 right-4 z-10">
+      <div className="fixed top-4 right-4 z-10 flex items-center space-x-3">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => window.navigateTo('/admin/login')}
+        >
+          Admin
+        </Button>
         <ThemeSelector />
       </div>
       
@@ -238,7 +245,7 @@ function App() {
         return <ProtectedAPIKeys />;
       case 'admin/queue':
         return <ProtectedQueueMonitor />;
-      case 'admin/themes':
+      case 'admin/theme':
         return <ProtectedThemeCustomizer />;
       case 'admin/stats':
         return <ProtectedSystemStats />;

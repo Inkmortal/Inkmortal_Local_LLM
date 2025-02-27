@@ -38,7 +38,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
 
   const navigateToThemeCustomizer = (e: React.MouseEvent) => {
     e.preventDefault();
-    window.navigateTo('/admin/themes');
+    window.navigateTo('/admin/theme');
     setIsOpen(false);
   };
 

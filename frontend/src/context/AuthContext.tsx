@@ -1,9 +1,11 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { fetchApi, checkBackendConnection } from '../config/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   username: string | null;
   loading: boolean;
+  connectionError: string | null;
   login: (token: string, username: string) => void;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
@@ -13,6 +15,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   username: null,
   loading: true,
+  connectionError: null,
   login: () => {},
   logout: () => {},
   checkAuth: () => Promise.resolve(false),
@@ -22,10 +25,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check authentication on component mount
-    checkAuth();
+    // Check backend connection and authentication on component mount
+    checkBackendConnection()
+      .then(connected => {
+        if (connected) {
+          checkAuth();
+        } else {
+          setConnectionError("Cannot connect to the backend server. Please ensure it's running on port 8000.");
+          setLoading(false);
+        }
+      });
   }, []);
 
   const login = (token: string, username: string) => {
@@ -42,11 +54,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUsername(null);
     
     // Redirect to login page
-    window.navigateTo('/admin/login');
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('/admin/login');
+    } else {
+      window.location.href = '/admin/login';
+    }
   };
 
   const checkAuth = async (): Promise<boolean> => {
     setLoading(true);
+    setConnectionError(null);
+    
     try {
       const token = localStorage.getItem('adminToken');
       const storedUsername = localStorage.getItem('adminUsername');
@@ -60,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Verify token with backend
       try {
-        const response = await fetch('/auth/users/me', {
+        const response = await fetchApi('/auth/users/me', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -81,17 +99,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         // Network error or server not available
-        // For now, assume token is valid to allow offline development
-        console.warn('Could not verify token with server:', error);
-        setIsAuthenticated(!!token);
-        setUsername(storedUsername);
-        setLoading(false);
-        return !!token;
+          console.error('Could not verify token with server:', error);
+          setConnectionError("Cannot connect to backend server. Please check if it's running.");
+          
+          // Allow offline usage with stored token in development environments
+          // Since we don't have access to process.env, we'll use a simpler approach
+          const isDevelopment = window.location.hostname === 'localhost';
+          if (isDevelopment) {
+            console.warn('DEV MODE: Allowing offline authentication with stored token');
+            setIsAuthenticated(!!token);
+            setUsername(storedUsername);
+          } else {
+            setIsAuthenticated(false);
+          }
+          
+          setLoading(false);
+          return !!token && isDevelopment;
       }
     } catch (error) {
       console.error('Auth check error:', error);
       setIsAuthenticated(false);
       setUsername(null);
+      setConnectionError("Authentication check failed due to an unexpected error.");
       setLoading(false);
       return false;
     }
@@ -103,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
         username,
         loading,
+        connectionError,
         login,
         logout,
         checkAuth,

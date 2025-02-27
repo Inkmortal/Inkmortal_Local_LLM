@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { fetchApi, checkBackendConnection } from '../../config/api';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
-import crypto from 'crypto-js';
 
 type LoginMode = 'login' | 'setup';
 
-// The expected passphrase hash (SHA-256 of "i will defy the heavens")
-const EXPECTED_PASSPHRASE_HASH = "8c1ba38c3d7351b7a56a48a9bb14bf754d2099e069c07c27ddc0d35e8d35e501";
+// The expected passphrase ("i will defy the heavens")
+const EXPECTED_PASSPHRASE = "i will defy the heavens";
 
 const AdminLogin: React.FC = () => {
   const { currentTheme } = useTheme();
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -20,55 +22,74 @@ const AdminLogin: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   
   // Secret question states
   const [secretAnswer, setSecretAnswer] = useState('');
   const [showSecretQuestion, setShowSecretQuestion] = useState(false);
   const [setupTokenFetched, setSetupTokenFetched] = useState('');
 
-  // Check if admin setup is required on component mount
+  // Check backend connection and admin setup status on component mount
   useEffect(() => {
-    const checkSetupStatus = async () => {
+    const initialize = async () => {
+      // First check if we can connect to the backend
       try {
-        console.log('Checking admin setup status...');
-        const response = await fetch('/auth/admin/setup-status');
+        const connected = await checkBackendConnection();
+        if (!connected) {
+          setConnectionStatus('error');
+          setError('Cannot connect to the backend server at http://localhost:8000. Please make sure it is running.');
+          return;
+        }
         
-        console.log('Response status:', response.status);
+        setConnectionStatus('connected');
         
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Admin exists?', data.admin_exists);
+        // Now check if admin setup is required
+        try {
+          console.log('Checking admin setup status...');
+          const response = await fetchApi('/auth/admin/setup-status');
           
-          if (!data.admin_exists) {
-            console.log('No admin exists, showing setup form');
-            setNeedsSetup(true);
-            setMode('setup');
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Admin exists?', data.admin_exists);
+            
+            if (!data.admin_exists) {
+              console.log('No admin exists, showing setup form');
+              setNeedsSetup(true);
+              setMode('setup');
+              // Automatically show secret question
+              setShowSecretQuestion(true);
+            } else {
+              console.log('Admin exists, showing login form');
+              setMode('login');
+            }
           } else {
-            console.log('Admin exists, showing login form');
+            const errorText = await response.text();
+            console.error('Error checking admin status:', errorText);
+            setError('Error checking admin setup status. Please try again later.');
           }
-        } else {
-          const errorText = await response.text();
-          console.error('Error checking admin status:', errorText);
-          setError('Error checking admin status: ' + errorText);
+        } catch (error) {
+          console.error('Error during admin status check:', error);
+          setError('Error checking admin setup status. Please try again later.');
         }
       } catch (error) {
-        console.error('Network error checking admin status:', error);
-        setError('Unable to connect to server. Please check if the backend is running.');
+        console.error('Connection check failed:', error);
+        setConnectionStatus('error');
+        setError('Cannot connect to the backend server. Please ensure it is running on port 8000.');
+      } finally {
+        setIsLoading(false);
       }
     };
     
-    checkSetupStatus();
+    setIsLoading(true);
+    initialize();
   }, []);
 
   // Handle secret question verification
   const verifySecret = () => {
     console.log('Verifying secret answer...');
-    // Hash the answer with SHA-256
-    const inputHash = crypto.SHA256(secretAnswer).toString();
-    console.log('Answer hash:', inputHash);
     
-    // Compare with expected hash
-    if (inputHash === EXPECTED_PASSPHRASE_HASH) {
+    // Compare with expected passphrase directly
+    if (secretAnswer.trim().toLowerCase() === EXPECTED_PASSPHRASE.toLowerCase()) {
       console.log('Secret verified, fetching token');
       fetchSetupToken();
     } else {
@@ -84,8 +105,7 @@ const AdminLogin: React.FC = () => {
       setIsLoading(true);
       console.log('Fetching setup token...');
       
-      const response = await fetch('/auth/admin/fetch-setup-token');
-      console.log('Token fetch response status:', response.status);
+      const response = await fetchApi('/auth/admin/fetch-setup-token');
       
       const responseText = await response.text();
       console.log('Token response text:', responseText);
@@ -130,7 +150,7 @@ const AdminLogin: React.FC = () => {
       formData.append('password', password);
       
       console.log('Sending login request...');
-      const response = await fetch('/auth/admin/login', {
+      const response = await fetchApi('/auth/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -147,9 +167,8 @@ const AdminLogin: React.FC = () => {
           const data = JSON.parse(responseText);
           console.log('Login successful, token received');
           
-          // Store token and username in localStorage
-          localStorage.setItem('adminToken', data.access_token);
-          localStorage.setItem('adminUsername', data.username);
+          // Use AuthContext login function
+          login(data.access_token, data.username);
           
           // Redirect to admin dashboard
           window.navigateTo('/admin');
@@ -166,8 +185,9 @@ const AdminLogin: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Network error during login:', error);
-      setError('Network error during login. Please check your connection.');
+      const errorMessage = error instanceof Error ? error.message : 'Network error';
+      console.error('Error during login:', errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +203,7 @@ const AdminLogin: React.FC = () => {
     
     try {
       console.log('Sending admin setup request...');
-      const response = await fetch('/auth/admin/setup', {
+      const response = await fetchApi('/auth/admin/setup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -205,9 +225,8 @@ const AdminLogin: React.FC = () => {
           const data = JSON.parse(responseText);
           console.log('Admin setup successful, token received');
           
-          // Store token and username in localStorage
-          localStorage.setItem('adminToken', data.access_token);
-          localStorage.setItem('adminUsername', data.username);
+          // Use AuthContext login function
+          login(data.access_token, data.username);
           
           // Redirect to admin dashboard
           window.navigateTo('/admin');
@@ -224,8 +243,9 @@ const AdminLogin: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Network error during admin setup:', error);
-      setError('Network error during admin setup. Please check your connection.');
+      const errorMessage = error instanceof Error ? error.message : 'Network error';
+      console.error('Error during admin setup:', errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
