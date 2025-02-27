@@ -10,6 +10,7 @@ import QueueMonitor from './pages/admin/QueueMonitor';
 import ThemeCustomizer from './pages/admin/ThemeCustomizer';
 import SystemStats from './pages/admin/SystemStats';
 import AdminLogin from './pages/admin/Login';
+import ChatPage from './pages/chat/ChatPage';
 import Card from './components/ui/Card';
 import Button from './components/ui/Button';
 import ThemeSelector from './components/ui/ThemeSelector';
@@ -35,6 +36,7 @@ type Route =
   | 'admin/stats' 
   | 'admin/login' 
   | 'themes'
+  | 'chat'
   | 'home';
 
 // Loader component
@@ -95,6 +97,13 @@ const HomePage: React.FC = () => {
         <Button 
           size="sm"
           variant="outline"
+          onClick={() => window.navigateTo('/chat')}
+        >
+          Chat
+        </Button>
+        <Button 
+          size="sm"
+          variant="outline"
           onClick={() => window.navigateTo('/admin/login')}
         >
           Admin
@@ -115,6 +124,14 @@ const HomePage: React.FC = () => {
         >
           Your personal AI tutor powered by Llama 3.3 70B, designed to assist with educational content
         </p>
+        <div className="mt-8">
+          <Button 
+            size="lg"
+            onClick={() => window.navigateTo('/chat')}
+          >
+            Start Chatting
+          </Button>
+        </div>
       </header>
       
       <main className="flex-grow container mx-auto px-4 pb-16">
@@ -254,6 +271,8 @@ function App() {
         return <AdminLogin />;
       case 'themes':
         return <ThemeGallery />;
+      case 'chat':
+        return <ChatPage />;
       case 'home':
       default:
         return <HomePage />;
