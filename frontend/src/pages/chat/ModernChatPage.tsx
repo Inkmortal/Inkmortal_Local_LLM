@@ -39,6 +39,7 @@ const ModernChatPage: React.FC = () => {
   // Chat history state
   const [conversations, setConversations] = useState<{id: string, title: string, date: Date}[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<{content: string, type: 'code' | 'math' | 'image'} | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
   
   // Refs for scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -313,6 +314,32 @@ const ModernChatPage: React.FC = () => {
     setSelectedFile(file);
   };
 
+  // Toggle function for the chat info sidebar
+  const toggleSidebar = () => {
+    setShowSidebar(!showSidebar);
+  };
+
+  const handleInsertCode = () => {
+    // For demo, add a code snippet template to the input
+    const codeSnippet = `\`\`\`javascript
+function example() {
+  // Your code here
+  return true;
+}
+\`\`\``;
+    
+    // In a real implementation, this would be inserted at cursor position in the ChatInput
+    console.log("Insert code:", codeSnippet);
+  };
+
+  const handleInsertMath = () => {
+    // For demo, add a LaTeX math template to the input
+    const mathSnippet = `$$\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$`;
+    
+    // In a real implementation, this would be inserted at cursor position in the ChatInput
+    console.log("Insert math:", mathSnippet);
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
       {/* Modern Glass Header - Reduced glow effect */}
@@ -375,7 +402,38 @@ const ModernChatPage: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          {/* Removed redundant buttons */}
+          {/* New conversation button */}
+          <Button 
+            size="sm"
+            variant="outline"
+            className="text-sm rounded-lg"
+            style={{
+              color: currentTheme.colors.textSecondary,
+              borderColor: `${currentTheme.colors.borderColor}60`,
+            }}
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            New Chat
+          </Button>
+
+          {/* Chat info button */}
+          <Button 
+            size="sm"
+            variant="ghost"
+            className="text-sm rounded-lg"
+            style={{
+              color: showSidebar ? currentTheme.colors.accentPrimary : currentTheme.colors.textSecondary,
+              backgroundColor: showSidebar ? `${currentTheme.colors.accentPrimary}10` : 'transparent',
+            }}
+            onClick={toggleSidebar}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </Button>
+          
           {isAuthenticated && (
             <Button 
               size="sm"
@@ -425,8 +483,8 @@ const ModernChatPage: React.FC = () => {
           />
         </div>
         
-        {/* Main container - full width */}
-        <div className="flex flex-grow w-full px-4 md:px-6 py-4 relative z-1">
+        {/* Main container - with reasonable max width */}
+        <div className="flex flex-grow max-w-7xl mx-auto px-4 md:px-6 py-4 relative z-1">
           {/* Left Sidebar - Conversation History */}
           <aside 
             className="hidden lg:flex flex-col w-64 mr-8 rounded-xl overflow-hidden shrink-0 animate-fade-in h-full transition-all"
@@ -588,106 +646,7 @@ const ModernChatPage: React.FC = () => {
               onStopGeneration={handleStopGeneration}
               isGenerating={isGenerating}
             />
-          
-            {/* Artifact Display Panel - will show when an artifact is selected */}
-            {selectedArtifact && (
-              <div 
-                className="p-5 border-t artifact-display"
-                style={{ 
-                  borderColor: `${currentTheme.colors.borderColor}30`,
-                  background: `linear-gradient(to bottom, ${currentTheme.colors.bgSecondary}E6, ${currentTheme.colors.bgTertiary}E6)`,
-                  backdropFilter: 'blur(10px)',
-                  boxShadow: `0 -4px 20px rgba(0, 0, 0, 0.06)`
-                }}
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <h3 
-                    className="text-sm font-medium flex items-center"
-                    style={{ 
-                      color: selectedArtifact.type === 'code' 
-                        ? currentTheme.colors.accentPrimary 
-                        : selectedArtifact.type === 'math' 
-                          ? currentTheme.colors.accentSecondary 
-                          : currentTheme.colors.accentTertiary
-                    }}
-                  >
-                    {selectedArtifact.type === 'code' && (
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                      </svg>
-                    )}
-                    {selectedArtifact.type === 'math' && (
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
-                      </svg>
-                    )}
-                    {selectedArtifact.type === 'image' && (
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    )}
-                    {selectedArtifact.type === 'code' ? 'Code Snippet' : 
-                     selectedArtifact.type === 'math' ? 'Mathematical Expression' : 'Image'}
-                  </h3>
-                  
-                  <div className="flex space-x-2">
-                    <Button 
-                      size="xs" 
-                      variant="outline"
-                      className="text-xs"
-                      style={{
-                        borderColor: currentTheme.colors.borderColor,
-                        color: currentTheme.colors.textSecondary
-                      }}
-                      onClick={() => setSelectedArtifact(null)}
-                    >
-                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Close
-                    </Button>
-                  </div>
-                </div>
-                
-                <div 
-                  className="rounded-lg overflow-hidden"
-                  style={{ 
-                    boxShadow: `0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
-                  }}
-                >
-                  {selectedArtifact.type === 'code' && (
-                    <CodeBlock 
-                      code={selectedArtifact.content}
-                      language="javascript" 
-                    />
-                  )}
-                  {selectedArtifact.type === 'math' && (
-                    <div 
-                      className="p-5 text-center"
-                      style={{ 
-                        backgroundColor: `${currentTheme.colors.bgPrimary}E6`,
-                      }}
-                    >
-                      <MathRenderer 
-                        latex={selectedArtifact.content}
-                        display={true}
-                      />
-                    </div>
-                  )}
-                  {selectedArtifact.type === 'image' && (
-                    <div className="p-4 text-center" style={{ backgroundColor: `${currentTheme.colors.bgPrimary}E6` }}>
-                      <img
-                        src={selectedArtifact.content}
-                        alt="Shared content"
-                        className="max-w-full mx-auto rounded-lg"
-                        style={{ maxHeight: '300px' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          
+            
             {/* File upload area */}
             {showFileUpload && (
               <div 
@@ -705,7 +664,7 @@ const ModernChatPage: React.FC = () => {
               </div>
             )}
             
-            {/* Action bar - simplified */}
+            {/* Action bar - with useful buttons */}
             <div 
               className="px-4 py-2 border-t flex items-center justify-between"
               style={{ 
@@ -715,6 +674,7 @@ const ModernChatPage: React.FC = () => {
               }}
             >
               <div className="flex items-center gap-1.5">
+                {/* File Upload Button */}
                 <Button
                   size="xs"
                   variant={showFileUpload ? "default" : "ghost"}
@@ -732,6 +692,40 @@ const ModernChatPage: React.FC = () => {
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </Button>
+                
+                {/* Code Snippet Button */}
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="rounded-full p-1.5 transition-all"
+                  style={{
+                    color: currentTheme.colors.textSecondary,
+                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+                  }}
+                  title="Insert code snippet"
+                  onClick={handleInsertCode}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                </Button>
+                
+                {/* Math Expression Button */}
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="rounded-full p-1.5 transition-all"
+                  style={{
+                    color: currentTheme.colors.textSecondary,
+                    backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+                  }}
+                  title="Insert math expression"
+                  onClick={handleInsertMath}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
                   </svg>
                 </Button>
                 
@@ -790,14 +784,191 @@ const ModernChatPage: React.FC = () => {
               </div>
             </div>
             
-            {/* Chat input */}
-            <ChatInput 
-              onSend={handleSendMessage} 
-              disabled={loading}
-              placeholder="Ask me anything..."
-              isGenerating={isGenerating}
-            />
+            {/* Chat input - styled like Claude */}
+            <div className="px-4 py-3 border-t relative"
+              style={{
+                borderColor: `${currentTheme.colors.borderColor}30`,
+                background: `linear-gradient(to top, ${currentTheme.colors.bgSecondary}80, ${currentTheme.colors.bgPrimary}90)`,
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
+                style={{
+                  boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
+                  border: `1px solid ${currentTheme.colors.borderColor}40`,
+                }}
+              >
+                <ChatInput 
+                  onSend={handleSendMessage} 
+                  disabled={loading}
+                  placeholder="Message SeaDragon..."
+                  isGenerating={isGenerating}
+                />
+              </div>
+            </div>
           </div>
+          
+          {/* Right Sidebar - Chat Info Panel (conditionally shown) */}
+          {showSidebar && (
+            <aside 
+              className="w-72 ml-8 rounded-xl overflow-hidden shrink-0 animate-fade-in h-full transition-all hidden lg:flex flex-col"
+              style={{ 
+                background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
+                backdropFilter: 'blur(10px)',
+                boxShadow: `0 4px 20px rgba(0, 0, 0, 0.07), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
+                borderLeft: `1px solid ${currentTheme.colors.borderColor}30`,
+                transition: 'all 0.3s ease',
+              }}
+            >
+              <div className="flex flex-col h-full">
+                <div 
+                  className="px-4 py-3 border-b"
+                  style={{ 
+                    borderColor: `${currentTheme.colors.borderColor}40`,
+                    background: `linear-gradient(90deg, ${currentTheme.colors.accentSecondary}10, transparent)`,
+                  }}
+                >
+                  <h3 
+                    className="text-base font-medium flex items-center"
+                    style={{ color: currentTheme.colors.textPrimary }}
+                  >
+                    <svg className="w-4 h-4 mr-2 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Chat Information
+                  </h3>
+                </div>
+                
+                <div className="p-4 overflow-y-auto modern-scrollbar flex-grow">
+                  {/* Uploaded Files Section */}
+                  <div className="mb-6">
+                    <h4 
+                      className="text-sm font-medium mb-2 flex items-center"
+                      style={{ color: currentTheme.colors.textPrimary }}
+                    >
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Uploaded Files
+                    </h4>
+                    
+                    {selectedFile ? (
+                      <div 
+                        className="p-3 rounded-xl mb-2 flex items-center"
+                        style={{ 
+                          backgroundColor: `${currentTheme.colors.bgPrimary}80`,
+                          border: `1px solid ${currentTheme.colors.borderColor}30`
+                        }}
+                      >
+                        <svg className="w-6 h-6 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                          style={{ color: currentTheme.colors.accentTertiary }}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <div className="overflow-hidden flex-grow">
+                          <div className="text-sm font-medium truncate" style={{ color: currentTheme.colors.textPrimary }}>
+                            {selectedFile.name}
+                          </div>
+                          <div className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                            {(selectedFile.size / 1024).toFixed(1)} KB
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className="text-sm italic"
+                        style={{ color: currentTheme.colors.textMuted }}
+                      >
+                        No files uploaded in this chat
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Generated Artifacts Section */}
+                  <div>
+                    <h4 
+                      className="text-sm font-medium mb-2 flex items-center"
+                      style={{ color: currentTheme.colors.textPrimary }}
+                    >
+                      <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                      </svg>
+                      Generated Artifacts
+                    </h4>
+                    
+                    <div className="space-y-2">
+                      {/* Code artifact example */}
+                      <div 
+                        className="p-3 rounded-xl cursor-pointer hover:scale-[1.01] transition-all"
+                        style={{ 
+                          backgroundColor: `${currentTheme.colors.bgPrimary}80`,
+                          border: `1px solid ${currentTheme.colors.borderColor}30`
+                        }}
+                        onClick={() => setSelectedArtifact({
+                          type: 'code',
+                          content: 'function fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n-1) + fibonacci(n-2);\n}\n\nconsole.log(fibonacci(10));'
+                        })}
+                      >
+                        <div className="flex items-center mb-2">
+                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                            style={{ color: currentTheme.colors.accentPrimary }}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                          </svg>
+                          <span className="text-sm font-medium" style={{ color: currentTheme.colors.textPrimary }}>Fibonacci Function</span>
+                        </div>
+                        <div 
+                          className="text-xs rounded-lg p-2 overflow-hidden max-h-20"
+                          style={{ 
+                            backgroundColor: `${currentTheme.colors.bgTertiary}50`,
+                            color: currentTheme.colors.textSecondary,
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          function fibonacci(n) {<br />
+                          &nbsp;&nbsp;if (n &lt;= 1) return n;<br />
+                          &nbsp;&nbsp;return fibonacci(n-1) + ...<br />
+                        </div>
+                      </div>
+                      
+                      {/* Math artifact example */}
+                      <div 
+                        className="p-3 rounded-xl cursor-pointer hover:scale-[1.01] transition-all"
+                        style={{ 
+                          backgroundColor: `${currentTheme.colors.bgPrimary}80`,
+                          border: `1px solid ${currentTheme.colors.borderColor}30`
+                        }}
+                        onClick={() => setSelectedArtifact({
+                          type: 'math',
+                          content: 'f(x) = \\int_{-\\infty}^{\\infty}\\hat f(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi'
+                        })}
+                      >
+                        <div className="flex items-center mb-2">
+                          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                            style={{ color: currentTheme.colors.accentSecondary }}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
+                          </svg>
+                          <span className="text-sm font-medium" style={{ color: currentTheme.colors.textPrimary }}>Fourier Transform</span>
+                        </div>
+                        <div 
+                          className="text-xs rounded-lg p-2 flex items-center justify-center"
+                          style={{ 
+                            backgroundColor: `${currentTheme.colors.bgTertiary}50`,
+                            color: currentTheme.colors.textSecondary,
+                            fontFamily: 'serif',
+                            fontStyle: 'italic'
+                          }}
+                        >
+                          f(x) = ∫ f̂(ξ)e²ᵖⁱᵏˣdξ
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          )}
         </div>
       </div>
     </div>
