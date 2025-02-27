@@ -22,6 +22,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const localInputRef = useRef<HTMLTextAreaElement>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const focusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   
   // Use local ref if no ref is provided
   const textareaRef = inputRef as React.RefObject<HTMLTextAreaElement> || localInputRef;
@@ -87,12 +88,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [isGenerating, focusTextarea]);
   
-  // Handle message sending
-  const handleSend = useCallback(() => {
+  // Handle form submission
+  const handleSubmit = useCallback((e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    
     if (message.trim() && !disabled) {
-      // Store current selection state and height
-      const selectionStart = textareaRef.current?.selectionStart || 0;
-      
       // Send message
       onSend(message);
       
@@ -135,7 +137,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSubmit();
     } else if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       const textarea = textareaRef.current;
@@ -156,7 +158,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         }, 0);
       }
     }
-  }, [handleSend, message, textareaRef]);
+  }, [handleSubmit, message, textareaRef]);
 
   // Handle textarea height adjustment
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -184,7 +186,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
     };
     
-    const container = textareaRef.current?.parentElement?.parentElement;
+    const container = formRef.current;
     if (container) {
       container.addEventListener('focusout', handleContainerBlur);
     }
@@ -202,130 +204,107 @@ const ChatInput: React.FC<ChatInputProps> = ({
         clearInterval(focusIntervalRef.current);
       }
     };
-  }, [focusTextarea, textareaRef]);
+  }, [focusTextarea]);
 
   return (
-    <div className="relative">
-      <div 
-        className="flex items-center rounded-xl overflow-hidden transition-all hover:shadow-md"
-        style={{ 
-          border: `1px solid ${currentTheme.colors.borderColor}80`,
-          backgroundColor: currentTheme.colors.bgPrimary,
-          boxShadow: `0 4px 12px rgba(0, 0, 0, 0.1)`,
-          position: 'relative',
-          backdropFilter: 'blur(8px)'
-        }}
+    <div className="relative w-full" style={{ maxWidth: '800px', margin: '0 auto' }}>
+      {/* Form wrapper to match Claude.ai interface */}
+      <form 
+        ref={formRef}
+        onSubmit={handleSubmit}
+        className="relative"
       >
-        {/* Growing pill indicator when streaming */}
+        {/* Loading indicator - matches Claude.ai style */}
         {isGenerating && (
-          <div 
-            className="absolute top-0 left-0 h-1 bg-gradient-to-r" 
-            style={{
-              from: currentTheme.colors.accentPrimary,
-              to: currentTheme.colors.accentSecondary,
-              width: '100%',
-              animation: 'pulse 2s infinite ease-in-out'
-            }}
-          />
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full">
+            <div className="text-xs opacity-60 bg-opacity-80 px-2 py-1 rounded-t-md" style={{ 
+              color: currentTheme.colors.textSecondary, 
+              backgroundColor: `${currentTheme.colors.bgSecondary}80` 
+            }}>
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                <span>AI is thinking...</span>
+              </div>
+            </div>
+          </div>
         )}
         
-        <textarea
-          ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
-          className="flex-grow py-3 px-4 outline-none resize-none min-h-[52px]"
-          placeholder={placeholder}
-          value={message}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onBlur={(e) => {
-            // If blur is not moving to send button, refocus
-            if (!e.relatedTarget || e.relatedTarget.tagName !== 'BUTTON') {
-              setTimeout(focusTextarea, 0);
-            }
-          }}
-          onFocus={() => {
-            console.log('Textarea focused');
-          }}
-          disabled={disabled}
-          rows={1}
-          spellCheck={true}
-          autoComplete="off"
-          autoFocus={true}
-          style={{
-            backgroundColor: 'transparent',
-            color: currentTheme.colors.textPrimary,
-            overflowY: 'hidden',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            fontSize: '1rem',
-            lineHeight: '1.5'
-          }}
-        />
-        
-        <div className="mr-2 flex items-center">
-          {message.trim() && (
-            <Button
-              onClick={(e) => {
-                e.preventDefault(); 
-                if (textareaRef.current) {
-                  setMessage('');
-                  textareaRef.current.style.height = '52px';
-                  textareaRef.current.focus();
-                }
-              }}
-              variant="ghost"
-              className="mr-1 hover:bg-transparent p-2 opacity-60 hover:opacity-100 transition-all"
-              style={{
-                color: currentTheme.colors.textMuted,
-              }}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </Button>
-          )}
-          
-          <Button
-            onClick={(e) => {
-              e.preventDefault();
-              handleSend();
-              // Focus management from button click
-              setTimeout(focusTextarea, 0);
-            }}
-            disabled={disabled || !message.trim()}
-            variant="default"
-            className="transition-all hover:scale-105 self-end mb-2 mr-1 my-1"
-            style={{
-              background: message.trim() 
-                ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 
-                : currentTheme.colors.bgTertiary,
-              color: message.trim() ? '#fff' : currentTheme.colors.textMuted,
-              opacity: disabled || !message.trim() ? 0.6 : 1,
-              padding: message.trim() ? '0.7rem' : '0.6rem',
-              borderRadius: '50%', // Make circular send button
-              boxShadow: message.trim() ? `0 2px 10px ${currentTheme.colors.accentPrimary}40` : 'none',
-              width: message.trim() ? '40px' : '36px',
-              height: message.trim() ? '40px' : '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 'unset'
+        {/* Main input container - matches Claude.ai style */}
+        <div className="flex flex-col">
+          <div 
+            className="border rounded-lg overflow-hidden transition-all bg-opacity-90"
+            style={{ 
+              borderColor: `${currentTheme.colors.borderColor}80`,
+              backgroundColor: currentTheme.colors.bgSecondary,
+              boxShadow: `0 2px 6px rgba(0, 0, 0, 0.1)`,
             }}
           >
-            <span className="flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </span>
-          </Button>
+            {/* Textarea wrapper */}
+            <div className="flex items-center px-3 py-2">
+              <textarea
+                ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
+                className="flex-grow outline-none resize-none min-h-[24px] bg-transparent placeholder-opacity-60 mx-1"
+                placeholder={placeholder}
+                value={message}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                onBlur={(e) => {
+                  // Only refocus if not clicking on a button
+                  if (!e.relatedTarget || e.relatedTarget.tagName !== 'BUTTON') {
+                    setTimeout(focusTextarea, 0);
+                  }
+                }}
+                disabled={disabled}
+                rows={1}
+                spellCheck={true}
+                autoComplete="off"
+                autoFocus={true}
+                style={{
+                  color: currentTheme.colors.textPrimary,
+                  overflowY: 'hidden',
+                  fontFamily: "'SF Pro Text', system-ui, sans-serif",
+                  fontSize: '0.95rem',
+                  lineHeight: '1.5',
+                }}
+              />
+            </div>
+            
+            {/* Button bar - matches Claude.ai style */}
+            <div 
+              className="flex items-center justify-between px-3 py-2 border-t"
+              style={{ 
+                borderColor: `${currentTheme.colors.borderColor}40`
+              }}
+            >
+              <div className="text-xs opacity-70" style={{ color: currentTheme.colors.textSecondary }}>
+                <span>Press Enter to send, Shift+Enter for new line</span>
+              </div>
+              
+              <button
+                type="submit"
+                disabled={disabled || !message.trim()}
+                className="px-4 py-1 rounded-md text-sm font-medium transition-all"
+                style={{
+                  backgroundColor: message.trim() && !disabled
+                    ? currentTheme.colors.accentPrimary
+                    : `${currentTheme.colors.bgTertiary}80`,
+                  color: message.trim() && !disabled
+                    ? '#fff'
+                    : currentTheme.colors.textMuted,
+                  opacity: disabled ? 0.5 : 1,
+                  cursor: message.trim() && !disabled ? 'pointer' : 'default'
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSubmit();
+                }}
+              >
+                Send
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      
-      {/* Optional keyboard shortcut hint */}
-      <div 
-        className="text-xs mt-2 text-center opacity-60"
-        style={{ color: currentTheme.colors.textSecondary }}
-      >
-        Press Enter to send, Shift+Enter for new line
-      </div>
+      </form>
     </div>
   );
 };
