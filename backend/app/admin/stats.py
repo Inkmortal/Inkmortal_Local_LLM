@@ -4,6 +4,7 @@ Admin statistics module for dashboard data
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
+from datetime import datetime
 import time
 
 try:
@@ -13,7 +14,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 from ..db import get_db
-from ..auth.models import APIKey, RegistrationToken, User
+from ..auth.models import APIKey, RegistrationToken, User, ActivityLog
 from ..config import settings
 from ..queue import QueueManagerInterface, get_queue_manager
 
@@ -47,12 +48,12 @@ async def get_dashboard_stats(
     # Get Ollama status from health check
     ollama_status = await get_ollama_status(queue_manager)
     
-    # Placeholder for recent activities (would come from a database in production)
-    recent_activities = get_mock_activities(current_user.username)
+    # Get real activity logs from database
+    recent_activities = get_recent_activities(db)
     
     return {
         "dashboard_cards": get_dashboard_cards(
-            ip_count, token_count, active_token_count, 
+            ip_count, token_count, active_token_count,
             api_key_count, queue_count, processing_count
         ),
         "system_stats": {
@@ -147,12 +148,34 @@ async def get_ollama_status(queue_manager: QueueManagerInterface) -> Dict[str, A
         "version": "0.2.1"  # This would be dynamically retrieved in production
     }
 
-def get_mock_activities(username: str) -> List[Dict[str, Any]]:
-    """Generate mock recent activities (would come from database in production)"""
-    return [
-        {"id": 1, "type": "api-key", "action": "created", "user": username, "target": "Development App", "time": "10 minutes ago"},
-        {"id": 2, "type": "ip", "action": "added", "user": username, "target": "192.168.1.105", "time": "25 minutes ago"},
-        {"id": 3, "type": "token", "action": "generated", "user": username, "target": "New User Invite", "time": "1 hour ago"},
-        {"id": 4, "type": "queue", "action": "cleared", "user": "System", "target": "Priority 3 Queue", "time": "2 hours ago"},
-        {"id": 5, "type": "api-key", "action": "revoked", "user": username, "target": "Test App", "time": "3 hours ago"}
-    ]
+def get_recent_activities(db: Session) -> List[Dict[str, Any]]:
+    """Get recent activities from the database"""
+    # Get most recent activity logs (limit to 10)
+    activities = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(10).all()
+    
+    result = []
+    for activity in activities:
+        # Calculate relative time
+        time_diff = datetime.utcnow() - activity.timestamp
+        
+        if time_diff.days > 0:
+            time_str = f"{time_diff.days} days ago"
+        elif time_diff.seconds >= 3600:
+            hours = time_diff.seconds // 3600
+            time_str = f"{hours} hour{'s' if hours > 1 else ''} ago"
+        elif time_diff.seconds >= 60:
+            minutes = time_diff.seconds // 60
+            time_str = f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        else:
+            time_str = "Just now"
+        
+        result.append({
+            "id": activity.id,
+            "type": activity.resource_type,
+            "action": activity.action,
+            "user": activity.username,
+            "target": activity.resource_name,
+            "time": time_str
+        })
+    
+    return result

@@ -8,6 +8,7 @@ import string
 import logging
 
 from .models import User, RegistrationToken, APIKey, SetupToken
+from .activities import log_activity
 from .utils import (
     get_password_hash, 
     verify_password, 
@@ -347,6 +348,15 @@ async def create_registration_token(
     db.commit()
     db.refresh(registration_token)
     
+    # Log the activity
+    await log_activity(
+        db,
+        current_user.username,
+        "generated",
+        "token",
+        description or f"Registration Token {token[:8]}"
+    )
+    
     return {
         "token": token,
         "description": description,
@@ -407,6 +417,15 @@ async def create_api_key(
     db.commit()
     db.refresh(api_key)
     
+    # Log the activity
+    await log_activity(
+        db,
+        current_user.username,
+        "created",
+        "api-key",
+        description or f"API Key {key[:8]}"
+    )
+    
     return {
         "key": key,
         "description": description,
@@ -450,7 +469,19 @@ async def delete_api_key(
             detail="API key not found"
         )
     
+    # Get key description before deletion for logging
+    key_description = key.description or f"API Key {key.key[:8]}"
+    
     db.delete(key)
     db.commit()
+    
+    # Log the activity
+    await log_activity(
+        db,
+        current_user.username,
+        "deleted",
+        "api-key",
+        key_description
+    )
     
     return {"message": "API key deleted successfully"}

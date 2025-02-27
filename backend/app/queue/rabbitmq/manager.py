@@ -209,12 +209,15 @@ class RabbitMQManager(QueueManagerInterface):
         await self.ensure_connected()
         sizes = {}
         for priority, queue_name in self.queue_handler.queue_names.items():
-            queue = await self.queue_handler.get_queue(queue_name)
-            if queue:
-                # Use queue info to get current size
-                queue_info = await self.queue_handler.channel.declare_queue(queue_name, durable=True)
+            try:
+                # Use passive declaration to get queue info without changing parameters
+                queue_info = await self.queue_handler.channel.declare_queue(
+                    queue_name,
+                    passive=True  # Only check if queue exists, don't try to create/modify
+                )
                 sizes[priority] = queue_info.message_count
-            else:
+            except Exception as e:
+                logger.warning(f"Error getting queue size for {queue_name}: {str(e)}")
                 sizes[priority] = 0
         return sizes
     
