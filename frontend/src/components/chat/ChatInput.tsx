@@ -7,18 +7,21 @@ interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
   inputRef?: React.RefObject<HTMLInputElement>;
+  isGenerating?: boolean; // Add prop to know if response is streaming
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSend, 
   disabled = false, 
   placeholder = "Type a message...",
-  inputRef
+  inputRef,
+  isGenerating = false
 }) => {
   const { currentTheme } = useTheme();
   const [message, setMessage] = useState<string>('');
   const localInputRef = useRef<HTMLTextAreaElement>(null);
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const focusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use local ref if no ref is provided
   const textareaRef = inputRef as React.RefObject<HTMLTextAreaElement> || localInputRef;
@@ -50,6 +53,39 @@ const ChatInput: React.FC<ChatInputProps> = ({
       clearTimeout(t3);
     };
   }, [focusTextarea]);
+  
+  // Set up continuous focus attempts when generating response
+  useEffect(() => {
+    // When response generation ends, focus the textarea
+    if (!isGenerating) {
+      // Clear any existing interval
+      if (focusIntervalRef.current) {
+        clearInterval(focusIntervalRef.current);
+        focusIntervalRef.current = null;
+      }
+      
+      // Attempt focus after response completes
+      const t1 = setTimeout(focusTextarea, 0);
+      const t2 = setTimeout(focusTextarea, 100);
+      const t3 = setTimeout(focusTextarea, 300);
+      
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    } else {
+      // During streaming, set up polling to keep attempting focus
+      focusIntervalRef.current = setInterval(focusTextarea, 500);
+      
+      return () => {
+        if (focusIntervalRef.current) {
+          clearInterval(focusIntervalRef.current);
+          focusIntervalRef.current = null;
+        }
+      };
+    }
+  }, [isGenerating, focusTextarea]);
   
   // Handle message sending
   const handleSend = useCallback(() => {
@@ -162,6 +198,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (focusTimeoutRef.current) {
         clearTimeout(focusTimeoutRef.current);
       }
+      if (focusIntervalRef.current) {
+        clearInterval(focusIntervalRef.current);
+      }
     };
   }, [focusTextarea, textareaRef]);
 
@@ -172,12 +211,27 @@ const ChatInput: React.FC<ChatInputProps> = ({
         style={{ 
           border: `1px solid ${currentTheme.colors.borderColor}80`,
           backgroundColor: currentTheme.colors.bgPrimary,
-          boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)` 
+          boxShadow: `0 4px 12px rgba(0, 0, 0, 0.1)`,
+          position: 'relative',
+          backdropFilter: 'blur(8px)'
         }}
       >
+        {/* Growing pill indicator when streaming */}
+        {isGenerating && (
+          <div 
+            className="absolute top-0 left-0 h-1 bg-gradient-to-r" 
+            style={{
+              from: currentTheme.colors.accentPrimary,
+              to: currentTheme.colors.accentSecondary,
+              width: '100%',
+              animation: 'pulse 2s infinite ease-in-out'
+            }}
+          />
+        )}
+        
         <textarea
           ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
-          className="flex-grow py-3 px-4 outline-none resize-none min-h-[42px]"
+          className="flex-grow py-3 px-4 outline-none resize-none min-h-[52px]"
           placeholder={placeholder}
           value={message}
           onChange={handleChange}
@@ -188,6 +242,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
               setTimeout(focusTextarea, 0);
             }
           }}
+          onFocus={() => {
+            console.log('Textarea focused');
+          }}
           disabled={disabled}
           rows={1}
           spellCheck={true}
@@ -197,35 +254,77 @@ const ChatInput: React.FC<ChatInputProps> = ({
             backgroundColor: 'transparent',
             color: currentTheme.colors.textPrimary,
             overflowY: 'hidden',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fontSize: '1rem',
+            lineHeight: '1.5'
           }}
         />
-        <Button
-          onClick={(e) => {
-            e.preventDefault();
-            handleSend();
-            // Focus management from button click
-            setTimeout(focusTextarea, 0);
-          }}
-          disabled={disabled || !message.trim()}
-          variant="default"
-          className="m-1.5 transition-all hover:scale-105 self-end mb-2 mr-2"
-          style={{
-            background: message.trim() 
-              ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 
-              : currentTheme.colors.bgTertiary,
-            color: message.trim() ? '#fff' : currentTheme.colors.textMuted,
-            opacity: disabled || !message.trim() ? 0.6 : 1,
-            padding: '0.6rem 1.2rem',
-            borderRadius: '10px',
-            boxShadow: message.trim() ? `0 2px 10px ${currentTheme.colors.accentPrimary}40` : 'none',
-          }}
-        >
-          <span className="flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </span>
-        </Button>
+        
+        <div className="mr-2 flex items-center">
+          {message.trim() && (
+            <Button
+              onClick={(e) => {
+                e.preventDefault(); 
+                if (textareaRef.current) {
+                  setMessage('');
+                  textareaRef.current.style.height = '52px';
+                  textareaRef.current.focus();
+                }
+              }}
+              variant="ghost"
+              className="mr-1 hover:bg-transparent p-2 opacity-60 hover:opacity-100 transition-all"
+              style={{
+                color: currentTheme.colors.textMuted,
+              }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </Button>
+          )}
+          
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+              handleSend();
+              // Focus management from button click
+              setTimeout(focusTextarea, 0);
+            }}
+            disabled={disabled || !message.trim()}
+            variant="default"
+            className="transition-all hover:scale-105 self-end mb-2 mr-1 my-1"
+            style={{
+              background: message.trim() 
+                ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 
+                : currentTheme.colors.bgTertiary,
+              color: message.trim() ? '#fff' : currentTheme.colors.textMuted,
+              opacity: disabled || !message.trim() ? 0.6 : 1,
+              padding: message.trim() ? '0.7rem' : '0.6rem',
+              borderRadius: '50%', // Make circular send button
+              boxShadow: message.trim() ? `0 2px 10px ${currentTheme.colors.accentPrimary}40` : 'none',
+              width: message.trim() ? '40px' : '36px',
+              height: message.trim() ? '40px' : '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 'unset'
+            }}
+          >
+            <span className="flex items-center justify-center">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </span>
+          </Button>
+        </div>
+      </div>
+      
+      {/* Optional keyboard shortcut hint */}
+      <div 
+        className="text-xs mt-2 text-center opacity-60"
+        style={{ color: currentTheme.colors.textSecondary }}
+      >
+        Press Enter to send, Shift+Enter for new line
       </div>
     </div>
   );

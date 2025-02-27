@@ -135,6 +135,12 @@ const ModernChatPage: React.FC = () => {
         40% { transform: scale(1); }
       }
       
+      @keyframes pulse {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+      }
+      
       .hover-grow {
         transition: all 0.2s ease;
       }
@@ -779,6 +785,7 @@ const ModernChatPage: React.FC = () => {
                 onSend={handleSendMessage} 
                 disabled={loading}
                 placeholder="Type your educational question..."
+                isGenerating={isGenerating}
               />
               
               <div 
