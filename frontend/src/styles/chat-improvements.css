@@ -1,81 +1,26 @@
-/* Minimal Chat UI Improvements - Respects Theme System */
+/* Chat UI Enhancements for InkMortal - Integrated with Theme System */
 
-/* Add RGB variables (fallback) */
+/* RGB variables for compatibility with dark/light themes */
 :root {
-  --accent-primary-rgb: 138, 173, 244;
-  --accent-secondary-rgb: 198, 160, 246;
+  --accent-primary-rgb: 212, 175, 55; /* Gold/amber for Inkmortal theme */
+  --accent-secondary-rgb: 165, 124, 27;
   --bg-secondary-rgb: 30, 32, 48;
 }
 
-/* Logo styling - Override SeaDragon with InkMortal */
-.text-lg.font-semibold:contains('SeaDragon') {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)) !important;
+/* SECTION 1: ASSISTANT STYLING */
+
+/* Dragon icon styling */
+.dragon-icon {
+  color: var(--accent-primary);
 }
 
-/* Dragon avatar styling for assistant */
-.w-9.h-9.rounded-full.flex-shrink-0.mr-3 svg path {
-  /* Override the assistant avatar with dragon-like styling */
-  fill: currentColor;
-}
-
-/* 1. Set max-width for chat container for better readability */
-.max-w-4xl {
-  max-width: 900px !important;
-}
-
-/* 2. Improve message bubble contrast with subtle enhancements */
+/* Add glow to assistant message bubbles */
 [class*="message-in"] {
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 1px rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(var(--accent-primary-rgb, 138, 173, 244), 0.15) !important;
-  background-color: rgba(var(--bg-secondary-rgb, 30, 32, 48), 0.7) !important;
-  backdrop-filter: blur(5px);
-}
-
-/* 3. Better scrollbar appearance */
-.modern-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.modern-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.modern-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(var(--accent-primary-rgb, 138, 173, 244), 0.2);
-  border-radius: 20px;
-}
-
-.modern-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(var(--accent-primary-rgb, 138, 173, 244), 0.4);
-}
-
-/* 4. Enhanced input field focus state */
-textarea:focus {
-  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 138, 173, 244), 0.2) !important;
-}
-
-/* 5. Better message spacing and alignment */
-[class*="justify-end"] > div,
-[class*="justify-start"] > div {
-  margin-bottom: 1.25rem !important;
-}
-
-/* 6. Subtle hover effects for interactive elements */
-button:hover {
-  transform: translateY(-1px);
-  transition: transform 0.2s ease;
-}
-
-/* 7. Ambient accents that work with any theme */
-@keyframes subtle-glow {
-  0%, 100% { opacity: 0.05; }
-  50% { opacity: 0.1; }
-}
-
-/* 8. Improved readability contrast for chat messages */
-[class*="message-in"] {
-  background-color: rgba(var(--bg-secondary-rgb, 30, 32, 48), 0.92) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 1px rgba(var(--accent-primary-rgb), 0.05) !important;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.15) !important;
+  background-color: rgba(var(--bg-secondary-rgb), 0.92) !important;
   position: relative;
+  backdrop-filter: blur(5px);
 }
 
 /* Add a subtle accent top border to assistant messages */
@@ -87,21 +32,68 @@ button:hover {
   right: 0;
   height: 2px;
   background: linear-gradient(to right, 
-    rgba(var(--accent-primary-rgb, 138, 173, 244), 0.4), 
-    rgba(var(--accent-secondary-rgb, 198, 160, 246), 0.4)
+    rgba(var(--accent-primary-rgb), 0.4), 
+    rgba(var(--accent-secondary-rgb), 0.4)
   );
   border-top-left-radius: inherit;
   border-top-right-radius: inherit;
   opacity: 0.7;
 }
 
-/* 9. Better visual hierarchy for timestamps */
+/* SECTION 2: LAYOUT & CONTAINER */
+
+/* Set max-width for chat container for better readability */
+.max-w-chat {
+  max-width: 900px !important;
+  margin: 0 auto;
+}
+
+/* Better spacing and alignment for messages */
+[class*="justify-end"] > div,
+[class*="justify-start"] > div {
+  margin-bottom: 1.25rem !important;
+}
+
+/* SECTION 3: USABILITY IMPROVEMENTS */
+
+/* Enhanced scrollbar appearance */
+.modern-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--accent-primary-rgb), 0.2);
+  border-radius: 20px;
+}
+
+.modern-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--accent-primary-rgb), 0.4);
+}
+
+/* Enhanced input field focus state */
+textarea:focus {
+  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb), 0.2) !important;
+}
+
+/* Subtle hover effects for interactive elements */
+button:hover {
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+/* SECTION 4: ANIMATIONS & TRANSITIONS */
+
+/* Better timestamp visibility */
 [class*="text-xs mt-2 text-right"] {
   opacity: 0.6;
   font-size: 0.7rem;
 }
 
-/* 10. Enhanced message transitions */
+/* Smooth message entrance */
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -115,4 +107,10 @@ button:hover {
 
 .message-fade-in > div {
   animation: fade-in-up 0.3s ease-out forwards;
+}
+
+/* Ambient accent with subtle glow */
+@keyframes subtle-glow {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.1; }
 }

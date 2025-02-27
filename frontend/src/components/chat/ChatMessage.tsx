@@ -114,11 +114,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
           <div className="absolute inset-0 flex items-center justify-center text-white z-10">
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 3.5V2M5.06 5.31L4 4.25M12 21.5V20M18.94 19.69L20 20.75M3.5 12H2M5.31 18.94L4.25 20M20.5 12H22M18.69 5.06L19.75 4" 
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M12 17.5C14.7614 17.5 17 15.2614 17 12.5C17 9.73858 14.7614 7.5 12 7.5C9.23858 7.5 7 9.73858 7 12.5C7 15.2614 9.23858 17.5 12 17.5Z" 
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <svg className="w-5 h-5 dragon-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Chinese dragon icon for InkMortal theme */}
+              <path d="M13 3C9.2 3 6.2 5.1 5 8.4C3.9 7.8 2.7 7.5 1.5 7.5C1.2 7.5 1 7.7 1 8C1 8.1 1 8.2 1.1 8.3C2.1 9.8 3.4 10.7 5 11.1C5 11.4 5 11.7 5 12C5 13.2 5.3 14.4 5.7 15.5C5.2 15.3 4.7 15 4.2 14.7C4.1 14.6 3.9 14.6 3.8 14.7C3.7 14.8 3.6 14.9 3.7 15.1C4.4 16.9 5.5 18.2 7 19C8.8 20 11 20 11 20C11 20 11.2 19.9 11.2 19.8C11.2 19.6 11 19.5 11 19.5C10.3 19.1 9.7 18.6 9.2 18C9.4 18 9.6 18 9.8 18C12.3 18 14.6 16.8 16.1 14.9C16.2 14.8 16.2 14.6 16.1 14.5C16 14.4 15.8 14.4 15.7 14.5C14.6 15.4 13.3 16 12 16C10 16 8.2 14.6 7.2 13.5C8.5 13 10.3 12.6 12 13.1C13.1 13.5 14 14.1 14.6 15C14.8 15.2 15 15.2 15.3 15.1C15.5 15 15.6 14.7 15.4 14.5C14.9 13.7 14.3 13.1 13.5 12.5C16.2 11 18 9.2 18 6.5C18 4.5 15.7 3 13 3Z" 
+                fill="currentColor" />
             </svg>
           </div>
           
