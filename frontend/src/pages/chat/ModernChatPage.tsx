@@ -169,7 +169,11 @@ const ModernChatPage: React.FC = () => {
   
   // Auto-scroll when messages change
   useEffect(() => {
+<<<<<<< HEAD
     if (messagesEndRef.current && scrollContainerRef.current) {
+=======
+    if (messagesEndRef.current) {
+>>>>>>> b18d27afe51d2fdb9c8b08770da8b20a17dd1149
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
