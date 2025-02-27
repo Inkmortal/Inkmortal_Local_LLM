@@ -123,6 +123,11 @@ app.include_router(admin_router)
 app.include_router(ip_whitelist_router)
 app.include_router(registration_tokens_router)
 app.include_router(api_keys_router)
+# Include new admin monitoring routers
+from .admin.queue_monitor import router as queue_monitor_router
+from .admin.system_stats import router as system_stats_router
+app.include_router(queue_monitor_router)
+app.include_router(system_stats_router)
 
 # Root endpoint
 @app.get("/")

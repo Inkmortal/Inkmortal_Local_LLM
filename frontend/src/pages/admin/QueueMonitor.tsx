@@ -3,6 +3,7 @@ import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import { fetchApi } from '../../config/api';
 
 interface QueueItem {
   id: string;
@@ -36,132 +37,105 @@ const QueueMonitor: React.FC = () => {
   const { currentTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
   const [selectedPriority, setSelectedPriority] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // Mock data for queue items
-  const [queueItems, setQueueItems] = useState<QueueItem[]>([
-    {
-      id: 'q1001',
-      priority: 1,
-      source: 'Direct API',
-      timestamp: '2025-02-26T13:45:00',
-      status: 'processing',
-      age: 0,
-      retries: 0,
-      apiKey: 'API_ab12cd34ef56gh78',
-      prompt: 'Explain quantum computing in simple terms'
-    },
-    {
-      id: 'q1002',
-      priority: 2,
-      source: 'Custom App',
-      timestamp: '2025-02-26T13:44:30',
-      status: 'waiting',
-      age: 30,
-      retries: 0,
-      apiKey: 'API_ij90kl12mn34op56',
-      prompt: 'Write a function to calculate Fibonacci sequence'
-    },
-    {
-      id: 'q1003',
-      priority: 3,
-      source: 'Web Interface',
-      timestamp: '2025-02-26T13:42:10',
-      status: 'waiting',
-      age: 170,
-      retries: 0,
-      prompt: 'Help me solve this calculus problem: integrate x^2 * sin(x)'
-    },
-    {
-      id: 'q1004',
-      priority: 3,
-      source: 'Web Interface',
-      timestamp: '2025-02-26T13:40:00',
-      status: 'waiting',
-      age: 300,
-      retries: 0,
-      prompt: 'What is the capital of France?'
-    },
-    {
-      id: 'q1005',
-      priority: 2,
-      source: 'Custom App',
-      timestamp: '2025-02-26T13:38:45',
-      status: 'waiting',
-      age: 375,
-      retries: 1,
-      apiKey: 'API_qr78st90uv12wx34',
-      prompt: 'Generate a tutorial on React hooks'
-    }
-  ]);
-  
-  // Mock data for completed items
-  const [historyItems, setHistoryItems] = useState<QueueItem[]>([
-    {
-      id: 'q1000',
-      priority: 1,
-      source: 'Direct API',
-      timestamp: '2025-02-26T13:30:00',
-      status: 'completed',
-      age: 0,
-      retries: 0,
-      apiKey: 'API_ab12cd34ef56gh78',
-      prompt: 'What are the main features of Python 3.12?'
-    },
-    {
-      id: 'q999',
-      priority: 2,
-      source: 'Custom App',
-      timestamp: '2025-02-26T13:25:00',
-      status: 'completed',
-      age: 180,
-      retries: 0,
-      apiKey: 'API_ij90kl12mn34op56',
-      prompt: 'Explain the differences between SQL and NoSQL databases'
-    },
-    {
-      id: 'q998',
-      priority: 3,
-      source: 'Web Interface',
-      timestamp: '2025-02-26T13:20:00',
-      status: 'error',
-      age: 360,
-      retries: 2,
-      prompt: 'This is a very long prompt that exceeds the maximum token limit...'
-    }
-  ]);
-  
-  // Mock data for queue statistics
+  // State for API data
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<QueueItem[]>([]);
   const [queueStats, setQueueStats] = useState<QueueStats>({
-    totalWaiting: 4,
-    totalProcessing: 1,
-    totalCompleted: 125,
-    totalError: 3,
-    requestsPerHour: 42,
-    averageWaitTime: 210, // 3.5 minutes
-    averageProcessingTime: 45 // 45 seconds
+    totalWaiting: 0,
+    totalProcessing: 0,
+    totalCompleted: 0,
+    totalError: 0,
+    requestsPerHour: 0,
+    averageWaitTime: 0,
+    averageProcessingTime: 0
   });
 
-  // Simulated real-time updates
+  // Fetch queue statistics
+  const fetchQueueStats = async () => {
+    try {
+      const response = await fetchApi('/admin/queue/stats');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch queue stats: ${response.status}`);
+      }
+      const data = await response.json();
+      setQueueStats(data);
+    } catch (error) {
+      console.error('Error fetching queue stats:', error);
+      setError('Failed to load queue statistics');
+    }
+  };
+
+  // Fetch queue items
+  const fetchQueueItems = async () => {
+    try {
+      // Fetch current queue items
+      const priorityParam = selectedPriority ? `?priority=${selectedPriority}` : '';
+      const response = await fetchApi(`/admin/queue/items${priorityParam}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch queue items: ${response.status}`);
+      }
+      const data = await response.json();
+      setQueueItems(data);
+    } catch (error) {
+      console.error('Error fetching queue items:', error);
+      setError('Failed to load queue items');
+    }
+  };
+
+  // Fetch history items
+  const fetchHistoryItems = async () => {
+    try {
+      const priorityParam = selectedPriority ? `?priority=${selectedPriority}` : '';
+      const response = await fetchApi(`/admin/queue/history${priorityParam}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch history items: ${response.status}`);
+      }
+      const data = await response.json();
+      setHistoryItems(data);
+    } catch (error) {
+      console.error('Error fetching history items:', error);
+      setError('Failed to load history items');
+    }
+  };
+
+  // Load all data
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      await Promise.all([
+        fetchQueueStats(),
+        fetchQueueItems(),
+        fetchHistoryItems()
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setError('Failed to load queue data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch data on component mount and when filter changes
   useEffect(() => {
+    loadData();
+    
+    // Set up polling interval
     const interval = setInterval(() => {
-      // Update ages of waiting items
-      setQueueItems(prevItems => 
-        prevItems.map(item => ({
-          ...item,
-          age: item.status === 'waiting' ? item.age + 5 : item.age
-        }))
-      );
-      
-      // Randomly update queue stats
-      setQueueStats(prev => ({
-        ...prev,
-        requestsPerHour: prev.requestsPerHour + (Math.random() > 0.5 ? 1 : 0),
-        averageWaitTime: prev.averageWaitTime + (Math.random() > 0.7 ? 5 : 0)
-      }));
+      fetchQueueStats();
+      if (activeTab === 'current') {
+        fetchQueueItems();
+      } else {
+        fetchHistoryItems();
+      }
     }, 5000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedPriority, activeTab]);
 
   // Format time display
   const formatTime = (seconds: number): string => {
@@ -176,43 +150,51 @@ const QueueMonitor: React.FC = () => {
   );
 
   // Process next queue item
-  const processNextItem = () => {
-    if (queueItems.filter(item => item.status === 'waiting').length === 0) {
-      return; // No waiting items
+  const processNextItem = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetchApi('/admin/queue/process-next', {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to process next item: ${response.status}`);
+      }
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error('Error processing next item:', error);
+      setError('Failed to process next item');
+    } finally {
+      setIsLoading(false);
     }
-    
-    // Find highest priority waiting item
-    const sortedItems = [...queueItems].sort((a, b) => {
-      // Sort by priority first (lower number = higher priority)
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      // Then by age (older = higher priority)
-      return b.age - a.age;
-    });
-    
-    const nextItem = sortedItems.find(item => item.status === 'waiting');
-    if (!nextItem) return;
-    
-    // Update item status
-    setQueueItems(prevItems => 
-      prevItems.map(item => 
-        item.id === nextItem.id
-          ? { ...item, status: 'processing' }
-          : item
-      )
-    );
   };
 
   // Clear queue
-  const clearQueue = () => {
-    // In a real application, this would make an API call
-    const processingItems = queueItems.filter(item => item.status === 'processing');
-    setQueueItems(processingItems);
+  const clearQueue = async () => {
+    if (!confirm('Are you sure you want to clear the queue? This cannot be undone.')) {
+      return;
+    }
     
-    // Update stats
-    setQueueStats(prev => ({
-      ...prev,
-      totalWaiting: 0
-    }));
+    try {
+      setIsLoading(true);
+      const response = await fetchApi('/admin/queue/clear', {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to clear queue: ${response.status}`);
+      }
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error('Error clearing queue:', error);
+      setError('Failed to clear queue');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -233,14 +215,21 @@ const QueueMonitor: React.FC = () => {
               Status:
               <span 
                 className="ml-1 font-medium"
-                style={{ color: currentTheme.colors.success }}
+                style={{ color: error ? currentTheme.colors.error : currentTheme.colors.success }}
               >
-                Active
+                {error ? 'Error' : 'Active'}
               </span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 p-3 rounded-md" style={{ backgroundColor: `${currentTheme.colors.error}20`, color: currentTheme.colors.error }}>
+          {error}
+        </div>
+      )}
 
       {/* Queue Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -260,7 +249,7 @@ const QueueMonitor: React.FC = () => {
             <div 
               className="h-full rounded-full"
               style={{ 
-                width: '25%',
+                width: `${Math.min(100, (queueStats.totalWaiting / (queueStats.totalWaiting + queueStats.totalProcessing + 10)) * 100)}%`,
                 backgroundColor: currentTheme.colors.accentPrimary
               }}
             />
@@ -283,7 +272,7 @@ const QueueMonitor: React.FC = () => {
             <div 
               className="h-full rounded-full"
               style={{ 
-                width: '10%',
+                width: queueStats.totalProcessing > 0 ? '50%' : '0%',
                 backgroundColor: currentTheme.colors.accentSecondary
               }}
             />
@@ -306,7 +295,7 @@ const QueueMonitor: React.FC = () => {
             <div 
               className="h-full rounded-full"
               style={{ 
-                width: '40%',
+                width: `${Math.min(100, (queueStats.averageWaitTime / 300) * 100)}%`,
                 backgroundColor: currentTheme.colors.accentTertiary
               }}
             />
@@ -329,7 +318,7 @@ const QueueMonitor: React.FC = () => {
             <div 
               className="h-full rounded-full"
               style={{ 
-                width: '60%',
+                width: `${Math.min(100, (queueStats.requestsPerHour / 100) * 100)}%`,
                 backgroundColor: currentTheme.colors.success
               }}
             />
@@ -341,7 +330,7 @@ const QueueMonitor: React.FC = () => {
       <div className="mb-6 flex flex-wrap gap-3">
         <Button 
           onClick={processNextItem}
-          disabled={queueItems.filter(item => item.status === 'waiting').length === 0}
+          disabled={isLoading || queueStats.totalWaiting === 0}
         >
           Process Next Request
         </Button>
@@ -349,7 +338,7 @@ const QueueMonitor: React.FC = () => {
         <Button 
           variant="danger"
           onClick={clearQueue}
-          disabled={queueItems.filter(item => item.status === 'waiting').length === 0}
+          disabled={isLoading || queueStats.totalWaiting === 0}
         >
           Clear Queue
         </Button>
@@ -377,6 +366,13 @@ const QueueMonitor: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="text-center py-4" style={{ color: currentTheme.colors.textSecondary }}>
+          Loading queue data...
+        </div>
+      )}
 
       {/* Queue Items Table */}
       <Card>
@@ -460,13 +456,13 @@ const QueueMonitor: React.FC = () => {
                         className="px-2 py-1 rounded-full text-xs font-medium"
                         style={{ 
                           backgroundColor: item.status === 'waiting' ? `${currentTheme.colors.warning}20` :
-                                          item.status === 'processing' ? `${currentTheme.colors.accentPrimary}20` :
-                                          item.status === 'completed' ? `${currentTheme.colors.success}20` :
-                                          `${currentTheme.colors.error}20`,
+                                        item.status === 'processing' ? `${currentTheme.colors.accentPrimary}20` :
+                                        item.status === 'completed' ? `${currentTheme.colors.success}20` :
+                                        `${currentTheme.colors.error}20`,
                           color: item.status === 'waiting' ? currentTheme.colors.warning :
-                                 item.status === 'processing' ? currentTheme.colors.accentPrimary :
-                                 item.status === 'completed' ? currentTheme.colors.success :
-                                 currentTheme.colors.error
+                                item.status === 'processing' ? currentTheme.colors.accentPrimary :
+                                item.status === 'completed' ? currentTheme.colors.success :
+                                currentTheme.colors.error
                         }}
                       >
                         {item.status.charAt(0).toUpperCase() + item.status.slice(1)}

@@ -1,46 +1,118 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
+import { fetchApi } from '../../config/api';
+
+interface SystemStatsData {
+  cpu: {
+    usage: number;
+    cores: number;
+    model: string;
+  };
+  memory: {
+    total: number;
+    used: number;
+    percentage: number;
+  };
+  storage: {
+    total: number;
+    used: number;
+    percentage: number;
+  };
+  network: {
+    incoming: number;
+    outgoing: number;
+    connections: number;
+  };
+  uptime: {
+    days: number;
+    hours: number;
+    minutes: number;
+  };
+  ollama: {
+    status: string;
+    model: string;
+    version: string;
+    requests: number;
+    avgResponseTime: number;
+  };
+}
 
 const SystemStats: React.FC = () => {
   const { currentTheme } = useTheme();
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
-  // Mock system stats
-  const stats = {
+  // System stats state
+  const [stats, setStats] = useState<SystemStatsData>({
     cpu: {
-      usage: 35,
-      cores: 12,
-      model: 'Mac Mini M4 Pro'
+      usage: 0,
+      cores: 0,
+      model: 'Loading...'
     },
     memory: {
-      total: 64,
-      used: 21.3,
-      percentage: 33
+      total: 0,
+      used: 0,
+      percentage: 0
     },
     storage: {
-      total: 1024,
-      used: 384,
-      percentage: 37
+      total: 0,
+      used: 0,
+      percentage: 0
     },
     network: {
-      incoming: 12.5,
-      outgoing: 8.3,
-      connections: 24
+      incoming: 0,
+      outgoing: 0,
+      connections: 0
     },
     uptime: {
-      days: 15,
-      hours: 8,
-      minutes: 43
+      days: 0,
+      hours: 0,
+      minutes: 0
     },
     ollama: {
-      status: 'Running',
-      model: 'Llama 3.3 70B',
-      version: '0.2.1',
-      requests: 2567,
-      avgResponseTime: 2.3
+      status: 'Loading',
+      model: 'Loading...',
+      version: 'Loading...',
+      requests: 0,
+      avgResponseTime: 0
+    }
+  });
+
+  // Fetch system stats
+  const fetchSystemStats = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetchApi('/admin/system/stats');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch system stats: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setStats(data);
+      setLastUpdated(new Date());
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching system stats:', error);
+      setError('Failed to load system statistics');
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  // Fetch stats on component mount and set up interval
+  useEffect(() => {
+    fetchSystemStats();
+    
+    const interval = setInterval(() => {
+      fetchSystemStats();
+    }, 10000); // Update every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Format GB
   const formatGB = (gb: number) => {
@@ -55,10 +127,24 @@ const SystemStats: React.FC = () => {
         </h1>
         <div className="mt-2 sm:mt-0">
           <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
-            Last updated: {new Date().toLocaleTimeString()}
+            Last updated: {lastUpdated.toLocaleTimeString()}
           </p>
         </div>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 p-3 rounded-md" style={{ backgroundColor: `${currentTheme.colors.error}20`, color: currentTheme.colors.error }}>
+          {error}
+        </div>
+      )}
+
+      {/* Loading indicator */}
+      {isLoading && !error && (
+        <div className="text-center py-2 mb-4" style={{ color: currentTheme.colors.textSecondary }}>
+          Loading system statistics...
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="flex flex-col">
@@ -185,8 +271,10 @@ const SystemStats: React.FC = () => {
               <span 
                 className="px-2 py-1 rounded-full text-xs font-medium"
                 style={{ 
-                  backgroundColor: `${currentTheme.colors.success}20`,
-                  color: currentTheme.colors.success
+                  backgroundColor: stats.ollama.status === 'Running' ? 
+                    `${currentTheme.colors.success}20` : `${currentTheme.colors.error}20`,
+                  color: stats.ollama.status === 'Running' ? 
+                    currentTheme.colors.success : currentTheme.colors.error
                 }}
               >
                 {stats.ollama.status}
@@ -225,15 +313,30 @@ const SystemStats: React.FC = () => {
 
         {/* Network Stats */}
         <Card title="Network Activity" className="lg:col-span-2">
-          <div className="p-4 text-center">
-            <p className="mb-4" style={{ color: currentTheme.colors.textSecondary }}>
-              Network statistics visualization will be implemented in a future update.
-            </p>
-            <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
-              Current connections: {stats.network.connections} | 
-              Incoming: {stats.network.incoming} MB/s | 
-              Outgoing: {stats.network.outgoing} MB/s
-            </p>
+          <div className="p-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="text-center">
+                <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>Connections</div>
+                <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
+                  {stats.network.connections}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>Incoming</div>
+                <div className="text-xl font-bold" style={{ color: currentTheme.colors.success }}>
+                  {stats.network.incoming} MB/s
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>Outgoing</div>
+                <div className="text-xl font-bold" style={{ color: currentTheme.colors.warning }}>
+                  {stats.network.outgoing} MB/s
+                </div>
+              </div>
+            </div>
+            <div className="text-center text-sm" style={{ color: currentTheme.colors.textMuted }}>
+              Detailed network statistics visualization will be implemented in a future update.
+            </div>
           </div>
         </Card>
       </div>
