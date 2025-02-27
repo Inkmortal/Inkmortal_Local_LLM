@@ -19,87 +19,88 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [message, setMessage] = useState<string>('');
   const localInputRef = useRef<HTMLTextAreaElement>(null);
   
-  // Combine refs
-  const combinedRef = inputRef || localInputRef;
+  // Use local ref if no ref is provided
+  const combinedRef = inputRef as React.RefObject<HTMLTextAreaElement> || localInputRef;
   
-  // Focus management function
-  const forceFocus = useCallback(() => {
-    if (combinedRef.current) {
-      // Using direct DOM focus method
-      combinedRef.current.focus();
-    }
-  }, [combinedRef]);
-
-  // Set autofocus and handle initial focus
+  // Focus input on first render
   useEffect(() => {
-    // Initial focus on mount with a slight delay to ensure rendering is complete
-    const timer = setTimeout(() => {
-      forceFocus();
-    }, 100);
+    const focusInput = () => {
+      if (combinedRef.current) {
+        combinedRef.current.focus();
+      }
+    };
     
-    return () => clearTimeout(timer);
-  }, [forceFocus]);
-
-  // Focus after sending a message
+    // Multiple focus attempts with staggered timing
+    focusInput();
+    setTimeout(focusInput, 0);
+    setTimeout(focusInput, 100);
+  }, [combinedRef]);
+  
+  // Handle message sending and maintain focus
   const handleSend = useCallback(() => {
     if (message.trim() && !disabled) {
       onSend(message);
       setMessage('');
       
-      // Focus using multiple timers with different delays to ensure it works
-      // This combats various edge cases where focus might be lost
+      // Force focus back on textarea after sending
       requestAnimationFrame(() => {
-        forceFocus();
-        
-        // Additional focus attempts with varying delays
-        setTimeout(forceFocus, 0);
-        setTimeout(forceFocus, 50);
-        setTimeout(forceFocus, 100);
+        if (combinedRef.current) {
+          combinedRef.current.focus();
+          combinedRef.current.style.height = '48px';
+        }
       });
     }
-  }, [message, disabled, onSend, forceFocus]);
+  }, [message, disabled, onSend, combinedRef]);
 
-  // Handle Enter keypress
-  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // Handle Enter key for sending, Shift+Enter for new line
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    } else if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      const textarea = combinedRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newMessage = message.substring(0, start) + '\n' + message.substring(end);
+        setMessage(newMessage);
+        
+        // Set cursor position after inserted newline
+        setTimeout(() => {
+          if (textarea) {
+            textarea.selectionStart = start + 1;
+            textarea.selectionEnd = start + 1;
+          }
+        }, 0);
+      }
     }
-  }, [handleSend]);
+  }, [handleSend, message, combinedRef]);
 
-  // Adjust textarea height based on content
-  const adjustHeight = useCallback(() => {
-    const element = combinedRef.current;
-    if (!element) return;
-    
-    // Reset height to calculate proper scrollHeight
-    element.style.height = 'auto';
-    
-    // Set to scrollHeight, but limit max height
-    const maxHeight = 120; // Maximum height in pixels
-    const newHeight = Math.min(element.scrollHeight, maxHeight);
-    element.style.height = `${newHeight}px`;
-    
-    // Add scrollbar if content exceeds maxHeight
-    element.style.overflowY = element.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  // Handle textarea height adjustment
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    const textarea = combinedRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.max(textarea.scrollHeight, 48)}px`;
+      textarea.style.overflowY = textarea.scrollHeight > 200 ? 'auto' : 'hidden';
+    }
   }, [combinedRef]);
 
-  // Adjust height when content changes
-  useEffect(() => {
-    adjustHeight();
-  }, [message, adjustHeight]);
-
-  // Force focus when window gains focus to improve usability
+  // Reset focus when window regains focus
   useEffect(() => {
     const handleWindowFocus = () => {
-      forceFocus();
+      if (combinedRef.current) {
+        combinedRef.current.focus();
+      }
     };
     
     window.addEventListener('focus', handleWindowFocus);
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
     };
-  }, [forceFocus]);
+  }, [combinedRef]);
 
   return (
     <div className="relative">
@@ -116,11 +117,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
           className="flex-grow py-3 px-4 outline-none resize-none min-h-[42px]"
           placeholder={placeholder}
           value={message}
-          onChange={(e) => {
-            setMessage(e.target.value);
-            adjustHeight();
-          }}
-          onKeyDown={handleKeyPress}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
           rows={1}
           spellCheck={true}

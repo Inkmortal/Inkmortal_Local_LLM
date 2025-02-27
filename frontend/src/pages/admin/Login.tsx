@@ -285,23 +285,25 @@ const AdminLogin: React.FC = () => {
               stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="text-xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>Seadragon LLM</span>
+          <div>
+            <h1 className="text-xl font-semibold" style={{ color: currentTheme.colors.accentPrimary }}>
+              Seadragon Admin
+            </h1>
+            <div className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+              Management Console
+            </div>
+          </div>
         </div>
         
         <div className="flex items-center gap-3">
-          <button 
-            className="p-2 rounded-lg transition-all duration-200 hover:scale-105 flex items-center gap-1.5"
+          <Button 
+            size="sm"
+            variant="ghost"
             onClick={handleHomeClick}
-            style={{ 
-              backgroundColor: `${currentTheme.colors.accentPrimary}15`,
-              color: currentTheme.colors.accentPrimary
-            }}
+            className="hover-float"
           >
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7m-7-7v14" />
-            </svg>
             Home
-          </button>
+          </Button>
           <ThemeSelector />
         </div>
       </div>
