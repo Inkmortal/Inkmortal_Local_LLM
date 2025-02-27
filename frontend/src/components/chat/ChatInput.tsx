@@ -22,23 +22,46 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // Combine refs
   const combinedRef = inputRef || localInputRef;
   
-  // Auto-focus the input field when the component mounts
+  // Auto-focus the input field when the component mounts or updates
   useEffect(() => {
+    // Focus immediately on mount
     if (combinedRef.current) {
       combinedRef.current.focus();
     }
   }, []);
 
+  // Re-focus after sending to ensure focus is maintained
+  useEffect(() => {
+    const focusInput = () => {
+      if (combinedRef.current) {
+        combinedRef.current.focus();
+      }
+    };
+    
+    // Set up an interval to try to focus the input
+    // This helps ensure focus even if other elements try to take focus
+    const focusInterval = setInterval(focusInput, 100);
+    
+    // Clear the interval after a short time
+    setTimeout(() => {
+      clearInterval(focusInterval);
+    }, 500);
+    
+    return () => {
+      clearInterval(focusInterval);
+    };
+  }, [message]); // This will re-run when message changes (like after sending)
+
   const handleSend = () => {
     if (message.trim() && !disabled) {
       onSend(message);
       setMessage('');
-      // Re-focus after sending
+      // Attempt immediate refocus
       setTimeout(() => {
         if (combinedRef.current) {
           combinedRef.current.focus();
         }
-      }, 100);
+      }, 10);
     }
   };
 
@@ -68,6 +91,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
           disabled={disabled}
+          autoFocus={true}
           style={{
             backgroundColor: 'transparent',
             color: currentTheme.colors.textPrimary,

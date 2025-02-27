@@ -30,7 +30,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   
   return (
     <div 
-      className={`flex mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex mb-4 ${isUser ? 'justify-end' : 'justify-start'} relative`}
       onMouseEnter={() => isAssistant && setShowControls(true)}
       onMouseLeave={() => isAssistant && setShowControls(false)}
     >
@@ -80,56 +80,59 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         >
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
-        
-        {/* Regenerate/Stop Generation Controls */}
-        {isAssistant && (showControls || isGenerating) && (
-          <div 
-            className="absolute -bottom-10 right-0 flex space-x-2 transition-opacity duration-200"
-            style={{ opacity: showControls || isGenerating ? 1 : 0 }}
-          >
-            {isGenerating ? (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="py-1 px-2"
-                onClick={onStopGeneration}
-                style={{
-                  backgroundColor: `${currentTheme.colors.error}20`,
-                  borderColor: currentTheme.colors.error,
-                  color: currentTheme.colors.error,
-                  boxShadow: `0 2px 8px ${currentTheme.colors.error}30`
-                }}
-              >
-                <div className="flex items-center">
-                  <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Stop generating
-                </div>
-              </Button>
-            ) : (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="py-1 px-2"
-                onClick={onRegenerate}
-                style={{
-                  backgroundColor: `${currentTheme.colors.accentPrimary}10`,
-                  borderColor: currentTheme.colors.accentPrimary,
-                  color: currentTheme.colors.accentPrimary
-                }}
-              >
-                <div className="flex items-center">
-                  <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Regenerate
-                </div>
-              </Button>
-            )}
-          </div>
-        )}
       </div>
+      
+      {/* Regenerate/Stop Generation Controls */}
+      {isAssistant && (
+        <div 
+          className={`absolute -bottom-10 right-0 flex space-x-2 transition-opacity duration-200 pointer-events-auto ${
+            (showControls || isGenerating) ? 'opacity-100' : 'opacity-0'
+          }`}
+          onMouseEnter={() => setShowControls(true)}
+          onMouseLeave={() => setShowControls(false)}
+        >
+          {isGenerating ? (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="py-1 px-2"
+              onClick={onStopGeneration}
+              style={{
+                backgroundColor: `${currentTheme.colors.error}20`,
+                borderColor: currentTheme.colors.error,
+                color: currentTheme.colors.error,
+                boxShadow: `0 2px 8px ${currentTheme.colors.error}30`
+              }}
+            >
+              <div className="flex items-center">
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Stop generating
+              </div>
+            </Button>
+          ) : (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="py-1 px-2"
+              onClick={onRegenerate}
+              style={{
+                backgroundColor: `${currentTheme.colors.accentPrimary}10`,
+                borderColor: currentTheme.colors.accentPrimary,
+                color: currentTheme.colors.accentPrimary
+              }}
+            >
+              <div className="flex items-center">
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Regenerate
+              </div>
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
