@@ -5,8 +5,21 @@
  * It provides utilities for making API requests with consistent error handling.
  */
 
+// Load environment variables or use defaults
+// For production, these would be set in the build environment or runtime config
+// For local development, we'll fall back to hardcoded defaults
+const getApiBaseUrl = (): string => {
+  // Check for environment variables (injected during build or runtime)
+  if (typeof window !== 'undefined' && (window as any).__ENV && (window as any).__ENV.API_BASE_URL) {
+    return (window as any).__ENV.API_BASE_URL;
+  }
+  
+  // Use hardcoded default as fallback
+  return 'http://localhost:8000';
+};
+
 // Base URL for all API requests
-export const API_BASE_URL = 'http://localhost:8000';
+export const API_BASE_URL = getApiBaseUrl();
 
 /**
  * Enhanced fetch function that automatically includes the API base URL
@@ -14,10 +27,17 @@ export const API_BASE_URL = 'http://localhost:8000';
  */
 export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  console.log(`Fetching from: ${url}`, options);
+  console.log(`Fetching from: ${url}`);
   
   try {
-    const response = await fetch(url, options);
+    const response = await fetch(url, {
+      ...options,
+      // Add default headers if not provided
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      }
+    });
     
     // Log response status for debugging
     console.log(`Response from ${url}: ${response.status}`);

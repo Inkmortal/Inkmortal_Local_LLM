@@ -26,7 +26,8 @@ export interface SystemStats {
     status: string;
     model: string;
     version: string;
-  }
+  };
+  queue_connected?: boolean;
 }
 
 // Interface for activity data
@@ -71,7 +72,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
     
-    // Return mock data as fallback (useful during development)
+    // Return minimal data structure to avoid breaking UI but indicate service is unavailable
     return {
       dashboard_cards: [
         {
@@ -105,12 +106,13 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
         cpu: 0,
         memory: 0,
         storage: 0,
-        uptime: 'Unknown',
+        uptime: 'Service Unavailable',
         ollama: {
-          status: 'Unknown',
-          model: 'Unknown',
-          version: 'Unknown'
-        }
+          status: 'Offline',
+          model: 'Service Unavailable',
+          version: 'Service Unavailable'
+        },
+        queue_connected: false
       },
       recent_activities: []
     };

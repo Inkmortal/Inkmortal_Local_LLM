@@ -76,7 +76,8 @@ const AdminDashboard: React.FC = () => {
       status: 'Unknown',
       model: 'Loading...',
       version: 'Loading...'
-    }
+    },
+    queue_connected: false
   };
   const recentActivities = dashboardData?.recent_activities || [];
 
@@ -184,15 +185,27 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>Ollama Status</p>
-                <p className="font-medium" style={{ color: currentTheme.colors.success }}>{systemStats.ollama.status}</p>
+                <p className="font-medium" style={{ 
+                  color: systemStats.ollama.status === 'Running' 
+                    ? currentTheme.colors.success 
+                    : currentTheme.colors.error 
+                }}>
+                  {systemStats.ollama.status}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>Queue Status</p>
+                <p className="font-medium" style={{ 
+                  color: systemStats.queue_connected 
+                    ? currentTheme.colors.success 
+                    : currentTheme.colors.error 
+                }}>
+                  {systemStats.queue_connected ? 'Connected' : 'Disconnected'}
+                </p>
               </div>
               <div>
                 <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>Model</p>
                 <p className="font-medium">{systemStats.ollama.model}</p>
-              </div>
-              <div>
-                <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>Version</p>
-                <p className="font-medium">{systemStats.ollama.version}</p>
               </div>
             </div>
 

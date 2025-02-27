@@ -94,21 +94,37 @@ class QueueManager:
         """Get the size of each priority queue"""
         result = {}
         for priority, queue_name in self.queue_names.items():
-            queue = await self.get_queue(queue_name)
-            if queue:
-                # Get the queue information with message count
-                queue_info = await self.channel.declare_queue(queue_name, durable=True)
-                result[priority] = queue_info.message_count
-            else:
+            try:
+                queue = await self.get_queue(queue_name)
+                if queue:
+                    # Get the queue information with message count
+                    try:
+                        queue_info = await self.channel.declare_queue(
+                            queue_name,
+                            durable=True,
+                            passive=True  # Just check if queue exists, don't create if not
+                        )
+                        result[priority] = queue_info.message_count
+                    except Exception as e:
+                        logger.error(f"Error getting message count for queue {queue_name}: {e}")
+                        result[priority] = 0
+                else:
+                    result[priority] = 0
+            except Exception as e:
+                logger.error(f"Error getting queue {queue_name}: {e}")
                 result[priority] = 0
+                
         return result
     
     async def purge_queue(self, name: str) -> None:
         """Purge all messages from a queue"""
-        queue = await self.get_queue(name)
-        if queue:
-            await queue.purge()
-            logger.info(f"Purged queue: {name}")
+        try:
+            queue = await self.get_queue(name)
+            if queue:
+                await queue.purge()
+                logger.info(f"Purged queue: {name}")
+        except Exception as e:
+            logger.error(f"Error purging queue {name}: {e}")
     
     async def purge_all_queues(self) -> None:
         """Purge all priority queues"""
@@ -140,19 +156,19 @@ class QueueManager:
         headers: Optional[Dict] = None
     ) -> None:
         """Publish a message to an exchange"""
-        # Check if channel is closed
-        if self.channel.is_closed:
-            logger.warning("Channel closed, attempting to reopen")
-            # Try to reacquire
-            self.channel = await self.channel.connection.channel()
-            
-        message = Message(
-            body=message_body,
-            delivery_mode=DeliveryMode.PERSISTENT,
-            headers=headers or {}
-        )
-        
         try:
+            # Check if channel is closed
+            if self.channel.is_closed:
+                logger.warning("Channel closed, attempting to reopen")
+                # Try to reacquire
+                self.channel = await self.channel.connection.channel()
+                
+            message = Message(
+                body=message_body,
+                delivery_mode=DeliveryMode.PERSISTENT,
+                headers=headers or {}
+            )
+            
             await exchange.publish(
                 message,
                 routing_key=routing_key
@@ -168,10 +184,14 @@ class QueueManager:
         no_ack: bool = False
     ) -> Optional[aio_pika.IncomingMessage]:
         """Get the next message from a queue, with manual ack"""
-        queue = await self.get_queue(queue_name)
-        if queue:
-            try:
-                return await queue.get(no_ack=no_ack, fail=False)
-            except aio_pika.exceptions.QueueEmpty:
-                return None
-        return None
+        try:
+            queue = await self.get_queue(queue_name)
+            if queue:
+                try:
+                    return await queue.get(no_ack=no_ack, fail=False)
+                except aio_pika.exceptions.QueueEmpty:
+                    return None
+            return None
+        except Exception as e:
+            logger.error(f"Error getting message from queue {queue_name}: {e}")
+            return None
