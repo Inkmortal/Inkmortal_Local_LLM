@@ -18,39 +18,82 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const { currentTheme } = useTheme();
   const [message, setMessage] = useState<string>('');
   const localInputRef = useRef<HTMLTextAreaElement>(null);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use local ref if no ref is provided
-  const combinedRef = inputRef as React.RefObject<HTMLTextAreaElement> || localInputRef;
+  const textareaRef = inputRef as React.RefObject<HTMLTextAreaElement> || localInputRef;
   
-  // Focus input on first render
+  // Helper function to force focus with console feedback
+  const focusTextarea = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      console.log('Focus attempt on textarea');
+    } else {
+      console.warn('Textarea ref is null during focus attempt');
+    }
+  }, [textareaRef]);
+
+  // Focus input on component mount
   useEffect(() => {
-    const focusInput = () => {
-      if (combinedRef.current) {
-        combinedRef.current.focus();
-      }
-    };
+    // Immediate focus
+    focusTextarea();
     
-    // Multiple focus attempts with staggered timing
-    focusInput();
-    setTimeout(focusInput, 0);
-    setTimeout(focusInput, 100);
-  }, [combinedRef]);
+    // Backup focus with staggered timing
+    const t1 = setTimeout(focusTextarea, 0);
+    const t2 = setTimeout(focusTextarea, 50);
+    const t3 = setTimeout(focusTextarea, 100);
+    
+    // Cleanup timeouts
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [focusTextarea]);
   
-  // Handle message sending and maintain focus
+  // Handle message sending
   const handleSend = useCallback(() => {
     if (message.trim() && !disabled) {
+      // Store current selection state and height
+      const selectionStart = textareaRef.current?.selectionStart || 0;
+      
+      // Send message
       onSend(message);
+      
+      // Reset state
       setMessage('');
       
-      // Force focus back on textarea after sending
+      // Focus management cascade (multiple approaches for redundancy)
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+      
+      // First attempt: immediate
+      focusTextarea();
+      
+      // Second attempt: requestAnimationFrame
       requestAnimationFrame(() => {
-        if (combinedRef.current) {
-          combinedRef.current.focus();
-          combinedRef.current.style.height = '48px';
-        }
+        focusTextarea();
+        
+        // Third attempt: setTimeout series
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.style.height = '48px';
+          }
+        }, 0);
+        
+        focusTimeoutRef.current = setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            // Place cursor at beginning
+            textareaRef.current.selectionStart = 0;
+            textareaRef.current.selectionEnd = 0;
+          }
+        }, 100);
       });
     }
-  }, [message, disabled, onSend, combinedRef]);
+  }, [message, disabled, onSend, focusTextarea, textareaRef]);
 
   // Handle Enter key for sending, Shift+Enter for new line
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -59,7 +102,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       handleSend();
     } else if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
-      const textarea = combinedRef.current;
+      const textarea = textareaRef.current;
       if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
@@ -71,36 +114,56 @@ const ChatInput: React.FC<ChatInputProps> = ({
           if (textarea) {
             textarea.selectionStart = start + 1;
             textarea.selectionEnd = start + 1;
+            // Force focus during cursor position change
+            textarea.focus();
           }
         }, 0);
       }
     }
-  }, [handleSend, message, combinedRef]);
+  }, [handleSend, message, textareaRef]);
 
   // Handle textarea height adjustment
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
-    const textarea = combinedRef.current;
+    const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
       textarea.style.height = `${Math.max(textarea.scrollHeight, 48)}px`;
       textarea.style.overflowY = textarea.scrollHeight > 200 ? 'auto' : 'hidden';
     }
-  }, [combinedRef]);
+  }, [textareaRef]);
 
   // Reset focus when window regains focus
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (combinedRef.current) {
-        combinedRef.current.focus();
+      focusTextarea();
+    };
+    
+    // Focus on blur events within the container to prevent focus loss
+    const handleContainerBlur = (e: FocusEvent) => {
+      // If focus is moving outside container, recover it
+      if (!e.currentTarget || !e.relatedTarget || 
+          !(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
+        setTimeout(focusTextarea, 0);
       }
     };
+    
+    const container = textareaRef.current?.parentElement?.parentElement;
+    if (container) {
+      container.addEventListener('focusout', handleContainerBlur);
+    }
     
     window.addEventListener('focus', handleWindowFocus);
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
+      if (container) {
+        container.removeEventListener('focusout', handleContainerBlur);
+      }
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
     };
-  }, [combinedRef]);
+  }, [focusTextarea, textareaRef]);
 
   return (
     <div className="relative">
@@ -113,12 +176,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
         }}
       >
         <textarea
-          ref={combinedRef as React.RefObject<HTMLTextAreaElement>}
+          ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
           className="flex-grow py-3 px-4 outline-none resize-none min-h-[42px]"
           placeholder={placeholder}
           value={message}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onBlur={(e) => {
+            // If blur is not moving to send button, refocus
+            if (!e.relatedTarget || e.relatedTarget.tagName !== 'BUTTON') {
+              setTimeout(focusTextarea, 0);
+            }
+          }}
           disabled={disabled}
           rows={1}
           spellCheck={true}
@@ -131,7 +200,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
           }}
         />
         <Button
-          onClick={handleSend}
+          onClick={(e) => {
+            e.preventDefault();
+            handleSend();
+            // Focus management from button click
+            setTimeout(focusTextarea, 0);
+          }}
           disabled={disabled || !message.trim()}
           variant="default"
           className="m-1.5 transition-all hover:scale-105 self-end mb-2 mr-2"
