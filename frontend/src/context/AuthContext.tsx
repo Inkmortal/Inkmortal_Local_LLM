@@ -105,6 +105,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Store token and update auth state
           login(data.access_token, data.username, true);
           
+          // Explicitly redirect to admin dashboard
+          window.navigateTo('/admin');
+          
           return true;
         } catch (e) {
           console.error('Error parsing login response:', e);
@@ -173,6 +176,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           login(data.access_token, data.username, data.is_admin || false);
           if (data.email) {
             setUserEmail(data.email);
+          }
+          
+          // Redirect user based on their role
+          if (data.is_admin) {
+            window.navigateTo('/admin');
+          } else {
+            window.navigateTo('/chat');
           }
           
           return true;

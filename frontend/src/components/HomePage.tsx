@@ -120,7 +120,15 @@ const HomePage: React.FC = () => {
           <Button 
             size="sm"
             variant="ghost"
-            onClick={() => window.navigateTo('/chat')}
+            onClick={() => {
+              // Check if user is logged in
+              const token = localStorage.getItem('authToken');
+              if (token) {
+                window.navigateTo('/chat');
+              } else {
+                window.navigateTo('/login');
+              }
+            }}
             className="hover-float transition-all duration-300"
           >
             Chat Now
@@ -169,7 +177,15 @@ const HomePage: React.FC = () => {
             <div className="flex flex-wrap gap-4">
               <Button 
                 size="lg"
-                onClick={() => window.navigateTo('/chat')}
+                onClick={() => {
+                  // Check if user is logged in
+                  const token = localStorage.getItem('authToken');
+                  if (token) {
+                    window.navigateTo('/chat');
+                  } else {
+                    window.navigateTo('/login');
+                  }
+                }}
                 className="button-shimmer group"
                 style={{ 
                   borderRadius: '1.5rem',
@@ -356,7 +372,19 @@ const HomePage: React.FC = () => {
                 <a 
                   className="inline-flex items-center text-sm font-medium mt-4 cursor-pointer hover:underline"
                   style={{ color: currentTheme.colors.accentPrimary }}
-                  onClick={() => window.navigateTo(feature.title === "Rich Formatting" ? '/rich-input-demo' : '/chat')}
+                  onClick={() => {
+                    if (feature.title === "Rich Formatting") {
+                      window.navigateTo('/rich-input-demo');
+                    } else {
+                      // Check if user is logged in
+                      const token = localStorage.getItem('authToken');
+                      if (token) {
+                        window.navigateTo('/chat');
+                      } else {
+                        window.navigateTo('/login');
+                      }
+                    }
+                  }}
                 >
                   {feature.title === "Rich Formatting" ? "Try the demo" : "Try it now"}
                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -407,7 +435,15 @@ const HomePage: React.FC = () => {
             <div className="mt-8 text-center">
               <Button
                 size="lg"
-                onClick={() => window.navigateTo('/chat')}
+                onClick={() => {
+                  // Check if user is logged in
+                  const token = localStorage.getItem('authToken');
+                  if (token) {
+                    window.navigateTo('/chat');
+                  } else {
+                    window.navigateTo('/login');
+                  }
+                }}
                 className="button-shimmer"
               >
                 Experience It Now
