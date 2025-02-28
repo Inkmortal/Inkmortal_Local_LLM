@@ -83,11 +83,11 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
           }}
           title="Insert code snippet"
           onClick={() => {
-            // Try to open the advanced code editor modal
+            // This sends a direct command to open the advanced code editor modal
             handleInsertCode("OPEN_MODAL");
-            // Fall back to the selector if modal doesn't open
-            setShowCodeSelector(true);
-            setShowMathSelector(false);
+            // Old behavior is commented out as the advanced modal will be used
+            // setShowCodeSelector(true);
+            // setShowMathSelector(false);
           }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -110,11 +110,11 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
           }}
           title="Insert math expression"
           onClick={() => {
-            // Try to open the advanced math editor modal
+            // This sends a direct command to open the advanced math editor modal
             handleInsertMath("OPEN_MODAL");
-            // Fall back to the selector if modal doesn't open
-            setShowMathSelector(true);
-            setShowCodeSelector(false);
+            // Old behavior is commented out as the advanced modal will be used
+            // setShowMathSelector(true);
+            // setShowCodeSelector(false);
           }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

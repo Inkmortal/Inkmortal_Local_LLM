@@ -74,13 +74,52 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     editor?.commands.clearContent();
   };
 
+  // Handler to open the math editor modal
   const handleInsertMath = useCallback(() => {
     setMathEditorOpen(true);
   }, []);
 
+  // Handler to open the code editor modal
   const handleInsertCode = useCallback(() => {
     setCodeEditorOpen(true);
   }, []);
+
+  // Register handlers for external components to open these modals
+  useEffect(() => {
+    if (onInsertMath) {
+      // Store a reference to our handler function in the ref from parent
+      const originalHandler = onInsertMath;
+      const newHandler = (input: string) => {
+        if (input === "OPEN_MODAL") {
+          // Direct command to open the modal
+          setMathEditorOpen(true);
+          return;
+        }
+        // Otherwise use the original function
+        originalHandler(input);
+      };
+      
+      // Replace the function
+      onInsertMath(newHandler);
+    }
+    
+    if (onInsertCode) {
+      // Store a reference to our handler function in the ref from parent
+      const originalHandler = onInsertCode;
+      const newHandler = (input: string) => {
+        if (input === "OPEN_MODAL") {
+          // Direct command to open the modal
+          setCodeEditorOpen(true);
+          return;
+        }
+        // Otherwise use the original function
+        originalHandler(input);
+      };
+      
+      // Replace the function
+      onInsertCode(newHandler);
+    }
+  }, [onInsertMath, onInsertCode]);
 
   // Debug logging to see what's happening with the editor
   useEffect(() => {
