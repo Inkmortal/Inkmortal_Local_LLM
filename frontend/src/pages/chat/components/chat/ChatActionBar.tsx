@@ -58,15 +58,11 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
         {/* Code Snippet Button */}
         <Button
           size="sm"
-          variant={showCodeSelector ? "default" : "ghost"}
+          variant="ghost"
           className="rounded-md px-3 py-1.5 transition-all flex items-center"
           style={{
-            color: showCodeSelector 
-              ? '#fff' 
-              : currentTheme.colors.textSecondary,
-            backgroundColor: showCodeSelector 
-              ? currentTheme.colors.accentPrimary 
-              : `${currentTheme.colors.bgTertiary}40`,
+            color: currentTheme.colors.textSecondary,
+            backgroundColor: `${currentTheme.colors.bgTertiary}40`,
           }}
           title="Insert code snippet"
           onClick={() => handleInsertCode("OPEN_MODAL")}
@@ -80,15 +76,11 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
         {/* Math Expression Button */}
         <Button
           size="sm"
-          variant={showMathSelector ? "default" : "ghost"}
+          variant="ghost"
           className="rounded-md px-3 py-1.5 transition-all flex items-center"
           style={{
-            color: showMathSelector 
-              ? '#fff' 
-              : currentTheme.colors.textSecondary,
-            backgroundColor: showMathSelector 
-              ? currentTheme.colors.accentSecondary 
-              : `${currentTheme.colors.bgTertiary}40`,
+            color: currentTheme.colors.textSecondary,
+            backgroundColor: `${currentTheme.colors.bgTertiary}40`,
           }}
           title="Insert math expression"
           onClick={() => handleInsertMath("OPEN_MODAL")}
