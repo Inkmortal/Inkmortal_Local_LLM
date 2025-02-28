@@ -13,7 +13,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
   const { logout } = useAuth();
 
   const handleHomeClick = () => {
-    window.location.href = window.location.origin;  // Use origin to ensure it goes to home
+    window.navigateTo('/');  // Use client-side routing for consistent navigation
   };
 
   return (
