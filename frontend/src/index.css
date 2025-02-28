@@ -17,6 +17,7 @@
 @import './styles/animations.css';
 @import './styles/modern-ui.css';
 @import './styles/enhanced-animations.css';
+@import './styles/editor.css'; /* Rich text editor styles */
 
 @tailwind base;
 @tailwind components;
