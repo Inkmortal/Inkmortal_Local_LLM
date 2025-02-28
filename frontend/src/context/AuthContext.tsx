@@ -80,15 +80,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     try {
       console.log('Attempting admin login...');
+      
+      // Create form data for OAuth2 compatibility
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password);
+      
       const response = await fetchApi('/auth/admin/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
+        body: formData,
       });
       
       console.log('Admin login response status:', response.status);
@@ -129,15 +132,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     try {
       console.log('Attempting user login...');
-      const response = await fetchApi('/auth/login', {
+      
+      // Create form data for OAuth2 compatibility
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password);
+      
+      const response = await fetchApi('/auth/token', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
+        body: formData,
       });
       
       console.log('User login response status:', response.status);
@@ -246,7 +252,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // Verify the token with backend
-      const response = await fetchApi('/auth/verify', {
+      const response = await fetchApi('/auth/users/me', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
