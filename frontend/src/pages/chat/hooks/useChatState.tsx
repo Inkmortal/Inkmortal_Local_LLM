@@ -190,7 +190,10 @@ ${template}
     
     // Use the registered callback to insert at cursor position
     if (codeInsertRef.current) {
+      console.log("Using codeInsertRef from useChatState:", codeSnippet.substring(0, 50) + "...");
       codeInsertRef.current(codeSnippet);
+    } else {
+      console.error("codeInsertRef.current is not defined in useChatState!");
     }
   }, []);
 
@@ -221,7 +224,10 @@ ${template}
     
     // Use the registered callback to insert at cursor position
     if (mathInsertRef.current) {
+      console.log("Using mathInsertRef from useChatState:", mathSnippet.substring(0, 50) + "...");
       mathInsertRef.current(mathSnippet);
+    } else {
+      console.error("mathInsertRef.current is not defined in useChatState!");
     }
   }, []);
 

@@ -58,6 +58,29 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     console.log("Directly opening math editor from action bar");
     setMathEditorOpen(true);
   };
+  
+  // Setup handlers for editor content insertion once on mount
+  useEffect(() => {
+    // When TipTapEditor registers its handler, store it in our ref
+    const handleSetupCodeInsert = (insertFn: (code: string) => void) => {
+      console.log("Setting up code insertion ref");
+      codeInsertRef.current = insertFn;
+    };
+    
+    const handleSetupMathInsert = (insertFn: (math: string) => void) => {
+      console.log("Setting up math insertion ref");
+      mathInsertRef.current = insertFn;
+    };
+    
+    // Pass these setup functions to TipTapEditor
+    if (codeInsertRef.current === undefined) {
+      codeInsertRef.current = handleSetupCodeInsert;
+    }
+    
+    if (mathInsertRef.current === undefined) {
+      mathInsertRef.current = handleSetupMathInsert;
+    }
+  }, []);
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -164,8 +187,18 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
             disabled={loading}
             placeholder="Message Sea Dragon Inkmortal..."
             isGenerating={isGenerating}
-            onInsertCode={codeInsertRef.current}
-            onInsertMath={mathInsertRef.current}
+            onInsertCode={(content) => {
+              console.log("Setting code content in TipTap:", content);
+              if (codeInsertRef.current) {
+                codeInsertRef.current(content);
+              }
+            }}
+            onInsertMath={(content) => {
+              console.log("Setting math content in TipTap:", content);
+              if (mathInsertRef.current) {
+                mathInsertRef.current(content);
+              }
+            }}
           />
         </div>
       </div>
@@ -176,9 +209,19 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       {codeEditorOpen && (
         <CodeEditor
           onInsert={(code, language) => {
+            console.log("Code editor submitted with:", code, language);
+            // Format the code with markdown code block syntax
+            const formattedCode = `\`\`\`${language}\n${code}\n\`\`\``;
+            
+            // Use the ref to insert into the editor
             if (codeInsertRef.current) {
-              codeInsertRef.current(`\`\`\`${language}\n${code}\n\`\`\``);
+              console.log("Inserting code via ref:", formattedCode.substring(0, 30) + "...");
+              codeInsertRef.current(formattedCode);
+            } else {
+              console.error("codeInsertRef.current is not defined!");
             }
+            
+            // Close the modal
             setCodeEditorOpen(false);
           }}
           onClose={() => setCodeEditorOpen(false)}
@@ -188,9 +231,19 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       {mathEditorOpen && (
         <MathExpressionEditor
           onInsert={(latex) => {
+            console.log("Math editor submitted with:", latex);
+            // Format the LaTeX with display math syntax
+            const formattedMath = `$$${latex}$$`;
+            
+            // Use the ref to insert into the editor
             if (mathInsertRef.current) {
-              mathInsertRef.current(`$$${latex}$$`);
+              console.log("Inserting math via ref:", formattedMath.substring(0, 30) + "...");
+              mathInsertRef.current(formattedMath);
+            } else {
+              console.error("mathInsertRef.current is not defined!");
             }
+            
+            // Close the modal
             setMathEditorOpen(false);
           }}
           onClose={() => setMathEditorOpen(false)}
