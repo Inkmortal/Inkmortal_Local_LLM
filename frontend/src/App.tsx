@@ -11,7 +11,6 @@ import ThemeCustomizer from './pages/admin/ThemeCustomizer';
 import SystemStats from './pages/admin/SystemStats';
 import AdminLogin from './pages/admin/Login';
 import ChatPage from './pages/chat/ModernChatPage';
-import RichInputDemo from './pages/chat/RichInputDemo';
 import ModernHomePage from './components/HomePage';
 import Card from './components/ui/Card';
 import Button from './components/ui/Button';
@@ -39,7 +38,6 @@ type Route =
   | 'admin/login' 
   | 'themes'
   | 'chat'
-  | 'rich-input-demo'
   | 'home';
 
 // Loader component
@@ -131,8 +129,6 @@ function App() {
         return <ThemeGallery />;
       case 'chat':
         return <ChatPage />;
-      case 'rich-input-demo':
-        return <RichInputDemo />;
       case 'home':
       default:
         return <ModernHomePage />;
