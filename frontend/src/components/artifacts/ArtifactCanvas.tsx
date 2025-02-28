@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { Artifact, ArtifactType, UploadedDocument } from './ArtifactsSidebar';
 import CodeBlock from '../education/CodeBlock';
+import MathRenderer from '../education/MathRenderer';
+import 'katex/dist/katex.min.css';
 
 interface ArtifactCanvasProps {
   artifact?: Artifact;
@@ -27,34 +29,7 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
   const [startX, setStartX] = useState(0);
   const [startWidth, setStartWidth] = useState(0);
 
-  // Initialize KaTeX rendering when the component mounts/updates
-  useEffect(() => {
-    if (isOpen && activeTab === 'preview' && artifact?.type === 'math') {
-      // Wait for the DOM to update before rendering math
-      setTimeout(() => {
-        const katexRender = window.renderMathInElement;
-        const mathElements = document.querySelectorAll('.math-display');
-        if (katexRender && mathElements.length > 0) {
-          mathElements.forEach(el => {
-            try {
-              katexRender(el, {
-                delimiters: [
-                  {left: "$$", right: "$$", display: true},
-                  {left: "$", right: "$", display: false},
-                  {left: "\\begin{align}", right: "\\end{align}", display: true},
-                  {left: "\\begin{equation}", right: "\\end{equation}", display: true}
-                ]
-              });
-            } catch (error) {
-              console.error('KaTeX rendering error:', error);
-            }
-          });
-        } else {
-          console.warn('KaTeX rendering not available or math elements not found');
-        }
-      }, 100);
-    }
-  }, [isOpen, activeTab, artifact]);
+  // No longer needed - Using MathRenderer component instead
 
   // Handle resize events
   useEffect(() => {
@@ -162,8 +137,10 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
               : 'plaintext';
           
           return (
-            <div className="overflow-auto p-4 h-full">
-              <CodeBlock code={artifact.content} language={language} />
+            <div className="overflow-auto p-4 h-full max-h-full w-full">
+              <div className="h-auto max-w-full">
+                <CodeBlock code={artifact.content} language={language} />
+              </div>
             </div>
           );
         } else {
@@ -242,9 +219,11 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
                 className="bg-opacity-30 p-8 rounded-lg" 
                 style={{ backgroundColor: currentTheme.colors.bgTertiary }}
               >
-                <div className="text-xl math-display">
-                  {artifact.content}
-                </div>
+                <MathRenderer 
+                  latex={artifact.content.replace(/\\begin{align}([\s\S]*?)\\end{align}/g, "$1")} 
+                  display={true} 
+                  className="text-xl"
+                />
                 <div 
                   className="mt-4 text-center text-sm font-medium"
                   style={{ color: currentTheme.colors.accentPrimary }}

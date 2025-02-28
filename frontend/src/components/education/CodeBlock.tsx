@@ -35,7 +35,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
 
   return (
     <div 
-      className={`rounded-md overflow-hidden ${className}`}
+      className={`rounded-md overflow-hidden w-full ${className}`}
       style={{ 
         backgroundColor: '#282c34',
         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
@@ -62,11 +62,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         </button>
       </div>
       <pre 
-        className="p-4 overflow-x-auto text-sm font-mono leading-relaxed" 
+        className="p-4 overflow-x-auto text-sm font-mono leading-relaxed w-full" 
         style={{ 
           margin: 0, 
-          backgroundColor: '#282c34',
-          maxHeight: '400px'
+          backgroundColor: '#282c34'
         }}
       >
         <code className={`language-${language}`}>{code}</code>
