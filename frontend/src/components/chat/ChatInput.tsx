@@ -1,16 +1,24 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Button from '../ui/Button';
+import CodeBlock from '../education/CodeBlock';
+import MathRenderer from '../education/MathRenderer';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
   placeholder?: string;
   inputRef?: React.RefObject<HTMLInputElement>;
-  onInsertCode?: (codeSnippet: string) => void; // Add prop for inserting code
-  onInsertMath?: (mathSnippet: string) => void; // Add prop for inserting math
-  isGenerating?: boolean; // Add prop to know if response is streaming
+  onInsertCode?: (codeSnippet: string) => void;
+  onInsertMath?: (mathSnippet: string) => void;
+  isGenerating?: boolean;
 }
+
+// Rich content types for internal rendering
+type ContentSegment = 
+  | { type: 'text'; content: string; start: number; end: number }
+  | { type: 'code'; language: string; content: string; start: number; end: number }
+  | { type: 'math'; display: boolean; content: string; start: number; end: number };
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSend, 
@@ -25,19 +33,138 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
+  const [segments, setSegments] = useState<ContentSegment[]>([{ type: 'text', content: '', start: 0, end: 0 }]);
   const [cursorPosition, setCursorPosition] = useState<{top: number, left: number} | null>(null);
+  const [activeEditor, setActiveEditor] = useState<{type: 'code' | 'math' | null; index: number}>({ type: null, index: -1 });
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   
   // Track if user is actively typing for advanced effects
   const [isTyping, setIsTyping] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Parse the message into segments for rendering
+  const parseMessage = useCallback(() => {
+    if (!message) {
+      setSegments([{ type: 'text', content: '', start: 0, end: 0 }]);
+      return;
+    }
+
+    const newSegments: ContentSegment[] = [];
+    let currentIndex = 0;
+    
+    // Regular expressions for different content types
+    const codeBlockRegex = /```([\w-]+)?\n([\s\S]*?)```/g;
+    const displayMathRegex = /\$\$([\s\S]*?)\$\$/g;
+    const inlineMathRegex = /\$([^$]+)\$/g;
+    
+    // Store all matches with their positions
+    const allMatches: ContentSegment[] = [];
+    
+    // Find code blocks
+    let codeMatch;
+    while ((codeMatch = codeBlockRegex.exec(message)) !== null) {
+      const language = codeMatch[1] || 'javascript';
+      const code = codeMatch[2];
+      allMatches.push({
+        type: 'code',
+        language,
+        content: code,
+        start: codeMatch.index,
+        end: codeMatch.index + codeMatch[0].length
+      });
+    }
+    
+    // Find display math
+    let displayMathMatch;
+    while ((displayMathMatch = displayMathRegex.exec(message)) !== null) {
+      // Ignore matches that are inside code blocks
+      const insideOtherBlock = allMatches.some(
+        match => displayMathMatch!.index >= match.start && displayMathMatch!.index < match.end
+      );
+      
+      if (!insideOtherBlock) {
+        allMatches.push({
+          type: 'math',
+          display: true,
+          content: displayMathMatch[1],
+          start: displayMathMatch.index,
+          end: displayMathMatch.index + displayMathMatch[0].length
+        });
+      }
+    }
+    
+    // Find inline math
+    let inlineMathMatch;
+    while ((inlineMathMatch = inlineMathRegex.exec(message)) !== null) {
+      // Ignore matches that are inside other blocks
+      const insideOtherBlock = allMatches.some(
+        match => inlineMathMatch!.index >= match.start && inlineMathMatch!.index < match.end
+      );
+      
+      if (!insideOtherBlock) {
+        allMatches.push({
+          type: 'math',
+          display: false,
+          content: inlineMathMatch[1],
+          start: inlineMathMatch.index,
+          end: inlineMathMatch.index + inlineMathMatch[0].length
+        });
+      }
+    }
+    
+    // Sort matches by start position
+    allMatches.sort((a, b) => a.start - b.start);
+    
+    // Build the result by combining text and special elements
+    for (let i = 0; i < allMatches.length; i++) {
+      const match = allMatches[i];
+      
+      // Add text before the match
+      if (match.start > currentIndex) {
+        newSegments.push({
+          type: 'text',
+          content: message.substring(currentIndex, match.start),
+          start: currentIndex,
+          end: match.start
+        });
+      }
+      
+      // Add the special element
+      newSegments.push(match);
+      
+      // Update the current index
+      currentIndex = match.end;
+    }
+    
+    // Add any remaining text
+    if (currentIndex < message.length) {
+      newSegments.push({
+        type: 'text',
+        content: message.substring(currentIndex),
+        start: currentIndex,
+        end: message.length
+      });
+    }
+    
+    // If no segments were created, add the whole message as text
+    if (newSegments.length === 0) {
+      newSegments.push({
+        type: 'text',
+        content: message,
+        start: 0,
+        end: message.length
+      });
+    }
+    
+    setSegments(newSegments);
+  }, [message]);
+
   // Focus techniques to maintain focus during streaming responses
   useEffect(() => {
     if (!disabled && textareaRef.current) {
-      // Try multiple focus approaches for better reliability
       textareaRef.current.focus();
       
       requestAnimationFrame(() => {
@@ -54,11 +181,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [disabled, isGenerating]);
   
+  // Update segments when message changes
+  useEffect(() => {
+    parseMessage();
+  }, [message, parseMessage]);
+  
   // Additional focus interval during streaming
   useEffect(() => {
     let focusInterval: NodeJS.Timeout | null = null;
     
-    // Only set up the interval if we're generating a response
     if (isGenerating) {
       focusInterval = setInterval(() => {
         if (textareaRef.current && document.activeElement !== textareaRef.current) {
@@ -84,7 +215,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     // Get cursor position
     const cursorPos = textarea.selectionStart;
     if (cursorPos === textarea.value.length) {
-      // Cursor is at the end of text, no need to show effect
       setCursorPosition(null);
       return;
     }
@@ -141,8 +271,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (message.trim() && !disabled && !isComposing) {
       onSend(message);
       setMessage('');
+      setActiveEditor({ type: null, index: -1 });
       
-      // Attempt focus after sending
       if (textareaRef.current) {
         setTimeout(() => {
           textareaRef.current?.focus();
@@ -161,6 +291,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // Handle Shift+Enter for newlines and Enter for submission
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     updateCursorPosition();
+    
+    // If we're in special editor mode, don't submit on Enter
+    if (activeEditor.type !== null) {
+      if (e.key === 'Escape') {
+        setActiveEditor({ type: null, index: -1 });
+        e.preventDefault();
+      }
+      return;
+    }
     
     // Don't submit while IME is composing for international keyboards
     if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
@@ -181,7 +320,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setIsTyping(false);
     }, 2000);
     
-  }, [handleSubmit, isComposing, updateCursorPosition]);
+  }, [handleSubmit, isComposing, updateCursorPosition, activeEditor]);
   
   // Handle composition events for international keyboards (CJK)
   const handleCompositionStart = () => setIsComposing(true);
@@ -222,6 +361,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
     window.addEventListener('resize', updateCursorPosition);
     return () => window.removeEventListener('resize', updateCursorPosition);
   }, [updateCursorPosition]);
+
+  // Function to update a segment's content
+  const updateSegmentContent = useCallback((index: number, newContent: string) => {
+    setSegments(prev => {
+      const newSegments = [...prev];
+      if (newSegments[index]) {
+        const segment = {...newSegments[index], content: newContent};
+        newSegments[index] = segment;
+        
+        // Rebuild the full message
+        const fullMessage = newSegments.map(seg => {
+          if (seg.type === 'text') return seg.content;
+          if (seg.type === 'code') return '```' + seg.language + '\n' + seg.content + '```';
+          if (seg.type === 'math') return seg.display ? '$$' + seg.content + '$$' : '$' + seg.content + '$';
+          return '';
+        }).join('');
+        
+        setMessage(fullMessage);
+      }
+      return newSegments;
+    });
+  }, []);
 
   // Function to insert text at cursor position
   const insertTextAtCursor = useCallback((text: string) => {
@@ -265,6 +426,234 @@ const ChatInput: React.FC<ChatInputProps> = ({
       });
     }
   }, [onInsertMath, insertTextAtCursor]);
+
+  // Function to enter editing mode for a segment
+  const enterEditMode = useCallback((type: 'code' | 'math', index: number) => {
+    setActiveEditor({ type, index });
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 10);
+  }, []);
+
+  // Render a preview of the message with formatted segments
+  const renderPreview = () => {
+    return (
+      <div 
+        ref={previewRef} 
+        className={`px-4 pt-3.5 pb-2 w-full ${activeEditor.type !== null ? 'hidden' : 'block'}`}
+        style={{ 
+          color: currentTheme.colors.textPrimary,
+          minHeight: '2.5rem',
+        }}
+      >
+        {segments.map((segment, index) => {
+          if (segment.type === 'text') {
+            // Split text by newlines and handle empty lines
+            return segment.content.split('\n').map((line, lineIndex, array) => (
+              <React.Fragment key={`text-${index}-${lineIndex}`}>
+                {line || (lineIndex < array.length - 1 ? <br /> : null)}
+                {lineIndex < array.length - 1 && line && <br />}
+              </React.Fragment>
+            ));
+          }
+          
+          if (segment.type === 'code') {
+            return (
+              <div key={`code-${index}`} className="my-2 relative group cursor-pointer" onClick={() => enterEditMode('code', index)}>
+                <CodeBlock 
+                  code={segment.content} 
+                  language={segment.language} 
+                  className="rounded-md overflow-hidden shadow-sm"
+                />
+                <div className="absolute top-2 right-2 bg-blue-500 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                  Edit
+                </div>
+              </div>
+            );
+          }
+          
+          if (segment.type === 'math') {
+            return (
+              <div 
+                key={`math-${index}`} 
+                className={`${segment.display ? 'my-2 block' : 'inline-block'} cursor-pointer group relative`}
+                onClick={() => enterEditMode('math', index)}
+              >
+                <MathRenderer 
+                  latex={segment.content} 
+                  display={segment.display} 
+                />
+                <div className="absolute top-0 right-0 bg-purple-500 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                  Edit
+                </div>
+              </div>
+            );
+          }
+          
+          return null;
+        })}
+      </div>
+    );
+  };
+
+  // Render a special editor for active code/math segment
+  const renderActiveEditor = () => {
+    if (activeEditor.type === null || activeEditor.index === -1) return null;
+    
+    const segment = segments[activeEditor.index];
+    if (!segment) return null;
+    
+    if (activeEditor.type === 'code') {
+      return (
+        <div className="px-4 pt-3.5 pb-2 w-full">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center">
+              <label className="text-sm mr-2">Language:</label>
+              <input 
+                type="text" 
+                value={(segment as {language: string}).language} 
+                onChange={(e) => {
+                  const newSegments = [...segments];
+                  (newSegments[activeEditor.index] as {language: string}).language = e.target.value;
+                  setSegments(newSegments);
+                }}
+                className="px-2 py-1 text-sm rounded bg-gray-800 text-white"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <button 
+                className="px-3 py-1 bg-gray-700 text-white text-sm rounded"
+                onClick={() => setActiveEditor({ type: null, index: -1 })}
+              >
+                Cancel
+              </button>
+              <button 
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded"
+                onClick={() => {
+                  // Apply changes to the message string
+                  const newSegments = [...segments];
+                  const seg = newSegments[activeEditor.index] as {type: 'code'; language: string; content: string};
+                  
+                  // Update the message with the edited code
+                  const fullMessage = newSegments.map((s, i) => {
+                    if (i === activeEditor.index) {
+                      return '```' + seg.language + '\n' + seg.content + '```';
+                    }
+                    if (s.type === 'text') return s.content;
+                    if (s.type === 'code') return '```' + s.language + '\n' + s.content + '```';
+                    if (s.type === 'math') return s.display ? '$$' + s.content + '$$' : '$' + s.content + '$';
+                    return '';
+                  }).join('');
+                  
+                  setMessage(fullMessage);
+                  setActiveEditor({ type: null, index: -1 });
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={(segment as {content: string}).content}
+            onChange={(e) => {
+              // Update just the content in the segment
+              updateSegmentContent(activeEditor.index, e.target.value);
+            }}
+            className="w-full h-32 p-3 bg-gray-900 text-gray-100 font-mono text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter your code here..."
+          />
+        </div>
+      );
+    }
+    
+    if (activeEditor.type === 'math') {
+      return (
+        <div className="px-4 pt-3.5 pb-2 w-full">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center">
+              <label className="text-sm mr-2">Display:</label>
+              <input 
+                type="checkbox" 
+                checked={(segment as {display: boolean}).display} 
+                onChange={(e) => {
+                  const newSegments = [...segments];
+                  (newSegments[activeEditor.index] as {display: boolean}).display = e.target.checked;
+                  setSegments(newSegments);
+                }}
+              />
+              <span className="ml-1 text-sm">Block equation</span>
+            </div>
+            <div className="flex space-x-2">
+              <button 
+                className="px-3 py-1 bg-gray-700 text-white text-sm rounded"
+                onClick={() => setActiveEditor({ type: null, index: -1 })}
+              >
+                Cancel
+              </button>
+              <button 
+                className="px-3 py-1 bg-purple-600 text-white text-sm rounded"
+                onClick={() => {
+                  // Apply changes to the message string
+                  const newSegments = [...segments];
+                  const seg = newSegments[activeEditor.index] as {type: 'math'; display: boolean; content: string};
+                  
+                  // Update the message with the edited math
+                  const fullMessage = newSegments.map((s, i) => {
+                    if (i === activeEditor.index) {
+                      return seg.display ? '$$' + seg.content + '$$' : '$' + seg.content + '$';
+                    }
+                    if (s.type === 'text') return s.content;
+                    if (s.type === 'code') return '```' + s.language + '\n' + s.content + '```';
+                    if (s.type === 'math') return s.display ? '$$' + s.content + '$$' : '$' + s.content + '$';
+                    return '';
+                  }).join('');
+                  
+                  setMessage(fullMessage);
+                  setActiveEditor({ type: null, index: -1 });
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col md:flex-row gap-4">
+            <textarea
+              value={(segment as {content: string}).content}
+              onChange={(e) => {
+                // Update just the content in the segment
+                updateSegmentContent(activeEditor.index, e.target.value);
+              }}
+              className="w-full md:w-1/2 h-32 p-3 bg-gray-900 text-gray-100 font-mono text-sm rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Enter LaTeX here..."
+            />
+            <div className="w-full md:w-1/2 h-32 p-3 bg-gray-800 rounded overflow-auto flex items-center justify-center">
+              <MathRenderer 
+                latex={(segment as {content: string}).content} 
+                display={(segment as {display: boolean}).display} 
+              />
+            </div>
+          </div>
+          <div className="mt-2 text-sm text-blue-400 flex flex-wrap gap-2">
+            {['\\alpha', '\\beta', '\\gamma', '\\theta', '\\pi', '\\sqrt{}', '\\frac{}{}', '\\sum_{}^{}', '\\int_{}^{}'].map(symbol => (
+              <button 
+                key={symbol}
+                className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
+                onClick={() => updateSegmentContent(activeEditor.index, 
+                  (segment as {content: string}).content + symbol
+                )}
+              >
+                {symbol}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
+    return null;
+  };
 
   return (
     <div className="w-full relative z-50">
@@ -328,6 +717,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             />
           )}
           
+          {/* Hidden textarea for managing input */}
           <textarea 
             ref={textareaRef}
             value={message}
@@ -341,14 +731,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
             disabled={disabled}
             placeholder={isGenerating ? "AI is generating..." : placeholder}
             rows={1}
-            className="w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 relative"
+            className={`w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 ${activeEditor.type !== null ? 'absolute opacity-0' : 'relative opacity-0 h-full'}`}
             style={{ 
               backgroundColor: 'transparent',
-              color: currentTheme.colors.textPrimary,
+              color: 'transparent',
               caretColor: currentTheme.colors.accentPrimary,
               maxHeight: '200px',
             }}
           />
+          
+          {/* Content Preview Layer */}
+          {renderPreview()}
+          
+          {/* Active Editor Layer */}
+          {renderActiveEditor()}
           
           <div className="px-3 pb-2.5 flex justify-between items-center relative z-10">
             <div className="opacity-70 flex-1 text-center" style={{ color: currentTheme.colors.textMuted }}>
