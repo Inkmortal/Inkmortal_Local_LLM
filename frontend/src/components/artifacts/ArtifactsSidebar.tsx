@@ -133,15 +133,15 @@ $$f(x) = \\frac{1}{2\\pi} \\int_{-\\infty}^{\\infty} F(\\omega) e^{i\\omega x} d
 
 ## Properties of Fourier Transform
 
-1. **Linearity**: $\\mathcal{F}\\{af(x) + bg(x)\\} = a\\mathcal{F}\\{f(x)\\} + b\\mathcal{F}\\{g(x)\\}$
+1. **Linearity**: $$\\mathcal{F}\\{af(x) + bg(x)\\} = a\\mathcal{F}\\{f(x)\\} + b\\mathcal{F}\\{g(x)\\}$$
 
-2. **Scaling**: $\\mathcal{F}\\{f(ax)\\} = \\frac{1}{|a|}F(\\frac{\\omega}{a})$
+2. **Scaling**: $$\\mathcal{F}\\{f(ax)\\} = \\frac{1}{|a|}F(\\frac{\\omega}{a})$$
 
-3. **Time Shifting**: $\\mathcal{F}\\{f(x-a)\\} = e^{-i\\omega a}F(\\omega)$
+3. **Time Shifting**: $$\\mathcal{F}\\{f(x-a)\\} = e^{-i\\omega a}F(\\omega)$$
 
-4. **Frequency Shifting**: $\\mathcal{F}\\{e^{ix_0 x}f(x)\\} = F(\\omega - x_0)$
+4. **Frequency Shifting**: $$\\mathcal{F}\\{e^{ix_0 x}f(x)\\} = F(\\omega - x_0)$$
 
-5. **Convolution**: $\\mathcal{F}\\{f * g\\} = F(\\omega) \\cdot G(\\omega)$
+5. **Convolution**: $$\\mathcal{F}\\{f * g\\} = F(\\omega) \\cdot G(\\omega)$$
 
 ## Applications
 

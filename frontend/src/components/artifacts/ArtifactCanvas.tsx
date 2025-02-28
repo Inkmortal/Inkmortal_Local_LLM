@@ -4,6 +4,7 @@ import { Artifact, ArtifactType, UploadedDocument } from './ArtifactsSidebar';
 import CodeBlock from '../education/CodeBlock';
 import MathRenderer from '../education/MathRenderer';
 import MessageParser from '../chat/MessageParser';
+import { renderMathExpression, renderPdfPreview, processImage } from '../../services/mathService';
 import 'katex/dist/katex.min.css';
 
 interface ArtifactCanvasProps {
