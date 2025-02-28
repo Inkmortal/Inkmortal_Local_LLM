@@ -16,4 +16,5 @@ declare module "*.jpg" {
 interface Window {
   navigateTo: (path: string) => boolean;
   renderMathInElement: (element: Element, options?: any) => void;
+  Prism: any;
 }
