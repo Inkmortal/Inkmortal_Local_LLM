@@ -36,6 +36,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [segments, setSegments] = useState<ContentSegment[]>([{ type: 'text', content: '', start: 0, end: 0 }]);
   const [cursorPosition, setCursorPosition] = useState<{top: number, left: number} | null>(null);
   const [activeEditor, setActiveEditor] = useState<{type: 'code' | 'math' | null; index: number}>({ type: null, index: -1 });
+  const [mathSymbolSearch, setMathSymbolSearch] = useState('');
+  const [mathSymbolResults, setMathSymbolResults] = useState<Array<{symbol: string, display: string}>>([]);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,93 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // Track if user is actively typing for advanced effects
   const [isTyping, setIsTyping] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Common LaTeX symbols
+  const mathSymbols = [
+    // Greek letters
+    { symbol: '\\alpha', display: 'α' },
+    { symbol: '\\beta', display: 'β' },
+    { symbol: '\\gamma', display: 'γ' },
+    { symbol: '\\delta', display: 'δ' },
+    { symbol: '\\epsilon', display: 'ε' },
+    { symbol: '\\zeta', display: 'ζ' },
+    { symbol: '\\eta', display: 'η' },
+    { symbol: '\\theta', display: 'θ' },
+    { symbol: '\\iota', display: 'ι' },
+    { symbol: '\\kappa', display: 'κ' },
+    { symbol: '\\lambda', display: 'λ' },
+    { symbol: '\\mu', display: 'μ' },
+    { symbol: '\\nu', display: 'ν' },
+    { symbol: '\\xi', display: 'ξ' },
+    { symbol: '\\pi', display: 'π' },
+    { symbol: '\\rho', display: 'ρ' },
+    { symbol: '\\sigma', display: 'σ' },
+    { symbol: '\\tau', display: 'τ' },
+    { symbol: '\\upsilon', display: 'υ' },
+    { symbol: '\\phi', display: 'φ' },
+    { symbol: '\\chi', display: 'χ' },
+    { symbol: '\\psi', display: 'ψ' },
+    { symbol: '\\omega', display: 'ω' },
+    
+    // Uppercase Greek letters
+    { symbol: '\\Gamma', display: 'Γ' },
+    { symbol: '\\Delta', display: 'Δ' },
+    { symbol: '\\Theta', display: 'Θ' },
+    { symbol: '\\Lambda', display: 'Λ' },
+    { symbol: '\\Xi', display: 'Ξ' },
+    { symbol: '\\Pi', display: 'Π' },
+    { symbol: '\\Sigma', display: 'Σ' },
+    { symbol: '\\Phi', display: 'Φ' },
+    { symbol: '\\Psi', display: 'Ψ' },
+    { symbol: '\\Omega', display: 'Ω' },
+    
+    // Operators and functions
+    { symbol: '\\sum', display: '∑' },
+    { symbol: '\\prod', display: '∏' },
+    { symbol: '\\int', display: '∫' },
+    { symbol: '\\iint', display: '∬' },
+    { symbol: '\\iiint', display: '∭' },
+    { symbol: '\\oint', display: '∮' },
+    { symbol: '\\sqrt{x}', display: '√x' },
+    { symbol: '\\frac{x}{y}', display: 'x/y' },
+    { symbol: '\\partial', display: '∂' },
+    
+    // Relations
+    { symbol: '\\approx', display: '≈' },
+    { symbol: '\\sim', display: '∼' },
+    { symbol: '\\neq', display: '≠' },
+    { symbol: '\\leq', display: '≤' },
+    { symbol: '\\geq', display: '≥' },
+    { symbol: '\\ll', display: '≪' },
+    { symbol: '\\gg', display: '≫' },
+    { symbol: '\\subset', display: '⊂' },
+    { symbol: '\\supset', display: '⊃' },
+    { symbol: '\\in', display: '∈' },
+    { symbol: '\\notin', display: '∉' },
+    
+    // Arrows
+    { symbol: '\\leftarrow', display: '←' },
+    { symbol: '\\rightarrow', display: '→' },
+    { symbol: '\\leftrightarrow', display: '↔' },
+    { symbol: '\\Leftarrow', display: '⇐' },
+    { symbol: '\\Rightarrow', display: '⇒' },
+    { symbol: '\\Leftrightarrow', display: '⇔' },
+    
+    // Miscellaneous
+    { symbol: '\\infty', display: '∞' },
+    { symbol: '\\nabla', display: '∇' },
+    { symbol: '\\forall', display: '∀' },
+    { symbol: '\\exists', display: '∃' },
+    { symbol: '\\nexists', display: '∄' },
+    { symbol: '\\therefore', display: '∴' },
+    { symbol: '\\because', display: '∵' },
+    
+    // Templates and structures
+    { symbol: '\\begin{matrix} a & b \\\\ c & d \\end{matrix}', display: 'Matrix' },
+    { symbol: '\\lim_{x \\to \\infty}', display: 'Limit' },
+    { symbol: '\\sum_{i=1}^{n}', display: 'Sum' },
+    { symbol: '\\int_{a}^{b}', display: 'Integral' }
+  ];
   
   // Parse the message into segments for rendering
   const parseMessage = useCallback(() => {
@@ -186,6 +275,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
     parseMessage();
   }, [message, parseMessage]);
   
+  // Filter math symbols based on search term
+  useEffect(() => {
+    if (mathSymbolSearch.trim() === '') {
+      setMathSymbolResults(mathSymbols.slice(0, 18)); // Show popular symbols by default
+      return;
+    }
+    
+    const searchTerm = mathSymbolSearch.toLowerCase();
+    const filtered = mathSymbols.filter(symbol => 
+      symbol.symbol.toLowerCase().includes(searchTerm) || 
+      symbol.display.toLowerCase().includes(searchTerm)
+    );
+    
+    setMathSymbolResults(filtered.slice(0, 21)); // Limit to 21 results
+  }, [mathSymbolSearch]);
+  
   // Additional focus interval during streaming
   useEffect(() => {
     let focusInterval: NodeJS.Timeout | null = null;
@@ -292,17 +397,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     updateCursorPosition();
     
-    // If we're in special editor mode, don't submit on Enter
-    if (activeEditor.type !== null) {
-      if (e.key === 'Escape') {
-        setActiveEditor({ type: null, index: -1 });
-        e.preventDefault();
-      }
+    // If we're in special editor mode but the editor is not focused, submit on Enter
+    // (This allows the textarea to still be the main input element)
+    if (e.key === 'Escape' && activeEditor.type !== null) {
+      setActiveEditor({ type: null, index: -1 });
+      e.preventDefault();
       return;
     }
     
     // Don't submit while IME is composing for international keyboards
-    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing && activeEditor.type === null) {
       e.preventDefault();
       handleSubmit();
     }
@@ -428,7 +532,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }, [onInsertMath, insertTextAtCursor]);
 
   // Function to enter editing mode for a segment
-  const enterEditMode = useCallback((type: 'code' | 'math', index: number) => {
+  const enterEditMode = useCallback((type: 'code' | 'math', index: number, e: React.MouseEvent) => {
+    // Stop event propagation so we don't lose focus
+    e.stopPropagation();
+    e.preventDefault();
+    
     setActiveEditor({ type, index });
     setTimeout(() => {
       if (textareaRef.current) {
@@ -437,15 +545,85 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }, 10);
   }, []);
 
+  // Function to exit editing mode
+  const exitEditMode = useCallback((e: React.MouseEvent) => {
+    // Stop event propagation
+    e.stopPropagation();
+    e.preventDefault();
+    
+    setActiveEditor({ type: null, index: -1 });
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 10);
+  }, []);
+
+  // Function to apply changes from the editor
+  const applyEditorChanges = useCallback((e: React.MouseEvent) => {
+    // Stop event propagation
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const { type, index } = activeEditor;
+    if (type === null || index === -1) return;
+    
+    // Get the current segments
+    const segment = segments[index];
+    if (!segment) return;
+    
+    // Update the message with the edited content
+    const fullMessage = segments.map((s, i) => {
+      if (i === index) {
+        if (type === 'code') {
+          const codeSegment = s as { type: 'code'; language: string; content: string };
+          return '```' + codeSegment.language + '\n' + codeSegment.content + '```';
+        } else if (type === 'math') {
+          const mathSegment = s as { type: 'math'; display: boolean; content: string };
+          return mathSegment.display ? '$$' + mathSegment.content + '$$' : '$' + mathSegment.content + '$';
+        }
+      }
+      
+      if (s.type === 'text') return s.content;
+      if (s.type === 'code') return '```' + s.language + '\n' + s.content + '```';
+      if (s.type === 'math') return s.display ? '$$' + s.content + '$$' : '$' + s.content + '$';
+      return '';
+    }).join('');
+    
+    setMessage(fullMessage);
+    setActiveEditor({ type: null, index: -1 });
+    
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 10);
+  }, [activeEditor, segments]);
+
+  // Insert a math symbol from search results
+  const insertMathSymbol = useCallback((symbol: string) => {
+    if (activeEditor.type === 'math' && activeEditor.index !== -1) {
+      const currentContent = (segments[activeEditor.index] as {content: string}).content;
+      updateSegmentContent(activeEditor.index, currentContent + symbol);
+      setMathSymbolSearch(''); // Clear the search after inserting
+    }
+  }, [activeEditor, segments, updateSegmentContent]);
+
   // Render a preview of the message with formatted segments
   const renderPreview = () => {
     return (
       <div 
         ref={previewRef} 
-        className={`px-4 pt-3.5 pb-2 w-full ${activeEditor.type !== null ? 'hidden' : 'block'}`}
+        className={`px-4 pt-3.5 pb-2 w-full min-h-[40px] ${activeEditor.type !== null ? 'hidden' : 'block'}`}
         style={{ 
           color: currentTheme.colors.textPrimary,
           minHeight: '2.5rem',
+          cursor: 'text'
+        }}
+        onClick={() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+          }
         }}
       >
         {segments.map((segment, index) => {
@@ -461,7 +639,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           
           if (segment.type === 'code') {
             return (
-              <div key={`code-${index}`} className="my-2 relative group cursor-pointer" onClick={() => enterEditMode('code', index)}>
+              <div key={`code-${index}`} className="my-2 relative group cursor-pointer" onClick={(e) => enterEditMode('code', index, e)}>
                 <CodeBlock 
                   code={segment.content} 
                   language={segment.language} 
@@ -479,7 +657,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <div 
                 key={`math-${index}`} 
                 className={`${segment.display ? 'my-2 block' : 'inline-block'} cursor-pointer group relative`}
-                onClick={() => enterEditMode('math', index)}
+                onClick={(e) => enterEditMode('math', index, e)}
               >
                 <MathRenderer 
                   latex={segment.content} 
@@ -494,6 +672,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
           
           return null;
         })}
+
+        {/* Placeholder when empty */}
+        {segments.length === 1 && segments[0].content === '' && (
+          <div className="opacity-50" style={{ color: currentTheme.colors.textMuted }}>
+            {isGenerating ? "AI is generating..." : placeholder}
+          </div>
+        )}
       </div>
     );
   };
@@ -525,45 +710,36 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <div className="flex space-x-2">
               <button 
                 className="px-3 py-1 bg-gray-700 text-white text-sm rounded"
-                onClick={() => setActiveEditor({ type: null, index: -1 })}
+                onClick={exitEditMode}
               >
                 Cancel
               </button>
               <button 
                 className="px-3 py-1 bg-blue-600 text-white text-sm rounded"
-                onClick={() => {
-                  // Apply changes to the message string
-                  const newSegments = [...segments];
-                  const seg = newSegments[activeEditor.index] as {type: 'code'; language: string; content: string};
-                  
-                  // Update the message with the edited code
-                  const fullMessage = newSegments.map((s, i) => {
-                    if (i === activeEditor.index) {
-                      return '```' + seg.language + '\n' + seg.content + '```';
-                    }
-                    if (s.type === 'text') return s.content;
-                    if (s.type === 'code') return '```' + s.language + '\n' + s.content + '```';
-                    if (s.type === 'math') return s.display ? '$$' + s.content + '$$' : '$' + s.content + '$';
-                    return '';
-                  }).join('');
-                  
-                  setMessage(fullMessage);
-                  setActiveEditor({ type: null, index: -1 });
-                }}
+                onClick={applyEditorChanges}
               >
                 Apply
               </button>
             </div>
           </div>
-          <textarea
-            value={(segment as {content: string}).content}
-            onChange={(e) => {
-              // Update just the content in the segment
-              updateSegmentContent(activeEditor.index, e.target.value);
-            }}
-            className="w-full h-32 p-3 bg-gray-900 text-gray-100 font-mono text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter your code here..."
-          />
+          <div className="flex flex-col md:flex-row gap-4">
+            <textarea
+              value={(segment as {content: string}).content}
+              onChange={(e) => {
+                updateSegmentContent(activeEditor.index, e.target.value);
+              }}
+              className="w-full md:w-1/2 h-32 p-3 bg-gray-900 text-gray-100 font-mono text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your code here..."
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="w-full md:w-1/2 h-32 p-0">
+              <CodeBlock 
+                code={(segment as {content: string}).content} 
+                language={(segment as {language: string}).language}
+                className="h-full" 
+              />
+            </div>
+          </div>
         </div>
       );
     }
@@ -582,52 +758,38 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   (newSegments[activeEditor.index] as {display: boolean}).display = e.target.checked;
                   setSegments(newSegments);
                 }}
+                onClick={(e) => e.stopPropagation()}
               />
               <span className="ml-1 text-sm">Block equation</span>
             </div>
             <div className="flex space-x-2">
               <button 
                 className="px-3 py-1 bg-gray-700 text-white text-sm rounded"
-                onClick={() => setActiveEditor({ type: null, index: -1 })}
+                onClick={exitEditMode}
               >
                 Cancel
               </button>
               <button 
                 className="px-3 py-1 bg-purple-600 text-white text-sm rounded"
-                onClick={() => {
-                  // Apply changes to the message string
-                  const newSegments = [...segments];
-                  const seg = newSegments[activeEditor.index] as {type: 'math'; display: boolean; content: string};
-                  
-                  // Update the message with the edited math
-                  const fullMessage = newSegments.map((s, i) => {
-                    if (i === activeEditor.index) {
-                      return seg.display ? '$$' + seg.content + '$$' : '$' + seg.content + '$';
-                    }
-                    if (s.type === 'text') return s.content;
-                    if (s.type === 'code') return '```' + s.language + '\n' + s.content + '```';
-                    if (s.type === 'math') return s.display ? '$$' + s.content + '$$' : '$' + s.content + '$';
-                    return '';
-                  }).join('');
-                  
-                  setMessage(fullMessage);
-                  setActiveEditor({ type: null, index: -1 });
-                }}
+                onClick={applyEditorChanges}
               >
                 Apply
               </button>
             </div>
           </div>
+          
           <div className="flex flex-col md:flex-row gap-4">
-            <textarea
-              value={(segment as {content: string}).content}
-              onChange={(e) => {
-                // Update just the content in the segment
-                updateSegmentContent(activeEditor.index, e.target.value);
-              }}
-              className="w-full md:w-1/2 h-32 p-3 bg-gray-900 text-gray-100 font-mono text-sm rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Enter LaTeX here..."
-            />
+            <div className="w-full md:w-1/2 flex flex-col">
+              <textarea
+                value={(segment as {content: string}).content}
+                onChange={(e) => {
+                  updateSegmentContent(activeEditor.index, e.target.value);
+                }}
+                className="w-full h-32 p-3 bg-gray-900 text-gray-100 font-mono text-sm rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter LaTeX here..."
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
             <div className="w-full md:w-1/2 h-32 p-3 bg-gray-800 rounded overflow-auto flex items-center justify-center">
               <MathRenderer 
                 latex={(segment as {content: string}).content} 
@@ -635,18 +797,66 @@ const ChatInput: React.FC<ChatInputProps> = ({
               />
             </div>
           </div>
-          <div className="mt-2 text-sm text-blue-400 flex flex-wrap gap-2">
-            {['\\alpha', '\\beta', '\\gamma', '\\theta', '\\pi', '\\sqrt{}', '\\frac{}{}', '\\sum_{}^{}', '\\int_{}^{}'].map(symbol => (
-              <button 
-                key={symbol}
-                className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600"
-                onClick={() => updateSegmentContent(activeEditor.index, 
-                  (segment as {content: string}).content + symbol
-                )}
-              >
-                {symbol}
-              </button>
-            ))}
+          
+          {/* Symbol search */}
+          <div className="mt-3">
+            <div className="flex mb-2">
+              <input
+                type="text"
+                value={mathSymbolSearch}
+                onChange={(e) => setMathSymbolSearch(e.target.value)}
+                placeholder="Search for symbols..."
+                className="w-full p-2 text-sm rounded bg-gray-900 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            
+            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto p-2 bg-gray-800 rounded">
+              {mathSymbolResults.map((symbol, i) => (
+                <button 
+                  key={i}
+                  className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    insertMathSymbol(symbol.symbol);
+                  }}
+                  title={symbol.symbol}
+                >
+                  {symbol.display}
+                </button>
+              ))}
+              {mathSymbolResults.length === 0 && (
+                <div className="w-full text-center py-2 text-sm text-gray-400">
+                  No symbols found
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Common LaTeX patterns */}
+          <div className="mt-3">
+            <div className="text-xs text-gray-400 mb-1">Common Patterns</div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: 'Fraction', pattern: '\\frac{num}{den}' },
+                { label: 'Square Root', pattern: '\\sqrt{x}' },
+                { label: 'Summation', pattern: '\\sum_{i=1}^{n} x_i' },
+                { label: 'Integral', pattern: '\\int_{a}^{b} f(x) dx' }
+              ].map((pattern, i) => (
+                <button 
+                  key={i}
+                  className="px-2 py-1 bg-gray-700 rounded hover:bg-gray-600 text-xs"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    insertMathSymbol(pattern.pattern);
+                  }}
+                >
+                  {pattern.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       );
@@ -700,7 +910,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           />
           
           {/* Cursor glow effect */}
-          {cursorPosition && isFocused && !isGenerating && (
+          {cursorPosition && isFocused && !isGenerating && activeEditor.type === null && (
             <div 
               className="absolute pointer-events-none transition-all duration-200 ease-out"
               style={{
@@ -731,7 +941,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             disabled={disabled}
             placeholder={isGenerating ? "AI is generating..." : placeholder}
             rows={1}
-            className={`w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 ${activeEditor.type !== null ? 'absolute opacity-0' : 'relative opacity-0 h-full'}`}
+            className="w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 absolute opacity-0"
             style={{ 
               backgroundColor: 'transparent',
               color: 'transparent',
