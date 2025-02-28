@@ -59,28 +59,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     setMathEditorOpen(true);
   };
   
-  // Setup handlers for editor content insertion once on mount
-  useEffect(() => {
-    // When TipTapEditor registers its handler, store it in our ref
-    const handleSetupCodeInsert = (insertFn: (code: string) => void) => {
-      console.log("Setting up code insertion ref");
-      codeInsertRef.current = insertFn;
-    };
-    
-    const handleSetupMathInsert = (insertFn: (math: string) => void) => {
-      console.log("Setting up math insertion ref");
-      mathInsertRef.current = insertFn;
-    };
-    
-    // Pass these setup functions to TipTapEditor
-    if (codeInsertRef.current === undefined) {
-      codeInsertRef.current = handleSetupCodeInsert;
-    }
-    
-    if (mathInsertRef.current === undefined) {
-      mathInsertRef.current = handleSetupMathInsert;
-    }
-  }, []);
+  // This section has been simplified to prevent circular references
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -187,17 +166,15 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
             disabled={loading}
             placeholder="Message Sea Dragon Inkmortal..."
             isGenerating={isGenerating}
-            onInsertCode={(content) => {
-              console.log("Setting code content in TipTap:", content);
-              if (codeInsertRef.current) {
-                codeInsertRef.current(content);
-              }
+            onInsertCode={(handler) => {
+              // Just store the handler function from TipTap
+              console.log("Registering code insertion handler from TipTap");
+              codeInsertRef.current = handler;
             }}
-            onInsertMath={(content) => {
-              console.log("Setting math content in TipTap:", content);
-              if (mathInsertRef.current) {
-                mathInsertRef.current(content);
-              }
+            onInsertMath={(handler) => {
+              // Just store the handler function from TipTap
+              console.log("Registering math insertion handler from TipTap");
+              mathInsertRef.current = handler;
             }}
           />
         </div>
