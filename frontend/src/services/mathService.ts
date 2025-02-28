@@ -1,4 +1,4 @@
-import { apiBaseUrl } from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 /**
  * Renders a LaTeX mathematical expression using server-side KaTeX
@@ -18,7 +18,7 @@ export async function renderMathExpression(expression: string, displayMode: bool
     const token = localStorage.getItem('token');
     
     // Send request to the server
-    const response = await fetch(`${apiBaseUrl}/api/artifacts/render-math`, {
+    const response = await fetch(`${API_BASE_URL}/api/artifacts/render-math`, {
       method: 'POST',
       headers: {
         // No Content-Type header when using FormData (browser sets it automatically)
@@ -61,7 +61,7 @@ export async function renderPdfPreview(file: File, page: number = 1) {
     const token = localStorage.getItem('token');
     
     // Send request to the server
-    const response = await fetch(`${apiBaseUrl}/api/artifacts/render-pdf`, {
+    const response = await fetch(`${API_BASE_URL}/api/artifacts/render-pdf`, {
       method: 'POST',
       headers: {
         // No Content-Type header when using FormData (browser sets it automatically)
@@ -118,7 +118,7 @@ export async function processImage(file: File, resize: boolean = false, maxWidth
     const token = localStorage.getItem('token');
     
     // Send request to the server
-    const response = await fetch(`${apiBaseUrl}/api/artifacts/process-image`, {
+    const response = await fetch(`${API_BASE_URL}/api/artifacts/process-image`, {
       method: 'POST',
       headers: {
         // No Content-Type header when using FormData (browser sets it automatically)
