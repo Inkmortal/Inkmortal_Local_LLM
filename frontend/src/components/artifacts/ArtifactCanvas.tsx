@@ -79,12 +79,16 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
     if (isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      
+      // Only remove event listeners if we've actually added them
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
     }
     
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
+    // Empty cleanup function when not resizing
+    return () => {};
   }, [isResizing, startX, startWidth]);
   
   const startResize = (e: React.MouseEvent) => {
