@@ -68,10 +68,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onLoginClick }) 
         setSuccessMessage('Registration successful! You can now sign in.');
         
         // Auto login is now handled in the register function
+        // Redirect immediately to chat page
         if (onSuccess) {
-          setTimeout(() => {
-            onSuccess();
-          }, 1000);
+          onSuccess();
         }
       } else {
         setError('Registration failed. Please check your registration token and try again.');

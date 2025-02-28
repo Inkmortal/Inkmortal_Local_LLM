@@ -1,12 +1,17 @@
 # Inkmortal Local LLM Coding Guidelines
 
 ## Recent Work
+- Completed authentication system implementation with proper token handling
+- Fixed OAuth2 form submissions for login and registration flows
+- Implemented protected routes with role-based access control
+- Added redirection flow after successful registration to chat page
+- Added home button to all authentication pages for consistent navigation
+- Ensured all chat access is properly authenticated
+- Implemented modern chat interface with mock chat service
 - Enhanced the chat interface with math and code editor capabilities
 - Added labeled buttons to the chat action bar
 - Implemented code and math blocks with edit/preview toggle
 - Added delete buttons to blocks for easy removal
-- Fixed persistence issues with math blocks
-- Improved component communication with proper refs
 
 ## Build & Run Commands
 

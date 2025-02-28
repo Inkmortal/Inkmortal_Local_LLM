@@ -32,7 +32,7 @@ const Register: React.FC = () => {
 
   // Handle successful registration
   const handleRegisterSuccess = () => {
-    window.navigateTo('/');
+    window.navigateTo('/chat');
   };
 
   // Handle login click

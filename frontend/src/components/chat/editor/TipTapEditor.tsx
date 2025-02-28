@@ -53,25 +53,41 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     editable: !disabled,
   });
 
+  // Convert HTML to markdown and send
+  const convertAndSend = async () => {
+    if (editor?.isEmpty) return;
+    
+    const html = editor?.getHTML() || '';
+    
+    try {
+      // Import the converter function (will be bundled at build time)
+      const { convertEditorContentToMarkdown } = await import('../../../utils/editorUtils');
+      
+      // Convert HTML to markdown
+      const markdown = convertEditorContentToMarkdown(html);
+      console.log('Sending converted markdown to LLM:', markdown);
+      
+      // Send markdown to the LLM
+      onSend(markdown);
+      editor?.commands.clearContent();
+    } catch (error) {
+      console.error('Error converting HTML to markdown:', error);
+      // Fallback to plain text if conversion fails
+      onSend(editor?.getText() || '');
+      editor?.commands.clearContent();
+    }
+  };
+  
   // Handle submit with Enter (not Shift+Enter)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !disabled) {
       e.preventDefault();
-      
-      if (editor?.isEmpty) return;
-      
-      const html = editor?.getHTML() || '';
-      onSend(html);
-      editor?.commands.clearContent();
+      convertAndSend();
     }
   };
 
   const handleSendClick = () => {
-    if (editor?.isEmpty) return;
-    
-    const html = editor?.getHTML() || '';
-    onSend(html);
-    editor?.commands.clearContent();
+    convertAndSend();
   };
 
   // Handler to open the math editor modal
