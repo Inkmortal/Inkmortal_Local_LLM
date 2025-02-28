@@ -81,32 +81,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     return message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  // Apply direct styling to ensure message styling works
-  useEffect(() => {
-    // Force assistant message styling with direct DOM manipulation
-    if (isAssistant && messageRef.current) {
-      const messageContent = messageRef.current.querySelector('[class*="message-in"]');
-      if (messageContent) {
-        (messageContent as HTMLElement).style.backgroundColor = currentTheme.colors.bgSecondary;
-        (messageContent as HTMLElement).style.color = currentTheme.colors.textPrimary;
-        (messageContent as HTMLElement).style.border = `1px solid ${currentTheme.colors.borderColor}40`;
-        // Force the messages to be readable regardless of CSS
-        const allText = messageContent.querySelectorAll('p, span, div');
-        allText.forEach(el => {
-          (el as HTMLElement).style.color = currentTheme.colors.textPrimary;
-        });
-      }
-      
-      // Force dragon icon to be visible
-      const dragonIcon = messageRef.current.querySelector('.dragon-icon');
-      if (dragonIcon) {
-        (dragonIcon as SVGElement).style.color = "#FFFFFF";
-        (dragonIcon as SVGElement).style.width = "16px";
-        (dragonIcon as SVGElement).style.height = "16px";
-      }
-    }
-  }, [isAssistant, currentTheme]);
-  
   return (
     <div 
       ref={messageRef}
@@ -140,10 +114,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             }}
           />
           <div className="absolute inset-0 flex items-center justify-center text-white z-10">
-            <svg className="w-6 h-6 dragon-icon" style={{ color: "#fff" }} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Chinese dragon icon for InkMortal theme */}
-              <path d="M13 3C9.2 3 6.2 5.1 5 8.4C3.9 7.8 2.7 7.5 1.5 7.5C1.2 7.5 1 7.7 1 8C1 8.1 1 8.2 1.1 8.3C2.1 9.8 3.4 10.7 5 11.1C5 11.4 5 11.7 5 12C5 13.2 5.3 14.4 5.7 15.5C5.2 15.3 4.7 15 4.2 14.7C4.1 14.6 3.9 14.6 3.8 14.7C3.7 14.8 3.6 14.9 3.7 15.1C4.4 16.9 5.5 18.2 7 19C8.8 20 11 20 11 20C11 20 11.2 19.9 11.2 19.8C11.2 19.6 11 19.5 11 19.5C10.3 19.1 9.7 18.6 9.2 18C9.4 18 9.6 18 9.8 18C12.3 18 14.6 16.8 16.1 14.9C16.2 14.8 16.2 14.6 16.1 14.5C16 14.4 15.8 14.4 15.7 14.5C14.6 15.4 13.3 16 12 16C10 16 8.2 14.6 7.2 13.5C8.5 13 10.3 12.6 12 13.1C13.1 13.5 14 14.1 14.6 15C14.8 15.2 15 15.2 15.3 15.1C15.5 15 15.6 14.7 15.4 14.5C14.9 13.7 14.3 13.1 13.5 12.5C16.2 11 18 9.2 18 6.5C18 4.5 15.7 3 13 3Z" 
-                fill="currentColor" />
+            {/* Sea Dragon SVG - Traditional Chinese style dragon */}
+            <svg 
+              className="w-5 h-5" 
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
+              fill="white"
+            >
+              <path d="M16 4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V4zm-2.5 4c-.8 0-1.5-.7-1.5-1.5S12.7 5 13.5 5s1.5.7 1.5 1.5S14.3 8 13.5 8zM22 2v18.1l-3 1.7-3-1.7-3 1.7-3-1.7-3 1.7-3-1.7V2h6v6h6V2h6z"/>
             </svg>
           </div>
           
@@ -174,7 +152,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           <div 
             className="absolute inset-0 z-0"
             style={{
-              backgroundColor: `${currentTheme.colors.accentPrimary}60`
+              backgroundColor: currentTheme.colors.bgTertiary, // Toned down from accentPrimary for better visibility
             }}
           />
           <div className="absolute inset-0 flex items-center justify-center z-10 font-medium text-white">
@@ -186,22 +164,26 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       
       <div 
         className={`${isUser ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tl-md'} 
-          px-5 py-4 max-w-[85%] md:max-w-[75%] relative overflow-hidden order-1 message-${isUser ? 'out' : 'in'}`}
+          px-5 py-4 max-w-[85%] md:max-w-[75%] relative overflow-hidden order-1`}
         style={{ 
           backgroundColor: isSystem
-            ? `${currentTheme.colors.accentSecondary}20`
+            ? `${currentTheme.colors.bgTertiary}20`
             : isUser 
-              ? currentTheme.colors.accentPrimary 
+              ? `${currentTheme.colors.bgTertiary}` // Toned down from accentPrimary for readability
               : currentTheme.colors.bgSecondary,
           color: isUser 
-            ? '#fff' 
+            ? currentTheme.colors.textPrimary // Changed from white for better readability
             : currentTheme.colors.textPrimary,
           boxShadow: isAssistant 
-            ? `0 8px 24px rgba(0, 0, 0, 0.09), 0 4px 8px rgba(0, 0, 0, 0.03)` 
+            ? `0 4px 12px rgba(0, 0, 0, 0.08)` 
             : isUser 
-              ? `0 6px 16px ${currentTheme.colors.accentPrimary}20` 
+              ? `0 4px 12px rgba(0, 0, 0, 0.05)` 
               : `0 4px 12px rgba(0, 0, 0, 0.06)`,
-          border: isAssistant ? `1px solid ${currentTheme.colors.borderColor}40` : 'none',
+          border: isAssistant 
+            ? `1px solid ${currentTheme.colors.borderColor}40` // Using border color, not accent color
+            : isUser 
+              ? `1px solid ${currentTheme.colors.borderColor}30`
+              : 'none',
           transform: `translateY(${hasAppeared ? '0' : '20px'})`,
           transition: 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease, opacity 0.3s ease',
         }}
@@ -212,34 +194,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             <div 
               className="absolute top-0 left-0 right-0 h-1 rounded-t-lg"
               style={{
-                background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}70, ${currentTheme.colors.accentSecondary}70)`,
-                opacity: 0.8
-              }}
-            />
-            
-            {/* Top-right glow spot */}
-            <div
-              className="absolute -right-5 -top-5 w-24 h-24 rounded-full opacity-5"
-              style={{
-                background: `radial-gradient(circle, ${currentTheme.colors.accentSecondary}, transparent 70%)`,
-              }}
-            />
-            
-            {/* Bottom-left glow spot */}
-            <div
-              className="absolute -left-4 -bottom-4 w-20 h-20 rounded-full opacity-5"
-              style={{
-                background: `radial-gradient(circle, ${currentTheme.colors.accentPrimary}, transparent 70%)`,
-              }}
-            />
-            
-            {/* Subtle background dot pattern */}
-            <div 
-              className="absolute inset-0 opacity-3 pointer-events-none"
-              style={{
-                opacity: 0.03,
-                backgroundImage: `radial-gradient(${currentTheme.colors.accentPrimary} 1px, transparent 1px)`,
-                backgroundSize: '16px 16px'
+                background: `linear-gradient(to right, ${currentTheme.colors.borderColor}50, ${currentTheme.colors.borderColor}50)`,
+                opacity: 0.7
               }}
             />
           </>
@@ -248,27 +204,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         {/* Decorative elements for user messages */}
         {isUser && (
           <>
-            {/* Bottom-left glow */}
-            <div
-              className="absolute -left-4 -bottom-4 w-20 h-20 rounded-full opacity-20"
+            <div 
+              className="absolute top-0 left-0 right-0 h-1 rounded-t-lg"
               style={{
-                background: `radial-gradient(circle, rgba(255,255,255,0.8), transparent 70%)`,
+                background: `linear-gradient(to right, ${currentTheme.colors.borderColor}50, ${currentTheme.colors.borderColor}50)`,
+                opacity: 0.7
               }}
             />
-            
-            {/* Top-right corner accent */}
-            <div
-              className="absolute top-0 right-0 w-10 h-10 overflow-hidden"
-            >
-              <div 
-                className="absolute top-0 right-0 w-5 h-5 rounded-full"
-                style={{
-                  boxShadow: `0 0 0 10px ${currentTheme.colors.accentSecondary}50`,
-                  opacity: 0.3,
-                  transform: 'translate(50%, -50%)'
-                }}
-              />
-            </div>
           </>
         )}
         
@@ -278,7 +220,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             <svg width="100%" height="100%" className="opacity-5">
               <defs>
                 <pattern id="diagonalHatch" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
-                  <line x1="0" y1="0" x2="0" y2="10" stroke={currentTheme.colors.accentSecondary} strokeWidth="1"/>
+                  <line x1="0" y1="0" x2="0" y2="10" stroke={currentTheme.colors.borderColor} strokeWidth="1"/>
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill="url(#diagonalHatch)" />
@@ -287,7 +229,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         )}
         
         {/* Message content */}
-        <div className={`whitespace-pre-wrap break-words relative z-10 message-content ${isAssistant ? 'message-in' : ''}`}>
+        <div className="whitespace-pre-wrap break-words relative z-10">
           {isUser ? (
             message.content
           ) : (
@@ -299,7 +241,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         <div 
           className="text-xs mt-2 text-right opacity-70 flex justify-end items-center relative z-10"
           style={{ 
-            color: isUser ? '#fff' : currentTheme.colors.textMuted 
+            color: currentTheme.colors.textMuted // Same for both user and assistant
           }}
         >
           {getTimeDisplay()}
@@ -339,10 +281,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 className="py-1.5 px-3 rounded-full backdrop-blur-sm transition-transform hover:scale-105 active:scale-95 shadow-lg"
                 onClick={onRegenerate}
                 style={{
-                  backgroundColor: `${currentTheme.colors.accentPrimary}15`,
-                  borderColor: `${currentTheme.colors.accentPrimary}40`,
-                  color: currentTheme.colors.accentPrimary,
-                  boxShadow: `0 4px 12px ${currentTheme.colors.accentPrimary}20`
+                  backgroundColor: `${currentTheme.colors.borderColor}15`,
+                  borderColor: `${currentTheme.colors.borderColor}40`,
+                  color: currentTheme.colors.textSecondary,
+                  boxShadow: `0 4px 12px rgba(0, 0, 0, 0.05)`
                 }}
               >
                 <div className="flex items-center space-x-1.5">

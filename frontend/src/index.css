@@ -17,7 +17,6 @@
 @import './styles/animations.css';
 @import './styles/modern-ui.css';
 @import './styles/enhanced-animations.css';
-@import './styles/chat-improvements.css';
 
 @tailwind base;
 @tailwind components;
@@ -135,11 +134,6 @@ body {
 /* Floating animation for components */
 .floating-ui {
   animation: float-subtle 4s ease-in-out infinite;
-}
-
-/* Dragon icon for assistant */
-.dragon-icon {
-  color: var(--accent-primary);
 }
 
 /* Maximum width container */
