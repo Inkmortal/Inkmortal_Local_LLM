@@ -1,5 +1,13 @@
 # Inkmortal Local LLM Coding Guidelines
 
+## Recent Work
+- Enhanced the chat interface with math and code editor capabilities
+- Added labeled buttons to the chat action bar
+- Implemented code and math blocks with edit/preview toggle
+- Added delete buttons to blocks for easy removal
+- Fixed persistence issues with math blocks
+- Improved component communication with proper refs
+
 ## Build & Run Commands
 
 ### Frontend

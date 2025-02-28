@@ -101,17 +101,8 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     };
     
     // Register our handler functions with the parent components
-    const originalHandleCode = handleInsertCode;
-    const originalHandleMath = handleInsertMath;
-    
-    // Temporarily replace the handlers with our modal-aware ones
     handleInsertCode("REGISTER_HANDLER", undefined, handleOpenCodeModal);
     handleInsertMath("REGISTER_HANDLER", undefined, handleOpenMathModal);
-    
-    // Cleanup on unmount
-    return () => {
-      // Note: Cleanup not needed as component unmounting
-    };
   }, [handleInsertCode, handleInsertMath]);
 
   return (

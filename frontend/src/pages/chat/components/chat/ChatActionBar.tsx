@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useTheme } from '../../../../context/ThemeContext';
 import Button from '../../../../components/ui/Button';
-import FormulaSelector from './FormulaSelector';
-import LanguageSelector from './LanguageSelector';
+// Removed unused selectors - using modal approach instead
 
 interface ChatActionBarProps {
   showFileUpload: boolean;
@@ -22,20 +21,7 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
   handleInsertMath,
 }) => {
   const { currentTheme } = useTheme();
-  const [showMathSelector, setShowMathSelector] = useState(false);
-  const [showCodeSelector, setShowCodeSelector] = useState(false);
-  
-  // Handler for language selection
-  const handleLanguageSelect = (language: string, template: string) => {
-    // Pass the selected language and template to the parent handler
-    handleInsertCode(language, template);
-  };
-  
-  // Handler for formula selection
-  const handleFormulaSelect = (formula: string) => {
-    // Pass the selected formula to the parent handler
-    handleInsertMath(formula);
-  };
+  // No longer needed - using direct modal approach
 
   return (
     <div 
@@ -83,13 +69,7 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
               : `${currentTheme.colors.bgTertiary}40`,
           }}
           title="Insert code snippet"
-          onClick={() => {
-            // This sends a direct command to open the advanced code editor modal
-            handleInsertCode("OPEN_MODAL");
-            // Old behavior is commented out as the advanced modal will be used
-            // setShowCodeSelector(true);
-            // setShowMathSelector(false);
-          }}
+          onClick={() => handleInsertCode("OPEN_MODAL")}
         >
           <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -111,13 +91,7 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
               : `${currentTheme.colors.bgTertiary}40`,
           }}
           title="Insert math expression"
-          onClick={() => {
-            // This sends a direct command to open the advanced math editor modal
-            handleInsertMath("OPEN_MODAL");
-            // Old behavior is commented out as the advanced modal will be used
-            // setShowMathSelector(true);
-            // setShowCodeSelector(false);
-          }}
+          onClick={() => handleInsertMath("OPEN_MODAL")}
         >
           <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
@@ -150,19 +124,7 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
         )}
       </div>
       
-      {/* Formula Selector popup */}
-      <FormulaSelector 
-        isOpen={showMathSelector}
-        onClose={() => setShowMathSelector(false)}
-        onSelect={handleFormulaSelect}
-      />
-      
-      {/* Language Selector popup */}
-      <LanguageSelector
-        isOpen={showCodeSelector}
-        onClose={() => setShowCodeSelector(false)}
-        onSelect={handleLanguageSelect}
-      />
+      {/* Formula and Language Selectors removed - using modals instead */}
     </div>
   );
 };

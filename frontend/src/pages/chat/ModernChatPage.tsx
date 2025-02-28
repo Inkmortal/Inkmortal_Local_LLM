@@ -9,8 +9,8 @@ import ChatHeader from './components/layout/ChatHeader';
 import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
 import ChatContainer from './components/chat/ChatContainer';
 import HistorySidebar from './components/sidebars/HistorySidebar/HistorySidebar';
-import CodeEditor from '../../components/chat/editors/CodeEditor';
-import MathExpressionEditor from '../../components/chat/editors/MathExpressionEditor';
+import ArtifactsSidebar, { Artifact, UploadedDocument } from '../../components/artifacts/ArtifactsSidebar';
+import ArtifactCanvas from '../../components/artifacts/ArtifactCanvas';
 
 // Import hooks
 import useChatState from './hooks/useChatState';
@@ -23,13 +23,14 @@ const ModernChatPage: React.FC = () => {
   // Chat state management
   const chatState = useChatState();
   
-  // Modal state
-  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
-  const [mathEditorOpen, setMathEditorOpen] = useState(false);
-  
   // UI state
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showArtifactsSidebar, setShowArtifactsSidebar] = useState(false);
+  
+  // Artifacts state
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>(undefined);
+  const [selectedDocument, setSelectedDocument] = useState<UploadedDocument | undefined>(undefined);
+  const [showArtifactCanvas, setShowArtifactCanvas] = useState(false);
   
   // Mock conversations
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -116,8 +117,29 @@ const ModernChatPage: React.FC = () => {
     setShowHistorySidebar(!showHistorySidebar);
   };
 
-  const toggleSidebar = () => {
-    setShowSidebar(!showSidebar);
+  const toggleArtifactsSidebar = () => {
+    setShowArtifactsSidebar(!showArtifactsSidebar);
+    // Close artifact canvas when closing sidebar
+    if (showArtifactsSidebar) {
+      setShowArtifactCanvas(false);
+    }
+  };
+
+  // Artifact handlers
+  const handleArtifactSelect = (artifact: Artifact) => {
+    setSelectedArtifact(artifact);
+    setSelectedDocument(undefined);
+    setShowArtifactCanvas(true);
+  };
+
+  const handleDocumentSelect = (document: UploadedDocument) => {
+    setSelectedDocument(document);
+    setSelectedArtifact(undefined);
+    setShowArtifactCanvas(true);
+  };
+
+  const handleCloseArtifactCanvas = () => {
+    setShowArtifactCanvas(false);
   };
 
   return (
@@ -136,8 +158,8 @@ const ModernChatPage: React.FC = () => {
         <ChatHeader 
           showHistorySidebar={showHistorySidebar}
           toggleHistorySidebar={toggleHistorySidebar}
-          toggleSidebar={toggleSidebar}
-          showSidebar={showSidebar}
+          toggleSidebar={toggleArtifactsSidebar}
+          showSidebar={showArtifactsSidebar}
           isAuthenticated={isAuthenticated}
         />
         
@@ -167,26 +189,21 @@ const ModernChatPage: React.FC = () => {
               mathInsertRef={chatState.mathInsertRef}
             />
             
-            {/* Right Sidebar - Artifacts Panel (to be implemented) */}
-            {showSidebar && (
-              <aside 
-                className="transition-all w-80 h-full"
-                style={{ 
-                  background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
-                  backdropFilter: 'blur(10px)',
-                  boxShadow: `0 4px 20px rgba(0, 0, 0, 0.07), 0 0 0 1px ${currentTheme.colors.borderColor}30`,
-                  borderLeft: `1px solid ${currentTheme.colors.borderColor}30`,
-                  transition: 'all 0.3s ease',
-                  zIndex: 20
-                }}
-              >
-                {/* Placeholder for ArtifactsSidebar component */}
-                <div className="p-4">
-                  <h3>Artifacts Sidebar</h3>
-                  <p>To be implemented as a separate component</p>
-                </div>
-              </aside>
-            )}
+            {/* Artifacts Sidebar */}
+            <ArtifactsSidebar 
+              isOpen={showArtifactsSidebar}
+              onClose={toggleArtifactsSidebar}
+              onArtifactSelect={handleArtifactSelect}
+              onDocumentSelect={handleDocumentSelect}
+            />
+
+            {/* Artifact Canvas for detailed view */}
+            <ArtifactCanvas 
+              artifact={selectedArtifact}
+              document={selectedDocument}
+              isOpen={showArtifactCanvas}
+              onClose={handleCloseArtifactCanvas}
+            />
           </div>
         </div>
       </div>
