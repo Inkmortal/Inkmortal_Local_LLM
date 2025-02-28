@@ -83,6 +83,9 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
           }}
           title="Insert code snippet"
           onClick={() => {
+            // Try to open the advanced code editor modal
+            handleInsertCode("OPEN_MODAL");
+            // Fall back to the selector if modal doesn't open
             setShowCodeSelector(true);
             setShowMathSelector(false);
           }}
@@ -107,6 +110,9 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
           }}
           title="Insert math expression"
           onClick={() => {
+            // Try to open the advanced math editor modal
+            handleInsertMath("OPEN_MODAL");
+            // Fall back to the selector if modal doesn't open
             setShowMathSelector(true);
             setShowCodeSelector(false);
           }}

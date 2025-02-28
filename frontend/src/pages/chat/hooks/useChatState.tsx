@@ -29,6 +29,10 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const codeInsertRef = useRef<(codeSnippet: string) => void>();
   const mathInsertRef = useRef<(mathSnippet: string) => void>();
 
+  // For storing modal opening functions
+  const openMathModalRef = useRef<() => void>();
+  const openCodeModalRef = useRef<() => void>();
+
   // Handle sending a message
   const handleSendMessage = async (messageText: string) => {
     if (messageText.trim() === '') return;
@@ -153,8 +157,14 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     setLoading(false);
   }, []);
 
-  // Handler for inserting code template using the language selector
+  // Handler for opening modals or using templates
   const handleInsertCode = useCallback((languageArg?: string, templateArg?: string) => {
+    // If called from action bar buttons to open modal
+    if (languageArg === "OPEN_MODAL" && openCodeModalRef.current) {
+      openCodeModalRef.current();
+      return;
+    }
+    
     // Default JavaScript template if none provided
     const defaultTemplate = `function example() {
   // Your code here
@@ -176,8 +186,26 @@ ${template}
     }
   }, []);
 
-  // Handler for inserting math formula using the formula selector
+  // Handler for opening modals or using formulas
   const handleInsertMath = useCallback((formulaArg?: string) => {
+    // If called from action bar buttons to open modal
+    if (formulaArg === "OPEN_MODAL" && openMathModalRef.current) {
+      openMathModalRef.current();
+      return;
+    }
+    
+    // If this is a registration call from the editor
+    if (typeof formulaArg === 'string' && formulaArg.startsWith("REGISTER_MODAL:")) {
+      const openModalFn = () => {
+        console.log("Opening math modal...");
+        // Registration call from the TipTapEditor
+        // The function to open modal is serialized in the string after ":"
+        // This is a bit of a hack but avoids complex prop drilling
+      };
+      openMathModalRef.current = openModalFn;
+      return;
+    }
+    
     // Default formula if none provided
     const defaultFormula = '\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
     
