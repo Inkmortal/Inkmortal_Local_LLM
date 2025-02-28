@@ -119,26 +119,24 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
         onFileSelect={handleFileSelect}
       />
       
-      {/* Chat input with floating action bar - styled with glass effect */}
+      {/* Action bar with utility buttons */}
+      <ChatActionBar
+        showFileUpload={showFileUpload}
+        setShowFileUpload={setShowFileUpload}
+        selectedFile={selectedFile}
+        setSelectedFile={setSelectedFile}
+        handleInsertCode={handleInsertCode}
+        handleInsertMath={handleInsertMath}
+      />
+      
+      {/* Chat input - styled with glass effect */}
       <div className="px-4 py-3 relative">
-        <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden relative"
+        <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
           style={{
             boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
             border: `1px solid rgba(0, 0, 0, 0.1)`,
           }}
         >
-          {/* Floating Action Bar */}
-          <div className="absolute -top-12 right-4 z-50">
-            <ChatActionBar
-              showFileUpload={showFileUpload}
-              setShowFileUpload={setShowFileUpload}
-              selectedFile={selectedFile}
-              setSelectedFile={setSelectedFile}
-              handleInsertCode={handleInsertCode}
-              handleInsertMath={handleInsertMath}
-            />
-          </div>
-          
           <TipTapEditor
             onSend={onSendMessage}
             disabled={loading}
