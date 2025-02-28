@@ -1,4 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import MathNodeView from '../nodeviews/MathNodeView';
 
 interface MathExtensionOptions {
   HTMLAttributes: Record<string, any>;
@@ -44,6 +46,11 @@ export const MathExtension = Node.create<MathExtensionOptions>({
   
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { 'data-type': 'math-block' }), 0];
+  },
+  
+  // Add the node view
+  addNodeView() {
+    return ReactNodeViewRenderer(MathNodeView);
   },
   
   addCommands() {

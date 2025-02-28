@@ -1,4 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import CodeNodeView from '../nodeviews/CodeNodeView';
 
 interface CodeBlockExtensionOptions {
   HTMLAttributes: Record<string, any>;
@@ -62,6 +64,11 @@ export const CodeBlockExtension = Node.create<CodeBlockExtensionOptions>({
       mergeAttributes(this.options.HTMLAttributes, HTMLAttributes),
       ['code', {}, 0],
     ];
+  },
+  
+  // Add the node view
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeNodeView);
   },
   
   addCommands() {
