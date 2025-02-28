@@ -77,14 +77,16 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
 
   const handleMathSubmit = (latex: string) => {
     if (latex.trim() && editor) {
-      editor.commands.setMathBlock(latex.trim());
+      // Command is under mathBlock namespace
+      editor.chain().focus().mathBlock.setMathBlock(latex.trim()).run();
       setMathEditorOpen(false);
     }
   };
 
   const handleCodeSubmit = (code: string, language: string) => {
     if (code.trim() && editor) {
-      editor.commands.setCodeBlock(code.trim(), language);
+      // Command is under customCodeBlock namespace
+      editor.chain().focus().customCodeBlock.setCodeBlock(code.trim(), language).run();
       setCodeEditorOpen(false);
     }
   };
