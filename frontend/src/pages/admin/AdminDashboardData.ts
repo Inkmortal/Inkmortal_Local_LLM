@@ -156,7 +156,7 @@ export const fetchRegistrationTokens = async () => {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetchApi('/admin/tokens', {
+    const response = await fetchApi('/auth/tokens', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -183,7 +183,7 @@ export const generateRegistrationToken = async (expiryDays: number) => {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetchApi('/admin/tokens', {
+    const response = await fetchApi('/auth/tokens', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -241,7 +241,7 @@ export const fetchApiKeys = async () => {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetchApi('/admin/api-keys', {
+    const response = await fetchApi('/auth/apikeys', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -268,7 +268,7 @@ export const createApiKey = async (description: string, priority: number) => {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetchApi('/admin/api-keys', {
+    const response = await fetchApi('/auth/apikeys', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -298,7 +298,7 @@ export const deleteApiKey = async (keyId: number) => {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetchApi(`/admin/api-keys/${keyId}`, {
+    const response = await fetchApi(`/auth/apikeys/${keyId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`
@@ -315,3 +315,111 @@ export const deleteApiKey = async (keyId: number) => {
     throw error;
   }
 };
+
+/**
+ * Fetch all users from the API
+ */
+export const fetchUsers = async () => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi('/auth/users', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return [];
+  }
+};
+
+/**
+ * Delete a user
+ */
+export const deleteUser = async (userId: number) => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetchApi(`/auth/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete user: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    throw error;
+  }
+};
+
+// Admin dashboard navigation items
+interface AdminDashboardItem {
+  title: string;
+  description: string;
+  icon: string;
+  path: string;
+}
+
+export const adminDashboardItems: AdminDashboardItem[] = [
+  {
+    title: 'Dashboard',
+    description: 'System overview and status',
+    icon: '📊',
+    path: '/admin'
+  },
+  {
+    title: 'System Stats',
+    description: 'CPU, Memory and GPU utilization',
+    icon: '📈',
+    path: '/admin/stats'
+  },
+  {
+    title: 'Queue Monitor',
+    description: 'Manage request queue and priorities',
+    icon: '⏱️',
+    path: '/admin/queue'
+  },
+  {
+    title: 'User Management',
+    description: 'Manage system users',
+    icon: '👥',
+    path: '/admin/users'
+  },
+  {
+    title: 'Registration Tokens',
+    description: 'Manage user registration tokens',
+    icon: '🔑',
+    path: '/admin/tokens'
+  },
+  {
+    title: 'IP Whitelist',
+    description: 'Control allowed IP addresses',
+    icon: '🔒',
+    path: '/admin/ip-whitelist'
+  },
+  {
+    title: 'API Keys',
+    description: 'Manage API access keys',
+    icon: '🔐',
+    path: '/admin/api-keys'
+  }
+];

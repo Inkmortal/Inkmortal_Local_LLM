@@ -7,9 +7,13 @@ import IPWhitelist from './pages/admin/IPWhitelist';
 import RegistrationTokens from './pages/admin/RegistrationTokens';
 import APIKeys from './pages/admin/APIKeys';
 import QueueMonitor from './pages/admin/QueueMonitor';
-import ThemeCustomizer from './pages/admin/ThemeCustomizer';
+import UserManagement from './pages/admin/UserManagement';
 import SystemStats from './pages/admin/SystemStats';
 import AdminLogin from './pages/admin/Login';
+import UserLogin from './pages/auth/Login';
+import Register from './pages/auth/Register';
+import Unauthorized from './pages/auth/Unauthorized';
+import Profile from './pages/user/Profile';
 import ChatPage from './pages/chat/ModernChatPage';
 import ModernHomePage from './components/HomePage';
 import Card from './components/ui/Card';
@@ -18,13 +22,17 @@ import ThemeSelector from './components/ui/ThemeSelector';
 import ThemeGallery from './pages/themes/ThemeGallery';
 
 // Wrap admin components with auth protection
-const ProtectedAdminDashboard = withAuth(AdminDashboard);
-const ProtectedIPWhitelist = withAuth(IPWhitelist);
-const ProtectedRegistrationTokens = withAuth(RegistrationTokens);
-const ProtectedAPIKeys = withAuth(APIKeys);
-const ProtectedQueueMonitor = withAuth(QueueMonitor);
-const ProtectedThemeCustomizer = withAuth(ThemeCustomizer);
-const ProtectedSystemStats = withAuth(SystemStats);
+const ProtectedAdminDashboard = withAuth(AdminDashboard, true);
+const ProtectedIPWhitelist = withAuth(IPWhitelist, true);
+const ProtectedRegistrationTokens = withAuth(RegistrationTokens, true);
+const ProtectedAPIKeys = withAuth(APIKeys, true);
+const ProtectedQueueMonitor = withAuth(QueueMonitor, true);
+const ProtectedUserManagement = withAuth(UserManagement, true);
+const ProtectedSystemStats = withAuth(SystemStats, true);
+
+// User protected components
+const ProtectedProfile = withAuth(Profile, false);
+const ProtectedChatPage = withAuth(ChatPage, false);
 
 // Simple routing mechanism (to be replaced with React Router in a real app)
 type Route = 
@@ -33,9 +41,13 @@ type Route =
   | 'admin/tokens' 
   | 'admin/api-keys'
   | 'admin/queue' 
-  | 'admin/theme' 
+  | 'admin/users' 
   | 'admin/stats' 
   | 'admin/login' 
+  | 'login'
+  | 'register'
+  | 'profile'
+  | 'unauthorized'
   | 'themes'
   | 'chat'
   | 'home';
@@ -109,7 +121,8 @@ function App() {
     }
     
     switch (currentRoute) {
-     case 'admin':
+      // Admin routes
+      case 'admin':
         return <ProtectedAdminDashboard currentRoute={currentRoute} />;
       case 'admin/ip-whitelist':
         return <ProtectedIPWhitelist currentRoute={currentRoute} />;
@@ -119,16 +132,28 @@ function App() {
         return <ProtectedAPIKeys currentRoute={currentRoute} />;
       case 'admin/queue':
         return <ProtectedQueueMonitor currentRoute={currentRoute} />;
-      case 'admin/theme':
-        return <ProtectedThemeCustomizer currentRoute={currentRoute} />;
+      case 'admin/users':
+        return <ProtectedUserManagement currentRoute={currentRoute} />;
       case 'admin/stats':
         return <ProtectedSystemStats currentRoute={currentRoute} />;
       case 'admin/login':
         return <AdminLogin />;
+      
+      // Auth routes
+      case 'login':
+        return <UserLogin />;
+      case 'register':
+        return <Register />;
+      case 'profile':
+        return <ProtectedProfile />;
+      case 'unauthorized':
+        return <Unauthorized />;
+      
+      // Content routes
       case 'themes':
         return <ThemeGallery />;
       case 'chat':
-        return <ChatPage />;
+        return <ProtectedChatPage />;
       case 'home':
       default:
         return <ModernHomePage />;

@@ -8,12 +8,31 @@ interface NavbarProps {
   username?: string;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
+const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }) => {
   const { currentTheme } = useTheme();
-  const { logout } = useAuth();
+  const { isAuthenticated, isAdmin, username: authUsername, logout } = useAuth();
+
+  // Use the username from either props or auth context
+  const username = propUsername || authUsername;
 
   const handleHomeClick = () => {
     window.navigateTo('/');  // Use client-side routing for consistent navigation
+  };
+
+  const handleLoginClick = () => {
+    window.navigateTo('/login');
+  };
+
+  const handleRegisterClick = () => {
+    window.navigateTo('/register');
+  };
+
+  const handleProfileClick = () => {
+    window.navigateTo('/profile');
+  };
+
+  const handleAdminDashboardClick = () => {
+    window.navigateTo('/admin');
   };
 
   return (
@@ -74,12 +93,16 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
       </div>
 
       <div className="flex items-center gap-4">
-        {username && (
-          <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg" 
+        {/* User Profile/Avatar (when authenticated) */}
+        {isAuthenticated && username && (
+          <div 
+            className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer" 
             style={{ 
               backgroundColor: `${currentTheme.colors.bgTertiary}30`,
               boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)`
-            }}>
+            }}
+            onClick={handleProfileClick}
+          >
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center"
               style={{ 
@@ -93,11 +116,14 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
             </div>
             <div className="flex flex-col">
               <span className="font-medium text-sm">{username}</span>
-              <span className="text-xs" style={{ color: currentTheme.colors.textMuted }}>Administrator</span>
+              <span className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                {isAdmin ? 'Administrator' : 'User'}
+              </span>
             </div>
           </div>
         )}
         
+        {/* Home Button */}
         <Button 
           size="sm"
           variant="outline"
@@ -107,21 +133,62 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username }) => {
           Home
         </Button>
         
-        {username && (
-          <button
-            onClick={logout}
-            className="p-2 rounded-lg transition-all duration-200 hover:scale-105"
-            title="Logout"
-            style={{ 
-              color: currentTheme.colors.error,
-              backgroundColor: `${currentTheme.colors.error}15`,
-              boxShadow: `0 2px 8px ${currentTheme.colors.error}15`
-            }}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
+        {/* Chat Button */}
+        <Button 
+          size="sm"
+          variant="primary"
+          onClick={() => window.navigateTo('/chat')}
+        >
+          Chat
+        </Button>
+        
+        {/* Authentication Buttons */}
+        {isAuthenticated ? (
+          <div className="flex items-center gap-2">
+            {/* Admin Dashboard Button (for admins only) */}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleAdminDashboardClick}
+              >
+                Admin
+              </Button>
+            )}
+            
+            {/* Logout Button */}
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg transition-all duration-200 hover:scale-105"
+              title="Logout"
+              style={{ 
+                color: currentTheme.colors.error,
+                backgroundColor: `${currentTheme.colors.error}15`,
+                boxShadow: `0 2px 8px ${currentTheme.colors.error}15`
+              }}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleLoginClick}
+            >
+              Login
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleRegisterClick}
+            >
+              Register
+            </Button>
+          </div>
         )}
       </div>
     </header>
