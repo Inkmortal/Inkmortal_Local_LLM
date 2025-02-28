@@ -37,9 +37,28 @@ const MathNodeView: React.FC<NodeViewProps> = ({
   const handleBlur = () => {
     // When user leaves the textarea, update the node content
     if (typeof getPos === 'function') {
-      const pos = getPos();
-      const transaction = editor.state.tr.insertText(latex, pos, pos + node.nodeSize - 1);
-      editor.view.dispatch(transaction);
+      try {
+        // Use updateAttributes to keep the node as a mathBlock
+        const pos = getPos();
+        
+        // Create a new instance of the same node type with updated content
+        const newNode = editor.schema.nodes.mathBlock.create(
+          node.attrs,
+          [editor.schema.text(latex)]
+        );
+        
+        // Replace the old node with the new one
+        const transaction = editor.state.tr.replaceWith(
+          pos, 
+          pos + node.nodeSize, 
+          newNode
+        );
+        
+        editor.view.dispatch(transaction);
+        console.log("Math node updated successfully");
+      } catch (error) {
+        console.error("Error updating math node:", error);
+      }
     }
   };
 

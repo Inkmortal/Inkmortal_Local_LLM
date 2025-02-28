@@ -100,14 +100,26 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         
         // Otherwise handle as regular math content
         if (editor) {
-          editor
-            .chain()
-            .focus()
-            .insertContent({
-              type: 'mathBlock',
-              content: [{ type: 'text', text: input.replace(/\$\$/g, '').trim() }]
-            })
-            .run();
+          try {
+            // Extract latex from $$ delimiters if present
+            const latex = input.replace(/\$\$/g, '').trim();
+            console.log("Inserting math content:", latex.substring(0, 30) + "...");
+            
+            editor
+              .chain()
+              .focus()
+              .insertContent({
+                type: 'mathBlock',
+                content: [{ type: 'text', text: latex }]
+              })
+              // Add a newline after the block
+              .insertContent({ type: 'paragraph' })
+              .run();
+              
+            console.log("Math block inserted successfully!");
+          } catch (error) {
+            console.error("Failed to insert math block:", error);
+          }
         }
       });
     }
@@ -126,25 +138,34 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         
         // Otherwise handle as regular code content
         if (editor) {
-          // Extract language and code from markdown code block syntax if present
-          let language = 'javascript';
-          let code = input;
-          
-          const codeBlockMatch = input.match(/```(\w+)?\s*([\s\S]*?)```/);
-          if (codeBlockMatch) {
-            language = codeBlockMatch[1] || 'javascript';
-            code = codeBlockMatch[2].trim();
+          try {
+            // Extract language and code from markdown code block syntax if present
+            let language = 'javascript';
+            let code = input;
+            
+            const codeBlockMatch = input.match(/```(\w+)?\s*([\s\S]*?)```/);
+            if (codeBlockMatch) {
+              language = codeBlockMatch[1] || 'javascript';
+              code = codeBlockMatch[2].trim();
+              console.log(`Extracted code: language=${language}, content=${code.substring(0, 30)}...`);
+            }
+            
+            editor
+              .chain()
+              .focus()
+              .insertContent({
+                type: 'customCodeBlock',
+                attrs: { language },
+                content: [{ type: 'text', text: code }]
+              })
+              // Add a newline after the block
+              .insertContent({ type: 'paragraph' })
+              .run();
+              
+            console.log("Code block inserted successfully!");
+          } catch (error) {
+            console.error("Failed to insert code block:", error);
           }
-          
-          editor
-            .chain()
-            .focus()
-            .insertContent({
-              type: 'customCodeBlock',
-              attrs: { language },
-              content: [{ type: 'text', text: code }]
-            })
-            .run();
         }
       });
     }
@@ -162,7 +183,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const handleMathSubmit = (latex: string) => {
     if (!latex.trim() || !editor) return;
 
-    console.log("Inserting math:", latex.trim());
+    console.log("Inserting math from editor:", latex.trim());
 
     try {
       // Safe approach with manual content insertion
@@ -173,17 +194,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
           type: 'mathBlock',
           content: [{ type: 'text', text: latex.trim() }]
         })
+        // Add a newline after the block
+        .insertContent({ type: 'paragraph' })
         .run();
 
       console.log("Math block inserted successfully");
       
-      // Call the external handler if provided
-      if (onInsertMath && typeof onInsertMath === 'function') {
-        onInsertMath(`$$${latex.trim()}$$`);
-      }
+      setMathEditorOpen(false);
     } catch (error) {
       console.error("Error inserting math block:", error);
-    } finally {
       setMathEditorOpen(false);
     }
   };
@@ -191,7 +210,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const handleCodeSubmit = (code: string, language: string) => {
     if (!code.trim() || !editor) return;
     
-    console.log("Inserting code:", code.trim(), "language:", language);
+    console.log("Inserting code from editor:", code.trim(), "language:", language);
 
     try {
       // Safe approach with manual content insertion
@@ -203,17 +222,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
           attrs: { language },
           content: [{ type: 'text', text: code.trim() }]
         })
+        // Add a newline after the block
+        .insertContent({ type: 'paragraph' })
         .run();
 
       console.log("Code block inserted successfully");
       
-      // Call the external handler if provided
-      if (onInsertCode && typeof onInsertCode === 'function') {
-        onInsertCode(`\`\`\`${language}\n${code.trim()}\n\`\`\``);
-      }
+      setCodeEditorOpen(false);
     } catch (error) {
       console.error("Error inserting code block:", error);
-    } finally {
       setCodeEditorOpen(false);
     }
   };
