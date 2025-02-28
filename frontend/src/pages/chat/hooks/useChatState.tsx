@@ -158,7 +158,15 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   }, []);
 
   // Handler for opening modals or using templates
-  const handleInsertCode = useCallback((languageArg?: string, templateArg?: string) => {
+  const handleInsertCode = useCallback((languageArg?: string, templateArg?: string, handlerFn?: any) => {
+    // Special case for registering external handlers
+    if (languageArg === "REGISTER_HANDLER" && handlerFn) {
+      openCodeModalRef.current = () => {
+        if (handlerFn) handlerFn("OPEN_MODAL");
+      };
+      return;
+    }
+    
     // If called from action bar buttons to open modal
     if (languageArg === "OPEN_MODAL" && openCodeModalRef.current) {
       openCodeModalRef.current();
@@ -187,26 +195,18 @@ ${template}
   }, []);
 
   // Handler for opening modals or using formulas
-  const handleInsertMath = useCallback((formulaArg?: string) => {
-    // If called from action bar buttons to open modal
-    if (formulaArg === "OPEN_MODAL" && openMathModalRef.current) {
-      openMathModalRef.current();
+  const handleInsertMath = useCallback((formulaArg?: string, templateArg?: string, handlerFn?: any) => {
+    // Special case for registering external handlers
+    if (formulaArg === "REGISTER_HANDLER" && handlerFn) {
+      openMathModalRef.current = () => {
+        if (handlerFn) handlerFn("OPEN_MODAL");
+      };
       return;
     }
     
-    // If this is a registration call from the editor
-    if (typeof formulaArg === 'string' && formulaArg.startsWith("REGISTER_MODAL:")) {
-      // Extract the open function provided by the editor
-      // The string after "REGISTER_MODAL:" should be the serialized function or identifier
-      const openFn = () => {
-        console.log("Opening math modal via registered function");
-        // In a real implementation, this would deserialize or call the function
-        // But for now we'll just set a flag that the TipTapEditor will check
-        if (mathInsertRef.current) {
-          mathInsertRef.current("OPEN_MODAL");
-        }
-      };
-      openMathModalRef.current = openFn;
+    // If called from action bar buttons to open modal
+    if (formulaArg === "OPEN_MODAL" && openMathModalRef.current) {
+      openMathModalRef.current();
       return;
     }
     

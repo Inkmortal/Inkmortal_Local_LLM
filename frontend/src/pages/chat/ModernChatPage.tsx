@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,6 +9,8 @@ import ChatHeader from './components/layout/ChatHeader';
 import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
 import ChatContainer from './components/chat/ChatContainer';
 import HistorySidebar from './components/sidebars/HistorySidebar/HistorySidebar';
+import CodeEditor from '../../components/chat/editors/CodeEditor';
+import MathExpressionEditor from '../../components/chat/editors/MathExpressionEditor';
 
 // Import hooks
 import useChatState from './hooks/useChatState';
@@ -20,6 +22,10 @@ const ModernChatPage: React.FC = () => {
   
   // Chat state management
   const chatState = useChatState();
+  
+  // Modal state
+  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
+  const [mathEditorOpen, setMathEditorOpen] = useState(false);
   
   // UI state
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);

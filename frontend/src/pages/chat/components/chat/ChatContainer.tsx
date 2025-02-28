@@ -1,9 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import ChatWindow from '../../../../components/chat/ChatWindow';
 import TipTapEditor from '../../../../components/chat/editor/TipTapEditor';
 import FileUploadArea from './FileUploadArea';
 import ChatActionBar from './ChatActionBar';
 import { Message } from '../../types/chat';
+import CodeEditor from '../../../../components/chat/editors/CodeEditor';
+import MathExpressionEditor from '../../../../components/chat/editors/MathExpressionEditor';
 
 interface ChatContainerProps {
   messages: Message[];
@@ -41,6 +43,10 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   mathInsertRef,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Add state for modal visibility
+  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
+  const [mathEditorOpen, setMathEditorOpen] = useState(false);
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -48,9 +54,53 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
-  // With TipTapEditor, we don't need to register external handlers
-  // as it has built-in handling for math and code blocks
+  
+  // Override the handler functions to open modals directly
+  useEffect(() => {
+    // Create a simple wrapper function to directly open the code editor modal
+    const handleOpenCodeModal = (arg: string) => {
+      console.log("Code editor trigger called with:", arg);
+      if (arg === "OPEN_MODAL") {
+        console.log("Opening code editor modal directly!");
+        setCodeEditorOpen(true);
+        return;
+      }
+      
+      // If not opening the modal, insert the code
+      if (codeInsertRef.current) {
+        codeInsertRef.current(arg);
+      }
+    };
+    
+    // Create a simple wrapper function to directly open the math editor modal
+    const handleOpenMathModal = (arg: string) => {
+      console.log("Math editor trigger called with:", arg);
+      if (arg === "OPEN_MODAL") {
+        console.log("Opening math editor modal directly!");
+        setMathEditorOpen(true);
+        return;
+      }
+      
+      // If not opening the modal, insert the math
+      if (mathInsertRef.current) {
+        mathInsertRef.current(arg);
+      }
+    };
+    
+    // Register our handler functions with the parent components
+    const originalHandleCode = handleInsertCode;
+    const originalHandleMath = handleInsertMath;
+    
+    // Temporarily replace the handlers with our modal-aware ones
+    handleInsertCode("REGISTER_HANDLER", handleOpenCodeModal);
+    handleInsertMath("REGISTER_HANDLER", handleOpenMathModal);
+    
+    // Cleanup on unmount
+    return () => {
+      handleInsertCode("REGISTER_HANDLER", originalHandleCode);
+      handleInsertMath("REGISTER_HANDLER", originalHandleMath);
+    };
+  }, []);
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden">
@@ -99,6 +149,31 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       </div>
       
       <div ref={messagesEndRef} />
+      
+      {/* Render the modals conditionally */}
+      {codeEditorOpen && (
+        <CodeEditor
+          onInsert={(code, language) => {
+            if (codeInsertRef.current) {
+              codeInsertRef.current(`\`\`\`${language}\n${code}\n\`\`\``);
+            }
+            setCodeEditorOpen(false);
+          }}
+          onClose={() => setCodeEditorOpen(false)}
+        />
+      )}
+      
+      {mathEditorOpen && (
+        <MathExpressionEditor
+          onInsert={(latex) => {
+            if (mathInsertRef.current) {
+              mathInsertRef.current(`$$${latex}$$`);
+            }
+            setMathEditorOpen(false);
+          }}
+          onClose={() => setMathEditorOpen(false)}
+        />
+      )}
     </div>
   );
 };
