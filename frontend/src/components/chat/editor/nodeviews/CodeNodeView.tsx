@@ -46,9 +46,26 @@ const CodeNodeView: React.FC<NodeViewProps> = ({
   const handleBlur = () => {
     // When user leaves the textarea, update the node content
     if (typeof getPos === 'function') {
-      const pos = getPos();
-      const transaction = editor.state.tr.insertText(code, pos + 1, pos + node.nodeSize - 1);
-      editor.view.dispatch(transaction);
+      try {
+        // Create a new instance of the same node type with updated content
+        const pos = getPos();
+        const newNode = editor.schema.nodes.customCodeBlock.create(
+          { language },
+          [editor.schema.text(code)]
+        );
+        
+        // Replace the old node with the new one
+        const transaction = editor.state.tr.replaceWith(
+          pos, 
+          pos + node.nodeSize, 
+          newNode
+        );
+        
+        editor.view.dispatch(transaction);
+        console.log("Code node updated successfully");
+      } catch (error) {
+        console.error("Error updating code node:", error);
+      }
     }
   };
 
@@ -81,6 +98,23 @@ const CodeNodeView: React.FC<NodeViewProps> = ({
           textareaRef.current.selectionEnd = selectionStart + 2;
         }
       }, 0);
+    }
+  };
+
+  // Delete this node
+  const handleDelete = () => {
+    if (typeof getPos === 'function') {
+      try {
+        const pos = getPos();
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from: pos, to: pos + node.nodeSize })
+          .run();
+        console.log("Code node deleted successfully");
+      } catch (error) {
+        console.error("Error deleting code node:", error);
+      }
     }
   };
 
@@ -118,7 +152,7 @@ const CodeNodeView: React.FC<NodeViewProps> = ({
             <span style={{ color: '#aab1c0' }}>{language}</span>
           )}
           
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
             {isEditing && (
               <span className="text-xs mr-2" style={{ color: '#aab1c0' }}>
                 <kbd className="px-1 py-0.5 rounded text-[10px] mx-0.5" style={{ backgroundColor: '#21252b', color: '#aab1c0', border: '1px solid #4b5263' }}>
@@ -127,6 +161,7 @@ const CodeNodeView: React.FC<NodeViewProps> = ({
               </span>
             )}
             
+            {/* Edit/View Toggle Button */}
             <button
               type="button"
               onClick={toggleMode}
@@ -149,6 +184,22 @@ const CodeNodeView: React.FC<NodeViewProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               )}
+            </button>
+            
+            {/* Delete Button */}
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="p-1 rounded opacity-80 hover:opacity-100 hover:bg-red-500/20 transition-all"
+              style={{
+                backgroundColor: `rgba(40, 44, 52, 0.7)`,
+                color: '#aab1c0',
+              }}
+              title="Delete code block"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
             </button>
           </div>
         </div>
