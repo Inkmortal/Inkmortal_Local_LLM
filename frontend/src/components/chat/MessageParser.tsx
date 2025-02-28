@@ -173,4 +173,55 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
   );
 };
 
+export default MessageParser;ag') return;
+      
+      const element = domNode as Element;
+      
+      // Handle math blocks
+      if (element.name === 'div' && 
+          element.attribs && 
+          element.attribs['data-type'] === 'math-block') {
+        const latex = element.children?.[0]?.data || '';
+        return <MathRenderer latex={latex} display={true} />;
+      }
+      
+      // Handle code blocks
+      if (element.name === 'pre' && 
+          element.attribs && 
+          element.attribs['data-language']) {
+        const language = element.attribs['data-language'];
+        let code = '';
+        
+        // Extract code from <code> child if exists
+        const codeNode = element.children?.find(child => 
+          child.type === 'tag' && child.name === 'code'
+        );
+        
+        if (codeNode && codeNode.type === 'tag') {
+          code = codeNode.children?.[0]?.data || '';
+        }
+        
+        return <CodeBlock code={code} language={language} />;
+      }
+      
+      return undefined;
+    }
+  };
+  
+  if (isHTML) {
+    return (
+      <div className="message-content">
+        {parse(content, options)}
+      </div>
+    );
+  }
+  
+  // For legacy plain text messages
+  return (
+    <div className="message-content">
+      {parseContent(content)}
+    </div>
+  );
+};
+
 export default MessageParser;

@@ -1,7 +1,7 @@
 import React from 'react';
 import TipTapEditor from './editor/TipTapEditor';
 import { useTheme } from '../../context/ThemeContext';
-import '../styles/editor.css';
+import '../../styles/editor.css';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
