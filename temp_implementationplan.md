@@ -1,383 +1,775 @@
-# Local LLM Server Implementation Guide
+# WYSIWYG Chat Interface Implementation Plan
 
-## System Overview
+## Overview
 
-This system provides:
-- Transparent Ollama API proxy with queue management
-- Web interface for chat
-- Admin panel for system management
-- Priority-based request handling
-- IP whitelisting for direct API access
+This implementation plan replaces the current custom rich text input solution with a more robust approach using TipTap, ensuring an elegant, beautiful, and functional user experience.
 
-## Core Components Implementation
+## Current Issues
 
-### 1. Ollama Proxy and Queue Manager
+- Custom cursor position tracking is complex and error-prone
+- Disconnect between input (plain text) and output (rendered content)
+- Basic rendering for math expressions and code blocks
+- Multiple focus management techniques causing unpredictable behavior
 
-```python
-# backend/app/queue/manager.py
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-import httpx
-import asyncio
-from datetime import datetime
-from enum import Enum
-from typing import AsyncGenerator, Optional
-import json
+## Implementation Goals
 
-class RequestSource(Enum):
-    DIRECT_API = 1    # Cline/Roo/etc (default)
-    CUSTOM_APP = 2    # Your applications (customizable)
-    WEB_CHAT = 3      # Browser interface
+1. True WYSIWYG experience (what you see is what you get)
+2. Seamless integration with existing theme system
+3. Proper support for educational features (math, code blocks)
+4. Maintainable code structure with clear separation of concerns
+5. Improved accessibility and user experience
 
-class APIKey(Base):
-    __tablename__ = "api_keys"
-    id = Column(Integer, primary_key=True)
-    key = Column(String, unique=True)
-    name = Column(String)  # Application name
-    priority = Column(Integer)  # Custom priority level
-    created_at = Column(DateTime)
-    last_used = Column(DateTime)
-    is_active = Column(Boolean, default=True)
+## Dependencies to Add
 
-class QueueEntry:
-    def __init__(self, source: RequestSource, path: str, data: dict, custom_priority: int = None):
-        self.id = str(uuid.uuid4())
-        self.source = source
-        self.path = path
-        self.data = data
-        self.timestamp = datetime.now()
-        self.base_priority = custom_priority if custom_priority is not None else source.value
+```json
+{
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.14.2",
+    "uuid": "^11.1.0",
     
-    @property
-    def priority(self) -> float:
-        # Age factor: Reduce priority number (increase actual priority) 
-        # by 0.1 for every minute waiting
-        wait_time = (datetime.now() - self.timestamp).total_seconds() / 60
-        return self.base_priority - (wait_time * 0.1)
-
-class QueueManager:
-    def __init__(self):
-        self.queue = []
-        self.processing = False
-        self.ollama_client = httpx.AsyncClient(base_url="http://localhost:11434")
-        self.ip_whitelist = set()  # For direct API access
-    
-    def add_to_whitelist(self, ip: str):
-        self.ip_whitelist.add(ip)
-    
-    def remove_from_whitelist(self, ip: str):
-        self.ip_whitelist.discard(ip)
-    
-    def is_whitelisted(self, ip: str) -> bool:
-        return ip in self.ip_whitelist
-    
-    async def add_request(self, path: str, data: dict, source: RequestSource, 
-                         client_ip: Optional[str] = None) -> AsyncGenerator:
-        # IP whitelist check for direct API access
-        if source == RequestSource.DIRECT_API and client_ip and not self.is_whitelisted(client_ip):
-            yield json.dumps({"error": "IP not whitelisted"}).encode()
-            return
-
-        entry = QueueEntry(source, path, data)
-        
-        # Wait if we're processing and there are higher priority requests
-        while self.processing or (self.queue and self.queue[0].priority < entry.priority):
-            await asyncio.sleep(0.1)
-        
-        self.processing = True
-        try:
-            # Forward to real Ollama and stream response
-            async with self.ollama_client.stream("POST", f"/api/{path}", json=data) as response:
-                async for chunk in response.aiter_bytes():
-                    yield chunk
-        finally:
-            self.processing = False
-
-# backend/app/main.py
-from fastapi import FastAPI, Request, Depends
-from fastapi.middleware.cors import CORSMiddleware
-import httpx
-
-app = FastAPI()
-queue_manager = QueueManager()
-
-# CORS setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://chat.seadragoninkmortal.com",
-        "https://admin.seadragoninkmortal.com"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-async def get_request_priority(request: Request) -> tuple[RequestSource, int]:
-    """Determine request source and priority based on headers and API keys"""
-    api_key = request.headers.get("X-API-Key")
-    if api_key:
-        # Check for custom API key priority
-        db_key = await APIKey.get(key=api_key)
-        if db_key and db_key.is_active:
-            # Update last used timestamp
-            db_key.last_used = datetime.now()
-            await db_key.save()
-            return RequestSource.CUSTOM_APP, db_key.priority
-    
-    # Check if it's direct API access (Cline/Roo)
-    if request.url.path.startswith("/api/"):
-        return RequestSource.DIRECT_API, RequestSource.DIRECT_API.value
-    
-    return RequestSource.WEB_CHAT, RequestSource.WEB_CHAT.value
-
-@app.get("/api/tags")
-async def list_models(request: Request):
-    """Mirror Ollama's model listing endpoint"""
-    async with httpx.AsyncClient() as client:
-        response = await client.get("http://localhost:11434/api/tags")
-        return response.json()
-
-@app.post("/api/{path}")
-async def proxy_ollama(path: str, request: Request):
-    """Proxy ALL Ollama API endpoints through queue system"""
-    data = await request.json()
-    source = get_source(request)
-    client_ip = request.client.host
-    
-    return StreamingResponse(
-        queue_manager.add_request(path, data, source, client_ip),
-        media_type="text/event-stream"
-    )
+    // New dependencies
+    "@tiptap/react": "^2.2.4",
+    "@tiptap/pm": "^2.2.4",
+    "@tiptap/starter-kit": "^2.2.4",
+    "@tiptap/extension-placeholder": "^2.2.4",
+    "@tiptap/extension-image": "^2.2.4",
+    "katex": "^0.16.9",
+    "prismjs": "^1.29.0",
+    "react-katex": "^3.0.1",
+    "html-react-parser": "^5.1.8"
+  },
+  "devDependencies": {
+    // Existing devDependencies
+    // Add these new ones
+    "@types/katex": "^0.16.7",
+    "@types/prismjs": "^1.26.3"
+  }
+}
 ```
 
-### 2. Authentication Service
+## Component Structure
 
-```python
-# backend/app/auth/models.py
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True)
-    password_hash = Column(String)
-    is_admin = Column(Boolean, default=False)
-    registration_token = Column(String)
-    created_at = Column(DateTime)
-
-class RegistrationToken(Base):
-    __tablename__ = "registration_tokens"
-    id = Column(Integer, primary_key=True)
-    token = Column(String, unique=True)
-    used = Column(Boolean, default=False)
-    created_at = Column(DateTime)
-
-# backend/app/auth/router.py
-from fastapi import APIRouter, Depends, HTTPException
-from .models import User, RegistrationToken
-from .utils import create_jwt_token, get_password_hash, verify_password
-
-router = APIRouter()
-
-@router.post("/register")
-async def register(username: str, password: str, token: str):
-    # Validate registration token
-    db_token = await RegistrationToken.get(token=token, used=False)
-    if not db_token:
-        raise HTTPException(status_code=400, detail="Invalid token")
-    
-    # Create user
-    user = User(
-        username=username,
-        password_hash=get_password_hash(password),
-        registration_token=token
-    )
-    await user.save()
-    
-    # Mark token as used
-    db_token.used = True
-    await db_token.save()
-    
-    return {"access_token": create_jwt_token(user.id)}
+```
+src/
+├── components/
+│   ├── chat/
+│   │   ├── ChatInput.tsx               (Replaced with TipTap)
+│   │   ├── ChatMessage.tsx             (Updated to use unified rendering)
+│   │   ├── MessageParser.tsx           (Enhanced with HTML parser)
+│   │   ├── editor/                     (New folder)
+│   │   │   ├── TipTapEditor.tsx        (Main editor component)
+│   │   │   ├── EditorToolbar.tsx       (Formatting controls)
+│   │   │   ├── extensions/             (Custom extensions)
+│   │   │   │   ├── MathExtension.ts    (KaTeX integration)
+│   │   │   │   ├── CodeBlockExtension.ts (Prism integration)
+│   │   │   │   └── ImageExtension.ts   (Image upload support)
+│   ├── education/
+│   │   ├── MathRenderer.tsx            (Upgraded with KaTeX)
+│   │   └── CodeBlock.tsx               (Upgraded with Prism.js)
 ```
 
-### 3. Admin Panel Interface
+## Implementation Steps
 
-```typescript
-// frontend/src/pages/Admin.tsx
-import React from 'react';
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+### 1. Set Up TipTap Editor Base
 
-export function AdminPanel() {
-  const [newIP, setNewIP] = useState('');
+Create the base TipTap editor component that will replace the current ChatInput:
+
+```tsx
+// src/components/chat/editor/TipTapEditor.tsx
+import React, { useEffect } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import { useTheme } from '../../../context/ThemeContext';
+
+interface TipTapEditorProps {
+  onSend: (html: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  isGenerating?: boolean;
+}
+
+const TipTapEditor: React.FC<TipTapEditorProps> = ({
+  onSend,
+  disabled = false,
+  placeholder = "Type a message...",
+  isGenerating = false,
+}) => {
+  const { currentTheme } = useTheme();
   
-  const { data: whitelist } = useQuery({
-    queryKey: ['whitelist'],
-    queryFn: () => fetch('/api/admin/whitelist').then(r => r.json())
-  });
-  
-  const addToWhitelist = useMutation({
-    mutationFn: (ip: string) => 
-      fetch('/api/admin/whitelist', {
-        method: 'POST',
-        body: JSON.stringify({ ip })
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({
+        placeholder,
       }),
-    onSuccess: () => {
-      setNewIP('');
-      // Refresh whitelist
-    }
+    ],
+    editorProps: {
+      attributes: {
+        class: 'focus:outline-none p-3 min-h-[80px] max-h-[200px] overflow-auto',
+      },
+    },
+    content: '',
+    editable: !disabled,
   });
-  
-  return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Admin Panel</h1>
+
+  // Handle submit with Shift+Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && !disabled) {
+      e.preventDefault();
       
-      {/* IP Whitelist Management */}
-      <div className="mb-8">
-        <h2 className="text-xl mb-2">IP Whitelist</h2>
-        <div className="flex gap-2 mb-4">
-          <input
-            value={newIP}
-            onChange={e => setNewIP(e.target.value)}
-            className="border p-2 rounded"
-            placeholder="Enter IP address"
-          />
-          <button
-            onClick={() => addToWhitelist.mutate(newIP)}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            Add IP
-          </button>
+      if (editor?.isEmpty) return;
+      
+      const html = editor?.getHTML() || '';
+      onSend(html);
+      editor?.commands.clearContent();
+    }
+  };
+
+  return (
+    <div
+      className="relative rounded-2xl overflow-hidden transition-all duration-300"
+      style={{
+        backgroundColor: currentTheme.colors.bgSecondary,
+        boxShadow: `0 0 0 1px ${currentTheme.colors.borderColor}40, 0 4px 16px rgba(0,0,0,0.08)`,
+      }}
+    >
+      {/* Ambient gradient effects */}
+      <div 
+        className="absolute inset-0 opacity-10 pointer-events-none"
+        style={{ 
+          backgroundImage: `
+            radial-gradient(circle at 20% 20%, ${currentTheme.colors.accentPrimary}30 0%, transparent 70%),
+            radial-gradient(circle at 80% 80%, ${currentTheme.colors.accentSecondary}30 0%, transparent 70%)
+          `,
+        }}
+      />
+      
+      {/* Top highlight bar */}
+      <div 
+        className="absolute top-0 left-0 right-0 h-0.5"
+        style={{
+          background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.accentPrimary})`,
+          backgroundSize: '200% 100%',
+          animation: 'gradientAnimation 6s ease infinite'
+        }}
+      />
+      
+      {/* Editor content */}
+      <EditorContent 
+        editor={editor} 
+        onKeyDown={handleKeyDown}
+        className="relative z-10"
+      />
+      
+      {/* Bottom toolbar */}
+      <div className="px-3 pb-2.5 pt-1 flex justify-between items-center border-t"
+        style={{ borderColor: `${currentTheme.colors.borderColor}30` }}
+      >
+        <div className="flex space-x-2">
+          {/* We'll add toolbar buttons here in the next step */}
         </div>
         
-        <ul className="space-y-2">
-          {whitelist?.map(ip => (
-            <li key={ip} className="flex justify-between items-center">
-              <span>{ip}</span>
-              <button
-                onClick={() => removeFromWhitelist.mutate(ip)}
-                className="text-red-500"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+        <button
+          disabled={disabled || editor?.isEmpty}
+          className={`rounded-full py-2 px-4 transition-all ${
+            editor?.isEmpty ? 'opacity-50' : 'opacity-100 hover:scale-[1.03] hover:shadow-lg active:scale-[0.97]'
+          }`}
+          style={{ 
+            background: !editor?.isEmpty
+              ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 
+              : `${currentTheme.colors.bgTertiary}`,
+            color: !editor?.isEmpty ? '#fff' : currentTheme.colors.textMuted,
+            boxShadow: !editor?.isEmpty ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+          }}
+          onClick={() => {
+            if (editor?.isEmpty) return;
+            const html = editor?.getHTML() || '';
+            onSend(html);
+            editor?.commands.clearContent();
+          }}
+        >
+          <div className="flex items-center text-sm font-medium">
+            {isGenerating ? (
+              <>
+                <span className="mr-1.5">Generating</span>
+                <div className="flex space-x-1 mt-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s' }}></div>
+                  <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s', animationDelay: '0.15s' }}></div>
+                  <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s', animationDelay: '0.3s' }}></div>
+                </div>
+              </>
+            ) : (
+              <>
+                <span>Send</span>
+                <svg className="ml-1.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </>
+            )}
+          </div>
+        </button>
       </div>
-      
-      {/* Registration Token Management */}
-      {/* Queue Monitoring */}
-      {/* System Statistics */}
     </div>
   );
+};
+
+export default TipTapEditor;
+```
+
+### 2. Add EditorToolbar Component
+
+```tsx
+// src/components/chat/editor/EditorToolbar.tsx
+import React from 'react';
+import { Editor } from '@tiptap/react';
+import { useTheme } from '../../../context/ThemeContext';
+
+interface EditorToolbarProps {
+  editor: Editor | null;
 }
+
+const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor }) => {
+  const { currentTheme } = useTheme();
+  
+  if (!editor) return null;
+  
+  const buttonStyles = {
+    backgroundColor: `${currentTheme.colors.bgTertiary}50`,
+    color: currentTheme.colors.textSecondary,
+    border: `1px solid ${currentTheme.colors.borderColor}20`,
+  };
+  
+  const activeButtonStyles = {
+    backgroundColor: `${currentTheme.colors.accentPrimary}20`,
+    color: currentTheme.colors.accentPrimary,
+    border: `1px solid ${currentTheme.colors.accentPrimary}30`,
+  };
+  
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        className={`p-1.5 rounded text-xs ${editor.isActive('bold') ? 'is-active' : ''}`}
+        style={editor.isActive('bold') ? activeButtonStyles : buttonStyles}
+        title="Bold"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8.21 13c2.106 0 3.412-1.087 3.412-2.823 0-1.306-.984-2.283-2.324-2.386v-.055a2.176 2.176 0 0 0 1.852-2.14c0-1.51-1.162-2.46-3.014-2.46H3.843V13H8.21zM5.908 4.674h1.696c.963 0 1.517.451 1.517 1.244 0 .834-.629 1.32-1.73 1.32H5.908V4.673zm0 6.788V8.598h1.73c1.217 0 1.88.492 1.88 1.415 0 .943-.643 1.449-1.832 1.449H5.907z"/>
+        </svg>
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        className={`p-1.5 rounded text-xs ${editor.isActive('italic') ? 'is-active' : ''}`}
+        style={editor.isActive('italic') ? activeButtonStyles : buttonStyles}
+        title="Italic"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M7.991 11.674 9.53 4.455c.123-.595.246-.71 1.347-.807l.11-.52H7.211l-.11.52c1.06.096 1.128.212 1.005.807L6.57 11.674c-.123.595-.246.71-1.346.806l-.11.52h3.774l.11-.52c-1.06-.095-1.129-.211-1.006-.806z"/>
+        </svg>
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        className={`p-1.5 rounded text-xs ${editor.isActive('codeBlock') ? 'is-active' : ''}`}
+        style={editor.isActive('codeBlock') ? activeButtonStyles : buttonStyles}
+        title="Code Block"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M5.854 4.854a.5.5 0 1 0-.708-.708l-3.5 3.5a.5.5 0 0 0 0 .708l3.5 3.5a.5.5 0 0 0 .708-.708L2.707 8l3.147-3.146zm4.292 0a.5.5 0 0 1 .708-.708l3.5 3.5a.5.5 0 0 1 0 .708l-3.5 3.5a.5.5 0 0 1-.708-.708L13.293 8l-3.147-3.146z"/>
+        </svg>
+      </button>
+      
+      <div className="h-5 w-px mx-1" style={{ backgroundColor: `${currentTheme.colors.borderColor}40` }}></div>
+      
+      {/* We'll add math and image buttons in the next steps */}
+    </div>
+  );
+};
+
+export default EditorToolbar;
 ```
 
-## Deployment Steps
+### 3. Create Math Extension
 
-1. **Initial Setup**
-```bash
-# Install required software
-brew install ollama
-brew install nginx
-brew install node
-brew install postgresql
+```typescript
+// src/components/chat/editor/extensions/MathExtension.ts
+import { Node, mergeAttributes } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import MathRenderer from '../../../education/MathRenderer';
 
-# Install pnpm
-npm install -g pnpm
-
-# Create project structure
-mkdir -p seadragoninkmortal/{backend,frontend,nginx}
+export const MathExtension = Node.create({
+  name: 'mathBlock',
+  
+  group: 'block',
+  
+  content: 'text*',
+  
+  marks: '',
+  
+  defining: true,
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-type="math-block"]',
+      },
+    ]
+  },
+  
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'math-block' }), 0]
+  },
+  
+  addNodeView() {
+    return ReactNodeViewRenderer(MathRenderer)
+  },
+})
 ```
 
-2. **Backend Setup**
-```bash
-cd seadragoninkmortal/backend
-python -m venv venv
-source venv/bin/activate
-pip install fastapi uvicorn sqlalchemy psycopg2-binary httpx python-jose[cryptography]
-```
+### 4. Create Code Block Extension
 
-3. **Frontend Setup**
-```bash
-cd seadragoninkmortal/frontend
-pnpm create vite . --template react-ts
-pnpm install
-```
+```typescript
+// src/components/chat/editor/extensions/CodeBlockExtension.ts
+import { Node } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import CodeBlock from '../../../education/CodeBlock';
 
-4. **Nginx Configuration**
-```nginx
-# nginx/nginx.conf
-http {
-    server {
-        listen 80;
-        server_name local-llm.seadragoninkmortal.com;
-
-        location / {
-            proxy_pass http://localhost:8000;  # FastAPI proxy
-            proxy_http_version 1.1;
-            proxy_set_header Connection '';
-            proxy_buffering off;
-            proxy_cache off;
-            proxy_read_timeout 24h;
-        }
+export const CodeBlockExtension = Node.create({
+  name: 'customCodeBlock',
+  
+  group: 'block',
+  
+  content: 'text*',
+  
+  marks: '',
+  
+  defining: true,
+  
+  addAttributes() {
+    return {
+      language: {
+        default: 'javascript',
+      },
     }
+  },
+  
+  parseHTML() {
+    return [
+      {
+        tag: 'pre[data-language]',
+        getAttrs: (element) => {
+          if (typeof element === 'string') return {}
+          const dom = element as HTMLElement
+          return {
+            language: dom.getAttribute('data-language'),
+          }
+        },
+      },
+    ]
+  },
+  
+  renderHTML({ HTMLAttributes }) {
+    return ['pre', { 'data-language': HTMLAttributes.language }, ['code', {}, 0]]
+  },
+  
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlock)
+  },
+})
+```
 
-    server {
-        listen 80;
-        server_name chat.seadragoninkmortal.com;
+### 5. Enhance MathRenderer with KaTeX
+
+```tsx
+// src/components/education/MathRenderer.tsx (Updated)
+import React, { useState } from 'react';
+import { useTheme } from '../../context/ThemeContext';
+import 'katex/dist/katex.min.css';
+import { InlineMath, BlockMath } from 'react-katex';
+
+interface MathRendererProps {
+  latex: string;
+  display?: boolean;
+  className?: string;
+}
+
+const MathRenderer: React.FC<MathRendererProps> = ({ 
+  latex, 
+  display = false,
+  className = ''
+}) => {
+  const { currentTheme } = useTheme();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(latex);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className={`math-renderer ${className}`}>
+      <div 
+        className={`${display ? 'block py-4 px-4' : 'inline-block py-1 px-2'} relative group`}
+        style={{ 
+          backgroundColor: display ? `${currentTheme.colors.bgTertiary}40` : 'transparent',
+          borderRadius: '0.375rem',
+          border: display ? `1px solid ${currentTheme.colors.borderColor}40` : 'none'
+        }}
+      >
+        {display && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              className="text-xs px-2 py-0.5 rounded"
+              style={{ 
+                backgroundColor: copied 
+                  ? `${currentTheme.colors.accentSecondary}20` 
+                  : `${currentTheme.colors.accentPrimary}20`,
+                color: copied 
+                  ? currentTheme.colors.accentSecondary 
+                  : currentTheme.colors.accentPrimary
+              }}
+              onClick={handleCopy}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )}
         
-        location / {
-            proxy_pass http://localhost:3000;  # React app
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-        }
-    }
+        <div className={`${display ? 'text-center' : ''} math-content`}>
+          {display ? (
+            <BlockMath math={latex} errorColor={currentTheme.colors.error} />
+          ) : (
+            <InlineMath math={latex} errorColor={currentTheme.colors.error} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MathRenderer;
+```
+
+### 6. Enhance CodeBlock with Prism.js
+
+```tsx
+// src/components/education/CodeBlock.tsx (Updated)
+import React, { useState, useEffect } from 'react';
+import { useTheme } from '../../context/ThemeContext';
+import Prism from 'prismjs';
+import 'prismjs/themes/prism-tomorrow.css';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-jsx';
+import 'prismjs/components/prism-tsx';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-python';
+
+interface CodeBlockProps {
+  code: string;
+  language?: string;
+  className?: string;
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({ 
+  code, 
+  language = 'javascript',
+  className = '' 
+}) => {
+  const { currentTheme } = useTheme();
+  const [copied, setCopied] = useState(false);
+  
+  useEffect(() => {
+    Prism.highlightAll();
+  }, [code, language]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div 
+      className={`rounded-md overflow-hidden ${className}`}
+      style={{ 
+        backgroundColor: '#282c34',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
+      }}
+    >
+      <div className="flex justify-between items-center px-4 py-2 text-xs" style={{ backgroundColor: '#21252b' }}>
+        <div className="flex items-center">
+          <div className="flex space-x-1.5 mr-3">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+          </div>
+          <span style={{ color: '#aab1c0' }}>{language}</span>
+        </div>
+        <button
+          className="text-xs px-2 py-1 rounded transition-colors"
+          style={{ 
+            backgroundColor: copied ? `${currentTheme.colors.accentSecondary}20` : `${currentTheme.colors.accentPrimary}20`,
+            color: copied ? currentTheme.colors.accentSecondary : currentTheme.colors.accentPrimary 
+          }}
+          onClick={handleCopy}
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+      <pre 
+        className="p-4 overflow-x-auto text-sm font-mono leading-relaxed" 
+        style={{ 
+          margin: 0, 
+          backgroundColor: '#282c34',
+          maxHeight: '400px'
+        }}
+      >
+        <code className={`language-${language}`}>{code}</code>
+      </pre>
+    </div>
+  );
+};
+
+export default CodeBlock;
+```
+
+### 7. Update ChatInput Component
+
+```tsx
+// src/components/chat/ChatInput.tsx (Complete Replacement)
+import React from 'react';
+import TipTapEditor from './editor/TipTapEditor';
+
+interface ChatInputProps {
+  onSend: (message: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  isGenerating?: boolean;
+}
+
+const ChatInput: React.FC<ChatInputProps> = ({ 
+  onSend, 
+  disabled = false, 
+  placeholder = "Type a message...",
+  isGenerating = false,
+}) => {
+  const handleSend = (html: string) => {
+    // Convert HTML to the format expected by the backend
+    // For now, just send the raw HTML
+    onSend(html);
+  };
+
+  return (
+    <div className="w-full relative z-50">
+      <TipTapEditor
+        onSend={handleSend}
+        disabled={disabled}
+        placeholder={placeholder}
+        isGenerating={isGenerating}
+      />
+      
+      <div className="text-xs text-center mt-2 opacity-70">
+        <div className="text-xs flex items-center justify-center">
+          <span>Use</span>
+          <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-1">Shift</kbd>
+          <span>+</span>
+          <kbd className="px-1.5 py-0.5 rounded text-[10px] font-medium mx-1">↵</kbd>
+          <span>for line break</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ChatInput;
+```
+
+### 8. Update ChatMessage Component
+
+```tsx
+// src/components/chat/ChatMessage.tsx (Updated rendering part)
+// ...existing code...
+
+// Inside the ChatMessage component, update the message content rendering:
+{/* Message content */}
+<div className="whitespace-pre-wrap break-words relative z-10">
+  {typeof message.content === 'string' ? (
+    // For backward compatibility with plain text messages
+    <MessageParser content={message.content} />
+  ) : (
+    // For new HTML content format
+    <div dangerouslySetInnerHTML={{ __html: message.content }} />
+  )}
+</div>
+
+// ...rest of existing code...
+```
+
+### 9. Update MessageParser Component
+
+```tsx
+// src/components/chat/MessageParser.tsx (Updated)
+import React, { ReactNode } from 'react';
+import parse from 'html-react-parser';
+import MathRenderer from '../education/MathRenderer';
+import CodeBlock from '../education/CodeBlock';
+
+interface MessageParserProps {
+  content: string;
+}
+
+const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
+  // Parse the legacy message content format with markdown-like syntax
+  const parseContent = (text: string): ReactNode[] => {
+    // Original parsing logic remains for backward compatibility
+    // ... (keep existing code)
+    
+    return elements;
+  };
+  
+  // Check if content is HTML or plain text
+  const isHTML = content.startsWith('<') && content.endsWith('>');
+  
+  if (isHTML) {
+    // If HTML, use html-react-parser
+    return (
+      <div className="message-content">
+        {parse(content, {
+          replace: (domNode) => {
+            // Custom replacements for special components
+            if (domNode.type === 'tag') {
+              // Handle math blocks
+              if (domNode.name === 'div' && domNode.attribs && domNode.attribs['data-type'] === 'math-block') {
+                // Extract latex content
+                if (domNode.children && domNode.children[0]?.type === 'text') {
+                  return <MathRenderer latex={domNode.children[0].data || ''} display={true} />;
+                }
+              }
+              
+              // Handle code blocks
+              if (domNode.name === 'pre' && domNode.attribs && domNode.attribs['data-language']) {
+                const language = domNode.attribs['data-language'];
+                const codeNode = domNode.children?.find(child => child.name === 'code');
+                const code = codeNode?.children?.[0]?.data || '';
+                return <CodeBlock code={code} language={language} />;
+              }
+            }
+            return undefined;
+          }
+        })}
+      </div>
+    );
+  }
+  
+  // Else, use the original parser for backward compatibility
+  return (
+    <div className="message-content">
+      {parseContent(content)}
+    </div>
+  );
+};
+
+export default MessageParser;
+```
+
+## CSS Requirements
+
+Add these to your global CSS or in a specific file:
+
+```css
+/* Add to src/styles/editor.css */
+
+/* TipTap base styles */
+.ProseMirror {
+  outline: none;
+}
+
+.ProseMirror p {
+  margin: 0.5em 0;
+}
+
+.ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Code block styles */
+.ProseMirror pre {
+  background-color: #282c34;
+  border-radius: 0.375rem;
+  color: #abb2bf;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  padding: 0.75em 1em;
+  margin: 0.5em 0;
+}
+
+/* Math block styles */
+.ProseMirror [data-type="math-block"] {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 0.375rem;
+  padding: 0.5em;
+  margin: 0.5em 0;
+  text-align: center;
+}
+
+/* Placeholder */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted, #9ca3af);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Animation for editor toolbar */
+@keyframes gradientAnimation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Animation for cursor blink */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 ```
 
-5. **Cloudflare Tunnel Setup**
-```yaml
-# ~/.cloudflared/config.yml
-tunnel: <your-tunnel-id>
-credentials-file: /Users/<your-user>/.cloudflared/<tunnel-id>.json
+## Migration Strategy
 
-ingress:
-  - hostname: local-llm.seadragoninkmortal.com
-    service: http://localhost:80
-  - hostname: chat.seadragoninkmortal.com
-    service: http://localhost:80
-  - hostname: admin.seadragoninkmortal.com
-    service: http://localhost:80
-  - service: http_status:404
-```
+1. Install all dependencies
+2. Create the new components one by one
+3. Test each component in isolation
+4. Replace the existing ChatInput with the new TipTapEditor
+5. Update the ChatMessage component to handle both formats
+6. Add CSS styles
+7. Test the entire flow
 
-## Usage Instructions
+## Future Enhancements
 
-1. **For Cline/Roo:**
-   - Set server URL to: `https://local-llm.seadragoninkmortal.com/api/code`
-   - Ensure IP is whitelisted in admin panel
+1. Add image upload functionality
+2. Support for collaborative editing
+3. Improved editor extensions for educational features
+4. Saving drafts of messages
+5. Message edit functionality
 
-2. **For Custom Applications:**
-```python
-import requests
+## Final Notes
 
-response = requests.post(
-    "https://local-llm.seadragoninkmortal.com/api/chat",
-    headers={"X-API-Key": "your-app-key"},
-    json={"messages": [...]}
-)
-```
-
-3. **For Web Interface:**
-   - Users visit: `https://chat.seadragoninkmortal.com`
-   - Register with admin-provided token
-   - Use chat interface
-
-Would you like me to focus on any particular component or add more details to any section?
+- The implementation keeps files under 300 lines as requested
+- There's a clear separation of concerns between different components
+- The UI preserves the elegant and beautiful design while improving functionality
+- Theme integration is preserved throughout all components
+- Both modern and legacy message formats are supported for backward compatibility

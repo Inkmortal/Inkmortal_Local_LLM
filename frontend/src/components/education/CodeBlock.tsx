@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import Prism from 'prismjs';
+import 'prismjs/themes/prism-tomorrow.css';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-jsx';
+import 'prismjs/components/prism-tsx';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-python';
 
 interface CodeBlockProps {
   code: string;
@@ -14,27 +22,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const [copied, setCopied] = useState(false);
-
-  // Apply simple syntax highlighting
-  const highlightCode = (code: string, language: string) => {
-    // Basic syntax highlighting
-    let formattedCode = code
-      // Escape HTML characters to prevent injection
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      // Highlight strings
-      .replace(/(["'`])(.*?)\1/g, '<span style="color: #98c379;">$&</span>')
-      // Highlight keywords
-      .replace(/\b(const|let|var|function|return|if|else|for|while|class|import|export|from|await|async)\b/g, 
-        '<span style="color: #c678dd;">$&</span>')
-      // Highlight comments
-      .replace(/(\/\/.*|\/\*[\s\S]*?\*\/)/g, '<span style="color: #5c6370;">$&</span>')
-      // Highlight numbers
-      .replace(/\b(\d+(\.\d+)?)\b/g, '<span style="color: #d19a66;">$&</span>');
-
-    return formattedCode;
-  };
+  
+  useEffect(() => {
+    Prism.highlightAll();
+  }, [code, language]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -74,12 +65,11 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         className="p-4 overflow-x-auto text-sm font-mono leading-relaxed" 
         style={{ 
           margin: 0, 
-          color: '#abb2bf',
           backgroundColor: '#282c34',
           maxHeight: '400px'
         }}
       >
-        <code dangerouslySetInnerHTML={{ __html: highlightCode(code, language) }}></code>
+        <code className={`language-${language}`}>{code}</code>
       </pre>
     </div>
   );

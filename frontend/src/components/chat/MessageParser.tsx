@@ -1,4 +1,5 @@
 import React, { ReactNode } from 'react';
+import parse, { DOMNode, HTMLReactParserOptions, Element } from 'html-react-parser';
 import MathRenderer from '../education/MathRenderer';
 import CodeBlock from '../education/CodeBlock';
 
@@ -7,7 +8,7 @@ interface MessageParserProps {
 }
 
 const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
-  // Parse the message content and return formatted components
+  // Parse the legacy message content format with markdown-like syntax
   const parseContent = (text: string): ReactNode[] => {
     const elements: ReactNode[] = [];
     let currentIndex = 0;
@@ -116,6 +117,55 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
     return elements;
   };
   
+  // Check if content is HTML or plain text
+  const isHTML = content.trim().startsWith('<') && content.trim().endsWith('>');
+
+  const options: HTMLReactParserOptions = {
+    replace: (domNode) => {
+      if (domNode.type !== 'tag') return;
+      
+      const element = domNode as Element;
+      
+      // Handle math blocks
+      if (element.name === 'div' && 
+          element.attribs && 
+          element.attribs['data-type'] === 'math-block') {
+        const latex = element.children?.[0]?.data || '';
+        return <MathRenderer latex={latex} display={true} />;
+      }
+      
+      // Handle code blocks
+      if (element.name === 'pre' && 
+          element.attribs && 
+          element.attribs['data-language']) {
+        const language = element.attribs['data-language'];
+        let code = '';
+        
+        // Extract code from <code> child if exists
+        const codeNode = element.children?.find(child => 
+          child.type === 'tag' && child.name === 'code'
+        );
+        
+        if (codeNode && codeNode.type === 'tag') {
+          code = codeNode.children?.[0]?.data || '';
+        }
+        
+        return <CodeBlock code={code} language={language} />;
+      }
+      
+      return undefined;
+    }
+  };
+  
+  if (isHTML) {
+    return (
+      <div className="message-content">
+        {parse(content, options)}
+      </div>
+    );
+  }
+  
+  // For legacy plain text messages
   return (
     <div className="message-content">
       {parseContent(content)}

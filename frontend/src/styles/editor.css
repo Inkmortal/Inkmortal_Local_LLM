@@ -1,0 +1,125 @@
+/* TipTap base styles */
+.ProseMirror {
+  outline: none;
+  color: var(--text-primary);
+}
+
+.ProseMirror p {
+  margin: 0.5em 0;
+}
+
+.ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Code block styles */
+.ProseMirror pre {
+  background-color: var(--bg-tertiary);
+  border-radius: 0.375rem;
+  color: var(--text-primary);
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  padding: 0.75em 1em;
+  margin: 0.5em 0;
+  border: 1px solid var(--border-color);
+}
+
+/* Math block styles */
+.ProseMirror [data-type="math-block"] {
+  background-color: var(--bg-secondary);
+  border-radius: 0.375rem;
+  padding: 0.5em;
+  margin: 0.5em 0;
+  text-align: center;
+  border: 1px solid var(--border-color);
+}
+
+/* Placeholder */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Animation for editor toolbar */
+@keyframes gradientAnimation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Animation for cursor blink */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Tooltip styles */
+.editor-tooltip {
+  position: absolute;
+  background-color: var(--bg-tertiary);
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+/* Floating menu */
+.editor-floating-menu {
+  position: absolute;
+  background-color: var(--bg-secondary);
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+  z-index: 50;
+  display: flex;
+  gap: 0.25rem;
+  border: 1px solid var(--border-color);
+}
+
+/* Dialog backdrop */
+.editor-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Focus effect */
+.editor-focus-active {
+  position: relative;
+}
+
+.editor-focus-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  pointer-events: none;
+}
+
+/* Mobile optimization */
+@media (max-width: 640px) {
+  .editor-toolbar-compact {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 0.5rem;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .editor-toolbar-compact::-webkit-scrollbar {
+    display: none;
+  }
+}
