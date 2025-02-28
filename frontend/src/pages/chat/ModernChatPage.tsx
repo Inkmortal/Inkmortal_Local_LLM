@@ -534,32 +534,22 @@ function example() {
               </Button>
             )}
             
-            <div className="relative group">
-              <div 
-                className="absolute -inset-1 rounded-full opacity-40 group-hover:opacity-70 transition-all blur-sm"
-                style={{ 
-                  background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                  filter: 'blur(6px)'
-                }}
-              />
-              <div className="relative p-2 rounded-full"
-                style={{ 
-                  background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                }}
-              >
-                <svg 
-                  className="w-6 h-6" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  xmlns="http://www.w3.org/2000/svg"
-                  style={{ color: '#fff' }}
-                >
-                  <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M12 11l3 3m0 0l-3 3m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-            </div>
+            {/* Home button that uses the same navigation as admin pages */}
+            <Button 
+              size="sm"
+              variant="ghost"
+              className="rounded-lg transition-all"
+              style={{
+                color: currentTheme.colors.textSecondary,
+                backgroundColor: `${currentTheme.colors.bgTertiary}40`,
+              }}
+              onClick={() => window.navigateTo('/')}
+            >
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7m-14 0l2 2m0 0l7 7 7-7" />
+              </svg>
+              Home
+            </Button>
             <div>
               <div className="flex items-baseline">
                 <span 
