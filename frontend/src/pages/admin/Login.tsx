@@ -13,7 +13,7 @@ const EXPECTED_PASSPHRASE = "i will defy the heavens";
 
 const AdminLogin: React.FC = () => {
   const { currentTheme } = useTheme();
-  const { login } = useAuth();
+  const { login, adminLogin } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -149,45 +149,14 @@ const AdminLogin: React.FC = () => {
     console.log('Attempting login with username:', username);
     
     try {
-      // Use the standard OAuth2 password flow
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
+      // Use the adminLogin function from Auth context
+      const success = await adminLogin(username, password);
       
-      console.log('Sending login request...');
-      const response = await fetchApi('/auth/admin/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData,
-      });
-      
-      console.log('Login response status:', response.status);
-      const responseText = await response.text();
-      console.log('Login response text:', responseText);
-      
-      if (response.ok) {
-        try {
-          const data = JSON.parse(responseText);
-          console.log('Login successful, token received');
-          
-          // Use AuthContext login function
-          login(data.access_token, data.username);
-          
-          // Redirect to admin dashboard
-          window.navigateTo('/admin');
-        } catch (e) {
-          console.error('Error parsing login response:', e);
-          setError('Invalid response format from server');
-        }
+      if (success) {
+        // Redirect handled by the adminLogin function
+        window.navigateTo('/admin');
       } else {
-        try {
-          const errorData = JSON.parse(responseText);
-          setError(errorData.detail || 'Login failed');
-        } catch {
-          setError('Login failed: ' + responseText);
-        }
+        setError('Login failed. Please check your credentials and try again.');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Network error';
@@ -231,7 +200,7 @@ const AdminLogin: React.FC = () => {
           console.log('Admin setup successful, token received');
           
           // Use AuthContext login function
-          login(data.access_token, data.username);
+          login(data.access_token, data.username, true);
           
           // Redirect to admin dashboard
           window.navigateTo('/admin');
