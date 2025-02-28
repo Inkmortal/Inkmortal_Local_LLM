@@ -16,6 +16,7 @@ import Unauthorized from './pages/auth/Unauthorized';
 import Profile from './pages/user/Profile';
 import ChatPage from './pages/chat/ModernChatPage';
 import ModernHomePage from './components/HomePage';
+import Layout from './components/layout/Layout';
 import Card from './components/ui/Card';
 import Button from './components/ui/Button';
 import ThemeSelector from './components/ui/ThemeSelector';
@@ -90,7 +91,7 @@ function App() {
       window.history.pushState(null, '', path);
       
       // Simulate loading (remove in production with real navigation)
-      setTimeout(() => setIsLoading(false), 300);
+      setTimeout(() => setIsLoading(false), 100);
       
       return false; // Prevent default navigation
     };
@@ -133,7 +134,7 @@ function App() {
       case 'admin/queue':
         return <ProtectedQueueMonitor currentRoute={currentRoute} />;
       case 'admin/users':
-        return <ProtectedUserManagement currentRoute={currentRoute} />;
+        return <Layout><ProtectedUserManagement currentRoute={currentRoute} /></Layout>;
       case 'admin/stats':
         return <ProtectedSystemStats currentRoute={currentRoute} />;
       case 'admin/login':
