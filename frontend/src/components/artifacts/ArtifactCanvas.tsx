@@ -3,6 +3,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Artifact, ArtifactType, UploadedDocument } from './ArtifactsSidebar';
 import CodeBlock from '../education/CodeBlock';
 import MathRenderer from '../education/MathRenderer';
+import MessageParser from '../chat/MessageParser';
 import 'katex/dist/katex.min.css';
 
 interface ArtifactCanvasProps {
@@ -158,44 +159,19 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
         if (activeTab === 'preview') {
           return (
             <div 
-              className="overflow-auto p-6 h-full prose prose-sm max-w-none"
-              style={{ 
+              className="overflow-auto p-6 h-full max-w-none"
+              style={{ color: currentTheme.colors.textPrimary }}
+            >
+              <div className="prose prose-sm max-w-none" style={{
                 color: currentTheme.colors.textPrimary,
                 '--tw-prose-headings': currentTheme.colors.accentPrimary,
                 '--tw-prose-links': currentTheme.colors.accentSecondary,
                 '--tw-prose-code': currentTheme.colors.textPrimary,
                 '--tw-prose-pre-bg': `${currentTheme.colors.bgTertiary}80`,
-              } as React.CSSProperties}
-              dangerouslySetInnerHTML={{ 
-                __html: `
-                  <h1>Fourier Transform</h1>
-                  <p>The Fourier transform is a mathematical transform that decomposes a function into its constituent frequencies. The Fourier transform of a function <em>f(x)</em> is given by:</p>
-                  <div class="math">
-                    $$F(\\omega) = \\int_{-\\infty}^{\\infty} f(x) e^{-i\\omega x} dx$$
-                  </div>
-                  <p>And the inverse Fourier transform is:</p>
-                  <div class="math">
-                    $$f(x) = \\frac{1}{2\\pi} \\int_{-\\infty}^{\\infty} F(\\omega) e^{i\\omega x} d\\omega$$
-                  </div>
-                  <h2>Properties of Fourier Transform</h2>
-                  <ol>
-                    <li><strong>Linearity</strong>: $\\mathcal{F}\\{af(x) + bg(x)\\} = a\\mathcal{F}\\{f(x)\\} + b\\mathcal{F}\\{g(x)\\}$</li>
-                    <li><strong>Scaling</strong>: $\\mathcal{F}\\{f(ax)\\} = \\frac{1}{|a|}F(\\frac{\\omega}{a})$</li>
-                    <li><strong>Time Shifting</strong>: $\\mathcal{F}\\{f(x-a)\\} = e^{-i\\omega a}F(\\omega)$</li>
-                    <li><strong>Frequency Shifting</strong>: $\\mathcal{F}\\{e^{ix_0 x}f(x)\\} = F(\\omega - x_0)$</li>
-                    <li><strong>Convolution</strong>: $\\mathcal{F}\\{f * g\\} = F(\\omega) \\cdot G(\\omega)$</li>
-                  </ol>
-                  <h2>Applications</h2>
-                  <ul>
-                    <li>Signal processing</li>
-                    <li>Image processing</li>
-                    <li>Quantum mechanics</li>
-                    <li>Probability theory</li>
-                    <li>Data compression</li>
-                  </ul>
-                `
-              }}
-            />
+              } as React.CSSProperties}>
+                <MessageParser content={artifact.content} />
+              </div>
+            </div>
           );
         } else {
           return (

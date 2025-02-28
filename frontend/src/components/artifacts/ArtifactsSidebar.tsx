@@ -149,7 +149,54 @@ $$f(x) = \\frac{1}{2\\pi} \\int_{-\\infty}^{\\infty} F(\\omega) e^{i\\omega x} d
 - Image processing
 - Quantum mechanics
 - Probability theory
-- Data compression`,
+- Data compression
+
+## Code Example
+
+\`\`\`python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def compute_fft(signal, fs):
+    """Compute the FFT of a signal."""
+    N = len(signal)
+    fft_result = np.fft.fft(signal)
+    freqs = np.fft.fftfreq(N, 1/fs)
+    
+    # Get the positive frequencies
+    pos_mask = freqs >= 0
+    freqs = freqs[pos_mask]
+    fft_result = fft_result[pos_mask]
+    
+    return freqs, np.abs(fft_result)
+
+# Generate a test signal with multiple frequency components
+fs = 1000  # Sampling frequency (Hz)
+t = np.arange(0, 1, 1/fs)  # Time vector
+f1, f2, f3 = 50, 120, 200  # Frequency components (Hz)
+signal = np.sin(2*np.pi*f1*t) + 0.5*np.sin(2*np.pi*f2*t) + 0.25*np.sin(2*np.pi*f3*t)
+
+# Compute FFT
+freqs, magnitudes = compute_fft(signal, fs)
+
+# Plot the results
+plt.figure(figsize=(12, 6))
+plt.subplot(2, 1, 1)
+plt.plot(t[:100], signal[:100])
+plt.title('Time Domain Signal (First 100 samples)')
+plt.xlabel('Time (s)')
+plt.ylabel('Amplitude')
+
+plt.subplot(2, 1, 2)
+plt.plot(freqs, magnitudes)
+plt.title('Frequency Domain')
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Magnitude')
+plt.xlim(0, 250)
+
+plt.tight_layout()
+plt.show()
+\`\`\``,
   },
   {
     id: '3',
