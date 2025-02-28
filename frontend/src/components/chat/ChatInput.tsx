@@ -142,16 +142,80 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }, 0);
   }, [message, adjustTextareaHeight]);
 
-  // Handle math insertion
+  // Handle math insertion from modal
   const handleMathInsert = (latex: string) => {
     insertTextAtCursor(`$${latex}$`);
     setShowMathEditor(false);
   };
 
-  // Handle code insertion
+  // Handle code insertion from modal
   const handleCodeInsert = (code: string, language: string) => {
     insertTextAtCursor(`\`\`\`${language}\n${code}\n\`\`\``);
     setShowCodeEditor(false);
+  };
+  
+  // Convert selected text to math
+  const convertSelectedToMath = () => {
+    if (!textareaRef.current) return;
+    
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    
+    // Check if text is selected
+    if (start !== end) {
+      const selectedText = message.substring(start, end);
+      const mathText = `$${selectedText}$`;
+      
+      // Replace selected text with math format
+      const newMessage = message.substring(0, start) + mathText + message.substring(end);
+      setMessage(newMessage);
+      
+      // Set cursor position after the inserted math
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newPosition = start + mathText.length;
+          textareaRef.current.setSelectionRange(newPosition, newPosition);
+          textareaRef.current.focus();
+        }
+      }, 0);
+    } else {
+      // If no text is selected, open math editor
+      setShowMathEditor(true);
+    }
+    
+    setShowFormatMenu(false);
+  };
+
+  // Convert selected text to code
+  const convertSelectedToCode = () => {
+    if (!textareaRef.current) return;
+    
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    
+    // Check if text is selected
+    if (start !== end) {
+      const selectedText = message.substring(start, end);
+      const codeText = `\`\`\`\n${selectedText}\n\`\`\``;
+      
+      // Replace selected text with code format
+      const newMessage = message.substring(0, start) + codeText + message.substring(end);
+      setMessage(newMessage);
+      
+      // Set cursor position after the inserted code
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newPosition = start + codeText.length;
+          textareaRef.current.setSelectionRange(newPosition, newPosition);
+          textareaRef.current.focus();
+        }
+      }, 0);
+    } else {
+      // If no text is selected, open code editor
+      setShowCodeEditor(true);
+    }
+    
+    setShowFormatMenu(false);
   };
 
   // Toggle the format menu
@@ -250,10 +314,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 <div className="p-1 flex flex-col">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowMathEditor(true);
-                      setShowFormatMenu(false);
-                    }}
+                    onClick={convertSelectedToMath}
                     className="flex items-center px-3 py-2 hover:bg-opacity-10 rounded-md text-sm"
                     style={{
                       color: currentTheme.colors.textPrimary,
@@ -267,10 +328,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowCodeEditor(true);
-                      setShowFormatMenu(false);
-                    }}
+                    onClick={convertSelectedToCode}
                     className="flex items-center px-3 py-2 hover:bg-opacity-10 rounded-md text-sm"
                     style={{
                       color: currentTheme.colors.textPrimary,
