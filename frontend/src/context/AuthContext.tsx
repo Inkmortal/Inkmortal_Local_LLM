@@ -1,172 +1,223 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { fetchApi, checkBackendConnection } from '../config/api';
-
-interface UserData {
-  id: number;
-  username: string;
-  email: string;
-  is_admin: boolean;
-  created_at: string;
-}
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { fetchApi } from '../config/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
+  loading: boolean;
   username: string | null;
   userEmail: string | null;
-  loading: boolean;
+  userData: any;
   connectionError: string | null;
   login: (token: string, username: string, isAdmin: boolean) => void;
   adminLogin: (username: string, password: string) => Promise<boolean>;
-  userLogin: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, email: string, password: string, token: string) => Promise<boolean>;
-  logout: () => void;
+  regularLogin: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, email: string, password: string, token?: string) => Promise<boolean>;
   checkAuth: () => Promise<boolean>;
-  userData: UserData | null;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({
+const defaultAuthContext: AuthContextType = {
   isAuthenticated: false,
   isAdmin: false,
+  loading: true,
   username: null,
   userEmail: null,
-  loading: true,
+  userData: null,
   connectionError: null,
   login: () => {},
-  adminLogin: () => Promise.resolve(false),
-  userLogin: () => Promise.resolve(false),
-  register: () => Promise.resolve(false),
+  adminLogin: async () => false,
+  regularLogin: async () => false,
+  register: async () => false,
+  checkAuth: async () => false,
   logout: () => {},
-  checkAuth: () => Promise.resolve(false),
-  userData: null,
-});
+};
 
-declare global {
-  interface Window {
-    navigateTo?: (path: string) => void;
-  }
+const AuthContext = createContext<AuthContextType>(defaultAuthContext);
+
+interface AuthProviderProps {
+  children: ReactNode;
 }
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
   const [username, setUsername] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [userData, setUserData] = useState<any>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [userData, setUserData] = useState<UserData | null>(null);
-
+  
+  // Check authentication on mount
   useEffect(() => {
-    // Check backend connection and authentication on component mount
-    checkBackendConnection()
-      .then(connected => {
-        if (connected) {
-          checkAuth();
-        } else {
-          setConnectionError("Cannot connect to the backend server. Please ensure it's running on port 8000.");
-          setLoading(false);
-        }
-      });
+    const initialCheck = async () => {
+      await checkAuth();
+    };
+    
+    initialCheck();
   }, []);
-
+  
+  // Helper to store auth token
+  const storeToken = (token: string) => {
+    localStorage.setItem('authToken', token);
+  };
+  
+  // Authenticate and store token
   const login = (token: string, username: string, isAdmin: boolean) => {
-    const tokenKey = isAdmin ? 'adminToken' : 'userToken';
-    const usernameKey = isAdmin ? 'adminUsername' : 'username';
-    
-    localStorage.setItem(tokenKey, token);
-    localStorage.setItem(usernameKey, username);
-    localStorage.setItem('userRole', isAdmin ? 'admin' : 'user');
-    
+    storeToken(token);
     setIsAuthenticated(true);
     setIsAdmin(isAdmin);
     setUsername(username);
+    setLoading(false);
+    
+    console.log(`Logged in as ${username}`, isAdmin ? '(Admin)' : '');
   };
-
+  
+  // Admin login handler
   const adminLogin = async (username: string, password: string): Promise<boolean> => {
+    setLoading(true);
+    setConnectionError(null);
+    
     try {
-      // Use the standard OAuth2 password flow
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
-      
+      console.log('Attempting admin login...');
       const response = await fetchApi('/auth/admin/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData,
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        login(data.access_token, data.username, true);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Admin login error:', error);
-      return false;
-    }
-  };
-
-  const userLogin = async (username: string, password: string): Promise<boolean> => {
-    try {
-      // Use the standard OAuth2 password flow
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
-      
-      const response = await fetchApi('/auth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData,
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        login(data.access_token, data.username, data.is_admin);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('User login error:', error);
-      return false;
-    }
-  };
-
-  const register = async (username: string, email: string, password: string, token: string): Promise<boolean> => {
-    try {
-      const response = await fetchApi('/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           username,
-          email,
           password,
-          token,
         }),
       });
       
-      return response.ok;
+      console.log('Admin login response status:', response.status);
+      const responseText = await response.text();
+      
+      if (response.ok) {
+        try {
+          const data = JSON.parse(responseText);
+          console.log('Admin login successful');
+          
+          // Store token and update auth state
+          login(data.access_token, data.username, true);
+          
+          return true;
+        } catch (e) {
+          console.error('Error parsing login response:', e);
+          setConnectionError('Invalid response format from server');
+          setLoading(false);
+          return false;
+        }
+      } else {
+        setConnectionError('Invalid credentials');
+        setLoading(false);
+        return false;
+      }
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Error during admin login:', error);
+      setConnectionError('Network error while logging in');
+      setLoading(false);
       return false;
     }
   };
-
-  const logout = () => {
-    // Clear all auth-related localStorage items
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminUsername');
-    localStorage.removeItem('userToken');
-    localStorage.removeItem('username');
-    localStorage.removeItem('userRole');
+  
+  // Regular user login handler
+  const regularLogin = async (username: string, password: string): Promise<boolean> => {
+    setLoading(true);
+    setConnectionError(null);
     
-    // Reset auth state
+    try {
+      console.log('Attempting user login...');
+      const response = await fetchApi('/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
+      
+      console.log('User login response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('User login successful');
+        
+        // Store token and update auth state
+        login(data.access_token, data.username, false);
+        setUserEmail(data.email);
+        
+        return true;
+      } else {
+        setConnectionError('Invalid credentials');
+        setLoading(false);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error during user login:', error);
+      setConnectionError('Network error while logging in');
+      setLoading(false);
+      return false;
+    }
+  };
+  
+  // User registration handler
+  const register = async (username: string, email: string, password: string, token?: string): Promise<boolean> => {
+    setLoading(true);
+    setConnectionError(null);
+    
+    try {
+      const body: any = {
+        username,
+        email,
+        password,
+      };
+      
+      // Add token if provided
+      if (token) {
+        body.token = token;
+      }
+      
+      console.log('Attempting user registration...');
+      const response = await fetchApi('/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      
+      console.log('Registration response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Registration successful');
+        
+        // Store token and update auth state
+        login(data.access_token, data.username, false);
+        setUserEmail(data.email);
+        
+        return true;
+      } else {
+        const errorData = await response.json();
+        setConnectionError(errorData.detail || 'Registration failed');
+        setLoading(false);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error during registration:', error);
+      setConnectionError('Network error during registration');
+      setLoading(false);
+      return false;
+    }
+  };
+  
+  // Logout handler
+  const logout = () => {
+    localStorage.removeItem('authToken');
     setIsAuthenticated(false);
     setIsAdmin(false);
     setUsername(null);
@@ -175,119 +226,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Redirect based on previous role
     const redirectPath = isAdmin ? '/admin/login' : '/login';
-    if (typeof window.navigateTo === 'function') {
-      window.navigateTo(redirectPath);
-    } else {
-      window.location.href = redirectPath;
-    }
+    // Always use navigateTo for client-side navigation
+    window.navigateTo(redirectPath);
   };
-
+  
   const checkAuth = async (): Promise<boolean> => {
     setLoading(true);
     setConnectionError(null);
     
     try {
-      // Check if we have admin or user token
-      const adminToken = localStorage.getItem('adminToken');
-      const userToken = localStorage.getItem('userToken');
-      const userRole = localStorage.getItem('userRole');
+      console.log('Checking authentication...');
+      // Get token from localStorage
+      const token = localStorage.getItem('authToken');
       
-      // Determine which token to use
-      const token = adminToken || userToken;
-      const storedUsername = localStorage.getItem(adminToken ? 'adminUsername' : 'username');
-      const isAdminRole = userRole === 'admin';
-      
-      if (!token || !storedUsername) {
-        setIsAuthenticated(false);
-        setIsAdmin(false);
-        setUsername(null);
-        setUserData(null);
+      if (!token) {
+        console.log('No auth token found');
         setLoading(false);
         return false;
       }
       
-      // Verify token with backend
-      try {
-        const response = await fetchApi('/auth/users/me', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      // Verify the token with backend
+      const response = await fetchApi('/auth/verify', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('Token verified, user data:', userData);
         
-        if (response.ok) {
-          const userData = await response.json();
-          setIsAuthenticated(true);
-          setIsAdmin(userData.is_admin);
-          setUsername(userData.username);
-          setUserEmail(userData.email);
-          setUserData(userData);
-          setLoading(false);
-          return true;
-        } else {
-          // Token is invalid or expired
-          setIsAuthenticated(false);
-          setIsAdmin(false);
-          setUsername(null);
-          setUserData(null);
-          
-          // Clear stored tokens
-          localStorage.removeItem('adminToken');
-          localStorage.removeItem('adminUsername');
-          localStorage.removeItem('userToken');
-          localStorage.removeItem('username');
-          localStorage.removeItem('userRole');
-          
-          setLoading(false);
-          return false;
-        }
-      } catch (error) {
-        // Network error or server not available
-        console.error('Could not verify token with server:', error);
-        setConnectionError("Cannot connect to backend server. Please check if it's running.");
-        
-        // Allow offline usage with stored token in development environments
-        const isDevelopment = window.location.hostname === 'localhost';
-        if (isDevelopment) {
-          console.warn('DEV MODE: Allowing offline authentication with stored token');
-          setIsAuthenticated(!!token);
-          setIsAdmin(isAdminRole);
-          setUsername(storedUsername);
-        } else {
-          setIsAuthenticated(false);
-          setIsAdmin(false);
-        }
-        
+        // Update auth state
+        setIsAuthenticated(true);
+        setIsAdmin(userData.is_admin || false);
+        setUsername(userData.username);
+        setUserEmail(userData.email);
+        setUserData(userData);
         setLoading(false);
-        return !!token && isDevelopment;
+        return true;
+      } else {
+        console.log('Token verification failed');
+        // Clear invalid token
+        localStorage.removeItem('authToken');
+        setLoading(false);
+        return false;
       }
     } catch (error) {
       console.error('Auth check error:', error);
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      setUsername(null);
-      setUserData(null);
-      setConnectionError("Authentication check failed due to an unexpected error.");
+      setConnectionError('Network error while checking authentication');
       setLoading(false);
       return false;
     }
   };
-
+  
+  const contextValue: AuthContextType = {
+    isAuthenticated,
+    isAdmin,
+    loading,
+    username,
+    userEmail,
+    userData,
+    connectionError,
+    login,
+    adminLogin,
+    regularLogin,
+    register,
+    checkAuth,
+    logout,
+  };
+  
   return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        isAdmin,
-        username,
-        userEmail,
-        loading,
-        connectionError,
-        login,
-        adminLogin,
-        userLogin,
-        register,
-        logout,
-        checkAuth,
-        userData,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
@@ -295,32 +305,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => useContext(AuthContext);
 
-// Higher-order component for protected routes
-export const withAuth = <P extends object>(
-  Component: React.ComponentType<P>,
-  requireAdmin: boolean = false
-) => {
-  return (props: P) => {
+// HOC to protect routes
+export const withAuth = (Component: React.ComponentType<any>, requireAdmin: boolean = false) => {
+  return (props: any) => {
     const { isAuthenticated, isAdmin, loading } = useAuth();
     
-    useEffect(() => {
-      if (!loading && !isAuthenticated) {
-        // Redirect to appropriate login page
-        window.navigateTo(requireAdmin ? '/admin/login' : '/login');
-      } else if (!loading && requireAdmin && !isAdmin) {
-        // If admin access is required but user is not admin
-        window.navigateTo('/unauthorized');
-      }
-    }, [isAuthenticated, isAdmin, loading]);
-    
+    // Show loader while checking auth
     if (loading) {
-      return <div>Loading...</div>; // Could be replaced with a proper loading component
+      return <div>Loading...</div>;
     }
     
-    if (!isAuthenticated || (requireAdmin && !isAdmin)) {
-      return null; // Don't render anything while redirecting
+    // Check if authenticated
+    if (!isAuthenticated) {
+      // Redirect to login
+      window.navigateTo(requireAdmin ? '/admin/login' : '/login');
+      return null;
     }
     
+    // Check admin requirement
+    if (requireAdmin && !isAdmin) {
+      // Redirect to unauthorized page
+      window.navigateTo('/unauthorized');
+      return null;
+    }
+    
+    // Render protected component
     return <Component {...props} />;
   };
 };
