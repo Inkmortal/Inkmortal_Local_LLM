@@ -46,12 +46,12 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
         zIndex: 30,
       }}
     >
-      <div className="flex items-center gap-2 mx-auto">
+      <div className="flex items-center gap-3 mx-auto">
         {/* File Upload Button */}
         <Button
-          size="xs"
+          size="sm"
           variant={showFileUpload ? "default" : "ghost"}
-          className="rounded-full p-1.5 transition-all"
+          className="rounded-md px-3 py-1.5 transition-all flex items-center"
           style={{
             color: showFileUpload 
               ? '#fff'
@@ -63,16 +63,17 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
           title={showFileUpload ? "Hide file upload" : "Attach file"}
           onClick={() => setShowFileUpload(!showFileUpload)}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
           </svg>
+          <span className="text-sm font-medium">Attach File</span>
         </Button>
         
         {/* Code Snippet Button */}
         <Button
-          size="xs"
+          size="sm"
           variant={showCodeSelector ? "default" : "ghost"}
-          className="rounded-full p-1.5 transition-all"
+          className="rounded-md px-3 py-1.5 transition-all flex items-center"
           style={{
             color: showCodeSelector 
               ? '#fff' 
@@ -90,16 +91,17 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
             // setShowMathSelector(false);
           }}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
           </svg>
+          <span className="text-sm font-medium">Insert Code</span>
         </Button>
         
         {/* Math Expression Button */}
         <Button
-          size="xs"
+          size="sm"
           variant={showMathSelector ? "default" : "ghost"}
-          className="rounded-full p-1.5 transition-all"
+          className="rounded-md px-3 py-1.5 transition-all flex items-center"
           style={{
             color: showMathSelector 
               ? '#fff' 
@@ -117,9 +119,10 @@ const ChatActionBar: React.FC<ChatActionBarProps> = ({
             // setShowCodeSelector(false);
           }}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.871 4A17.926 17.926 0 003 12c0 2.874.673 5.59 1.871 8m14.13 0a17.926 17.926 0 001.87-8c0-2.874-.673-5.59-1.87-8M9 9h1.246a1 1 0 01.961.725l1.586 5.55a1 1 0 00.961.725H15m1-7h-.08a2 2 0 00-1.519.698L9.6 15.302A2 2 0 018.08 16H8" />
           </svg>
+          <span className="text-sm font-medium">Insert Math</span>
         </Button>
         
         {selectedFile && (
