@@ -57,38 +57,47 @@ const MathNodeView: React.FC<NodeViewProps> = ({
   return (
     <NodeViewWrapper className="math-block-wrapper">
       <div
-        className="math-block relative group my-2 rounded-md"
+        className="math-block relative group my-2 rounded-md overflow-hidden"
         style={{
           backgroundColor: `${currentTheme.colors.bgTertiary}30`,
           border: `1px solid ${currentTheme.colors.borderColor}40`,
-          padding: isEditing ? '0' : '12px',
         }}
       >
-        {/* Edit/View toggle button */}
-        <button
-          type="button"
-          onClick={toggleMode}
-          className="absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{
-            backgroundColor: `${currentTheme.colors.bgTertiary}70`,
-            color: currentTheme.colors.textSecondary,
-            zIndex: 10,
+        {/* Header bar with label and toggle button */}
+        <div 
+          className="flex justify-between items-center px-3 py-1.5 border-b"
+          style={{ 
+            borderColor: `${currentTheme.colors.borderColor}40`,
+            backgroundColor: `${currentTheme.colors.bgTertiary}30`
           }}
-          title={isEditing ? "View rendered math" : "Edit LaTeX"}
         >
-          {isEditing ? (
-            // Eye icon for view mode
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          ) : (
-            // Edit icon for edit mode
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          )}
-        </button>
+          <span className="text-xs font-medium" style={{ color: currentTheme.colors.textMuted }}>
+            {isEditing ? "Editing LaTeX" : "Math Expression"}
+          </span>
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="p-1 rounded opacity-80 hover:opacity-100 transition-opacity"
+            style={{
+              backgroundColor: `${currentTheme.colors.bgTertiary}70`,
+              color: currentTheme.colors.textSecondary,
+            }}
+            title={isEditing ? "View rendered math" : "Edit LaTeX"}
+          >
+            {isEditing ? (
+              // Eye icon for view mode
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            ) : (
+              // Edit icon for edit mode
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            )}
+          </button>
+        </div>
 
         {isEditing ? (
           <div className="p-2">
@@ -115,7 +124,7 @@ const MathNodeView: React.FC<NodeViewProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex justify-center p-3">
             <MathRenderer latex={latex} display={true} />
           </div>
         )}

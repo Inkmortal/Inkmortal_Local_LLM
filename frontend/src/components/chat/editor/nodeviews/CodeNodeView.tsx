@@ -100,72 +100,77 @@ const CodeNodeView: React.FC<NodeViewProps> = ({
           border: `1px solid ${currentTheme.colors.borderColor}40`,
         }}
       >
-        {/* Edit/View toggle button */}
-        <button
-          type="button"
-          onClick={toggleMode}
-          className="absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-20"
-          style={{
-            backgroundColor: `rgba(40, 44, 52, 0.7)`,
-            color: '#aab1c0',
-          }}
-          title={isEditing ? "View rendered code" : "Edit code"}
-        >
+        {/* Header bar with language and toggle button */}
+        <div className="flex justify-between items-center px-4 py-2 text-xs" style={{ backgroundColor: '#21252b' }}>
           {isEditing ? (
-            // Eye icon for view mode
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
+            <select
+              value={language}
+              onChange={handleLanguageChange}
+              className="bg-transparent text-gray-300 border border-gray-700 rounded px-1 py-0.5"
+            >
+              {languageOptions.map(lang => (
+                <option key={lang} value={lang} style={{ backgroundColor: '#282c34', color: '#aab1c0' }}>
+                  {lang}
+                </option>
+              ))}
+            </select>
           ) : (
-            // Edit icon for edit mode
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <span style={{ color: '#aab1c0' }}>{language}</span>
           )}
-        </button>
-
-        {isEditing ? (
-          <div>
-            {/* Language selector header */}
-            <div className="flex items-center justify-between px-4 py-2 text-xs" style={{ backgroundColor: '#21252b' }}>
-              <select
-                value={language}
-                onChange={handleLanguageChange}
-                className="bg-transparent text-gray-300 border border-gray-700 rounded px-1 py-0.5"
-              >
-                {languageOptions.map(lang => (
-                  <option key={lang} value={lang} style={{ backgroundColor: '#282c34', color: '#aab1c0' }}>
-                    {lang}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs" style={{ color: '#aab1c0' }}>
+          
+          <div className="flex items-center">
+            {isEditing && (
+              <span className="text-xs mr-2" style={{ color: '#aab1c0' }}>
                 <kbd className="px-1 py-0.5 rounded text-[10px] mx-0.5" style={{ backgroundColor: '#21252b', color: '#aab1c0', border: '1px solid #4b5263' }}>
                   {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'} + Enter
                 </kbd> to save
               </span>
-            </div>
+            )}
             
-            {/* Code editor textarea */}
-            <textarea
-              ref={textareaRef}
-              value={code}
-              onChange={handleCodeChange}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              className="w-full p-4 font-mono text-sm"
+            <button
+              type="button"
+              onClick={toggleMode}
+              className="p-1 rounded opacity-80 hover:opacity-100 transition-opacity"
               style={{
-                backgroundColor: '#282c34',
-                color: '#abb2bf',
-                minHeight: '100px',
-                outline: 'none',
-                resize: 'vertical',
-                lineHeight: 1.5,
+                backgroundColor: `rgba(40, 44, 52, 0.7)`,
+                color: '#aab1c0',
               }}
-              placeholder={`Enter ${language} code...`}
-            />
+              title={isEditing ? "View rendered code" : "Edit code"}
+            >
+              {isEditing ? (
+                // Eye icon for view mode
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              ) : (
+                // Edit icon for edit mode
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              )}
+            </button>
           </div>
+        </div>
+
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={code}
+            onChange={handleCodeChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className="w-full p-4 font-mono text-sm"
+            style={{
+              backgroundColor: '#282c34',
+              color: '#abb2bf',
+              minHeight: '100px',
+              outline: 'none',
+              resize: 'vertical',
+              lineHeight: 1.5,
+            }}
+            placeholder={`Enter ${language} code...`}
+          />
         ) : (
           <CodeBlock code={code} language={language} />
         )}

@@ -212,8 +212,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         >
           <EditorToolbar
             editor={editor}
-            onInsertMath={handleInsertMath}
-            onInsertCode={handleInsertCode}
             previewMode={previewMode}
             onTogglePreview={togglePreviewMode}
           />
