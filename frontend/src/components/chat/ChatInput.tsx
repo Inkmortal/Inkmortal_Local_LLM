@@ -7,6 +7,8 @@ interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
   inputRef?: React.RefObject<HTMLInputElement>;
+  onInsertCode?: (codeSnippet: string) => void; // Add prop for inserting code
+  onInsertMath?: (mathSnippet: string) => void; // Add prop for inserting math
   isGenerating?: boolean; // Add prop to know if response is streaming
 }
 
@@ -15,7 +17,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   disabled = false, 
   placeholder = "Type a message...",
   inputRef,
-  isGenerating = false
+  isGenerating = false,
+  onInsertCode,
+  onInsertMath
 }) => {
   const { currentTheme } = useTheme();
   const [message, setMessage] = useState('');
@@ -218,6 +222,49 @@ const ChatInput: React.FC<ChatInputProps> = ({
     window.addEventListener('resize', updateCursorPosition);
     return () => window.removeEventListener('resize', updateCursorPosition);
   }, [updateCursorPosition]);
+
+  // Function to insert text at cursor position
+  const insertTextAtCursor = useCallback((text: string) => {
+    if (!textareaRef.current) return;
+    
+    const textarea = textareaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    
+    const beforeText = message.substring(0, start);
+    const afterText = message.substring(end);
+    
+    const newValue = beforeText + text + afterText;
+    setMessage(newValue);
+    
+    // Focus and set cursor position after the inserted text
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newPosition = start + text.length;
+        textareaRef.current.setSelectionRange(newPosition, newPosition);
+        adjustTextareaHeight();
+      }
+    }, 0);
+  }, [message, adjustTextareaHeight]);
+
+  // Handle code insertion from parent component
+  useEffect(() => {
+    if (onInsertCode) {
+      onInsertCode((codeSnippet: string) => {
+        insertTextAtCursor(codeSnippet);
+      });
+    }
+  }, [onInsertCode, insertTextAtCursor]);
+
+  // Handle math insertion from parent component
+  useEffect(() => {
+    if (onInsertMath) {
+      onInsertMath((mathSnippet: string) => {
+        insertTextAtCursor(mathSnippet);
+      });
+    }
+  }, [onInsertMath, insertTextAtCursor]);
 
   return (
     <div className="w-full relative z-50">
