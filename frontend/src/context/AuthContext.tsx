@@ -95,10 +95,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
       
       console.log('Admin login response status:', response.status);
-      const responseText = await response.text();
       
       if (response.ok) {
         try {
+          const responseText = await response.text();
           const data = JSON.parse(responseText);
           console.log('Admin login successful');
           
@@ -113,7 +113,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return false;
         }
       } else {
-        setConnectionError('Invalid credentials');
+        let errorMessage = 'Invalid credentials';
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.detail || errorMessage;
+            } catch (e) {
+              errorMessage = errorText;
+            }
+          }
+        } catch (e) {
+          // Fallback to default error
+        }
+        
+        setConnectionError(errorMessage);
         setLoading(false);
         return false;
       }
@@ -149,16 +164,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('User login response status:', response.status);
       
       if (response.ok) {
-        const data = await response.json();
-        console.log('User login successful');
-        
-        // Store token and update auth state
-        login(data.access_token, data.username, false);
-        setUserEmail(data.email);
-        
-        return true;
+        try {
+          const responseText = await response.text();
+          const data = JSON.parse(responseText);
+          console.log('User login successful');
+          
+          // Store token and update auth state
+          login(data.access_token, data.username, data.is_admin || false);
+          if (data.email) {
+            setUserEmail(data.email);
+          }
+          
+          return true;
+        } catch (e) {
+          console.error('Error parsing login response:', e);
+          setConnectionError('Invalid response format from server');
+          setLoading(false);
+          return false;
+        }
       } else {
-        setConnectionError('Invalid credentials');
+        let errorMessage = 'Invalid credentials';
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.detail || errorMessage;
+            } catch (e) {
+              errorMessage = errorText;
+            }
+          }
+        } catch (e) {
+          // Fallback to default error
+        }
+        
+        setConnectionError(errorMessage);
         setLoading(false);
         return false;
       }
@@ -199,17 +239,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Registration response status:', response.status);
       
       if (response.ok) {
-        const data = await response.json();
         console.log('Registration successful');
         
-        // Store token and update auth state
-        login(data.access_token, data.username, false);
-        setUserEmail(data.email);
+        // After successful registration, attempt to log in with provided credentials
+        const loginSuccess = await regularLogin(username, password);
+        if (!loginSuccess) {
+          setConnectionError('Registration successful but automatic login failed. Please try logging in manually.');
+          setLoading(false);
+        }
         
         return true;
       } else {
-        const errorData = await response.json();
-        setConnectionError(errorData.detail || 'Registration failed');
+        let errorMessage = 'Registration failed';
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.detail || errorMessage;
+            } catch (e) {
+              errorMessage = errorText;
+            }
+          }
+        } catch (e) {
+          // Fallback to default error
+        }
+        
+        setConnectionError(errorMessage);
         setLoading(false);
         return false;
       }

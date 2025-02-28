@@ -10,7 +10,7 @@ interface RegisterFormProps {
 
 const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onLoginClick }) => {
   const { currentTheme } = useTheme();
-  const { register, userLogin } = useAuth();
+  const { register, regularLogin } = useAuth();
   
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -67,13 +67,12 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onLoginClick }) 
       if (success) {
         setSuccessMessage('Registration successful! You can now sign in.');
         
-        // Auto login if registration was successful
-        setTimeout(async () => {
-          const loginSuccess = await userLogin(username, password);
-          if (loginSuccess && onSuccess) {
+        // Auto login is now handled in the register function
+        if (onSuccess) {
+          setTimeout(() => {
             onSuccess();
-          }
-        }, 1500);
+          }, 1000);
+        }
       } else {
         setError('Registration failed. Please check your registration token and try again.');
       }

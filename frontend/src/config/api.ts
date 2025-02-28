@@ -22,6 +22,27 @@ const getApiBaseUrl = (): string => {
 export const API_BASE_URL = getApiBaseUrl();
 
 /**
+ * Determines if a route requires authentication
+ */
+const isProtectedRoute = (endpoint: string): boolean => {
+  // Routes that require authentication:
+  // - Admin routes
+  // - Auth routes except login/register endpoints
+  // - User routes
+  // - Chat routes
+  return (
+    endpoint.startsWith('/admin') ||
+    endpoint.startsWith('/auth/admin') ||
+    endpoint.startsWith('/auth/users') || 
+    endpoint.startsWith('/auth/apikeys') ||
+    endpoint.startsWith('/auth/tokens') ||
+    endpoint.startsWith('/user') ||
+    endpoint.startsWith('/chat') ||
+    endpoint.startsWith('/api/v1') // API gateway routes
+  );
+};
+
+/**
  * Enhanced fetch function that automatically includes the API base URL
  * and provides better debugging information
  */
@@ -38,11 +59,11 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
   }
   
   // Add authentication token for protected routes
-  if (endpoint.startsWith('/admin') || endpoint.startsWith('/auth/admin') || endpoint.startsWith('/auth/users')) {
+  if (isProtectedRoute(endpoint)) {
     const token = localStorage.getItem('authToken');
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
-      console.log('Added authentication token for authenticated request');
+      console.log('Added authentication token for protected route');
     } else {
       console.warn('No auth token found for protected route:', endpoint);
     }
@@ -57,6 +78,17 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
     
     // Log response status for debugging
     console.log(`Response from ${url}: ${response.status}`);
+    
+    // Handle 401 Unauthorized responses by clearing token
+    if (response.status === 401 && isProtectedRoute(endpoint)) {
+      console.warn('Authentication failed for protected route - clearing token');
+      localStorage.removeItem('authToken');
+      
+      // If we're in the browser, redirect to login
+      if (typeof window !== 'undefined' && window.navigateTo) {
+        window.navigateTo('/login');
+      }
+    }
     
     return response;
   } catch (error) {
