@@ -1,7 +1,22 @@
 import React, { ReactNode } from 'react';
-import parse, { DOMNode, HTMLReactParserOptions, Element } from 'html-react-parser';
+import parse from 'html-react-parser';
 import MathRenderer from '../education/MathRenderer';
 import CodeBlock from '../education/CodeBlock';
+
+// Define types for HTML React Parser
+interface HTMLElement {
+  type: 'tag';
+  name: string;
+  attribs: Record<string, string>;
+  children: Array<HTMLElement | TextNode>;
+}
+
+interface TextNode {
+  type: 'text';
+  data: string;
+}
+
+type DOMNode = HTMLElement | TextNode;
 
 interface MessageParserProps {
   content: string;
@@ -120,17 +135,21 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
   // Check if content is HTML or plain text
   const isHTML = content.trim().startsWith('<') && content.trim().endsWith('>');
 
-  const options: HTMLReactParserOptions = {
-    replace: (domNode) => {
-      if (domNode.type !== 'tag') return;
+  const parseOptions = {
+    replace: (domNode: DOMNode) => {
+      if (domNode.type !== 'tag') return undefined;
       
-      const element = domNode as Element;
+      const element = domNode as HTMLElement;
       
       // Handle math blocks
       if (element.name === 'div' && 
           element.attribs && 
           element.attribs['data-type'] === 'math-block') {
-        const latex = element.children?.[0]?.data || '';
+        let latex = '';
+        const textNode = element.children?.find(child => child.type === 'text');
+        if (textNode && textNode.type === 'text') {
+          latex = textNode.data || '';
+        }
         return <MathRenderer latex={latex} display={true} />;
       }
       
@@ -142,12 +161,15 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
         let code = '';
         
         // Extract code from <code> child if exists
-        const codeNode = element.children?.find(child => 
-          child.type === 'tag' && child.name === 'code'
-        );
+        const codeElement = element.children?.find(child => 
+          child.type === 'tag' && (child as HTMLElement).name === 'code'
+        ) as HTMLElement | undefined;
         
-        if (codeNode && codeNode.type === 'tag') {
-          code = codeNode.children?.[0]?.data || '';
+        if (codeElement) {
+          const textNode = codeElement.children?.find(child => child.type === 'text');
+          if (textNode && textNode.type === 'text') {
+            code = textNode.data || '';
+          }
         }
         
         return <CodeBlock code={code} language={language} />;
@@ -158,62 +180,21 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
   };
   
   if (isHTML) {
-    return (
-      <div className="message-content">
-        {parse(content, options)}
-      </div>
-    );
-  }
-  
-  // For legacy plain text messages
-  return (
-    <div className="message-content">
-      {parseContent(content)}
-    </div>
-  );
-};
-
-export default MessageParser;ag') return;
-      
-      const element = domNode as Element;
-      
-      // Handle math blocks
-      if (element.name === 'div' && 
-          element.attribs && 
-          element.attribs['data-type'] === 'math-block') {
-        const latex = element.children?.[0]?.data || '';
-        return <MathRenderer latex={latex} display={true} />;
-      }
-      
-      // Handle code blocks
-      if (element.name === 'pre' && 
-          element.attribs && 
-          element.attribs['data-language']) {
-        const language = element.attribs['data-language'];
-        let code = '';
-        
-        // Extract code from <code> child if exists
-        const codeNode = element.children?.find(child => 
-          child.type === 'tag' && child.name === 'code'
-        );
-        
-        if (codeNode && codeNode.type === 'tag') {
-          code = codeNode.children?.[0]?.data || '';
-        }
-        
-        return <CodeBlock code={code} language={language} />;
-      }
-      
-      return undefined;
+    try {
+      return (
+        <div className="message-content">
+          {parse(content, parseOptions)}
+        </div>
+      );
+    } catch (error) {
+      console.error('Error parsing HTML content:', error);
+      // Fallback to plain text parsing if HTML parsing fails
+      return (
+        <div className="message-content">
+          {parseContent(content)}
+        </div>
+      );
     }
-  };
-  
-  if (isHTML) {
-    return (
-      <div className="message-content">
-        {parse(content, options)}
-      </div>
-    );
   }
   
   // For legacy plain text messages
