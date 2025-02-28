@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -8,6 +8,7 @@ import { MathExtension } from './extensions/MathExtension';
 import { CodeBlockExtension } from './extensions/CodeBlockExtension';
 import MathExpressionEditor from '../../chat/editors/MathExpressionEditor';
 import CodeEditor from '../../chat/editors/CodeEditor';
+import MessageParser from '../../chat/MessageParser';
 
 interface TipTapEditorProps {
   onSend: (html: string) => void;
@@ -29,6 +30,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const { currentTheme } = useTheme();
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+  const editorContentRef = useRef<HTMLDivElement>(null);
   
   const editor = useEditor({
     extensions: [
@@ -43,7 +46,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     ],
     editorProps: {
       attributes: {
-        class: 'focus:outline-none p-3 min-h-[80px] max-h-[200px] overflow-auto',
+        class: 'focus:outline-none p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin',
       },
     },
     content: '',
@@ -147,6 +150,11 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     }
   };
   
+  // Toggle preview mode
+  const togglePreviewMode = useCallback(() => {
+    setPreviewMode(!previewMode);
+  }, [previewMode]);
+
   return (
     <div className="relative">
       <div
@@ -157,9 +165,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         }}
       >
         {/* Ambient gradient effects */}
-        <div 
+        <div
           className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{ 
+          style={{
             backgroundImage: `
               radial-gradient(circle at 20% 20%, ${currentTheme.colors.accentPrimary}30 0%, transparent 70%),
               radial-gradient(circle at 80% 80%, ${currentTheme.colors.accentSecondary}30 0%, transparent 70%)
@@ -168,7 +176,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         />
         
         {/* Top highlight bar */}
-        <div 
+        <div
           className="absolute top-0 left-0 right-0 h-0.5"
           style={{
             background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.accentPrimary})`,
@@ -177,21 +185,37 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
           }}
         />
         
-        {/* Editor content */}
-        <EditorContent 
-          editor={editor} 
-          onKeyDown={handleKeyDown}
-          className="relative z-10"
-        />
+        {/* Editor content or Preview depending on mode */}
+        <div className="relative z-10">
+          {previewMode ? (
+            <div
+              className="p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin whitespace-pre-wrap break-words"
+              style={{ color: currentTheme.colors.textPrimary }}
+            >
+              {editor && !editor.isEmpty ? (
+                <MessageParser content={editor.getHTML()} />
+              ) : (
+                <div className="text-gray-400 italic">Nothing to preview</div>
+              )}
+            </div>
+          ) : (
+            <EditorContent
+              editor={editor}
+              onKeyDown={handleKeyDown}
+            />
+          )}
+        </div>
         
         {/* Bottom toolbar */}
         <div className="px-3 pb-2.5 pt-1 flex justify-between items-center border-t"
           style={{ borderColor: `${currentTheme.colors.borderColor}30` }}
         >
-          <EditorToolbar 
-            editor={editor} 
+          <EditorToolbar
+            editor={editor}
             onInsertMath={handleInsertMath}
             onInsertCode={handleInsertCode}
+            previewMode={previewMode}
+            onTogglePreview={togglePreviewMode}
           />
           
           <button
