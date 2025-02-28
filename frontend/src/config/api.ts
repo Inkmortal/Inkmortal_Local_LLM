@@ -37,14 +37,14 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
     headers.set('Content-Type', 'application/json');
   }
   
-  // Add authentication token for admin routes and auth/admin routes
-  if (endpoint.startsWith('/admin') || endpoint.startsWith('/auth/admin')) {
+  // Add authentication token for protected routes
+  if (endpoint.startsWith('/admin') || endpoint.startsWith('/auth/admin') || endpoint.startsWith('/auth/users')) {
     const token = localStorage.getItem('authToken');
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
-      console.log('Added authentication token for admin endpoint');
+      console.log('Added authentication token for authenticated request');
     } else {
-      console.warn('No auth token found for admin route:', endpoint);
+      console.warn('No auth token found for protected route:', endpoint);
     }
   }
   
