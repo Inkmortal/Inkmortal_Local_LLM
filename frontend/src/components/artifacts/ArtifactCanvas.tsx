@@ -171,7 +171,7 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
                 '--tw-prose-code': currentTheme.colors.textPrimary,
                 '--tw-prose-pre-bg': `${currentTheme.colors.bgTertiary}80`,
               } as React.CSSProperties}>
-                <div dangerouslySetInnerHTML={{ __html: artifact.content }} />
+                <MarkdownRenderer markdown={artifact.content} />
               </div>
             </div>
           );
@@ -188,30 +188,6 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
       
       case 'math':
         if (activeTab === 'preview') {
-          const [renderedMath, setRenderedMath] = useState<string | null>(null);
-          const [isLoading, setIsLoading] = useState(true);
-          
-          // Use the server-side rendering for LaTeX
-          useEffect(() => {
-            async function renderMathEquations() {
-              setIsLoading(true);
-              try {
-                // Use the service we built to render the entire LaTeX expression
-                const html = await renderMathExpression(artifact.content, true);
-                setRenderedMath(html);
-              } catch (error) {
-                console.error('Error rendering math with server:', error);
-                // Fall back to basic rendering if server fails
-                setRenderedMath(`<div style="color:red">Error rendering equations. Showing raw LaTeX:</div>
-                                <pre>${artifact.content}</pre>`);
-              } finally {
-                setIsLoading(false);
-              }
-            }
-            
-            renderMathEquations();
-          }, [artifact.content]);
-          
           return (
             <div 
               className="overflow-auto p-6 flex items-center justify-center h-full"
@@ -221,27 +197,17 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
                 className="bg-opacity-30 p-8 rounded-lg max-w-2xl w-full" 
                 style={{ backgroundColor: currentTheme.colors.bgTertiary }}
               >
-                {isLoading ? (
-                  <div className="text-center py-8">
-                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" role="status">
-                      <span className="sr-only">Loading...</span>
-                    </div>
-                    <p className="mt-2">Rendering equations...</p>
+                {artifact.content.split('\n').map((equation, index) => (
+                  <div key={index} className="my-3">
+                    <MathRenderer latex={equation.trim()} display={true} className="text-xl" />
                   </div>
-                ) : (
-                  <>
-                    <div 
-                      className="math-content text-xl"
-                      dangerouslySetInnerHTML={{ __html: renderedMath || '' }}
-                    />
-                    <div 
-                      className="mt-4 text-center text-sm font-medium"
-                      style={{ color: currentTheme.colors.accentPrimary }}
-                    >
-                      Maxwell's Equations
-                    </div>
-                  </>
-                )}
+                ))}
+                <div 
+                  className="mt-4 text-center text-sm font-medium"
+                  style={{ color: currentTheme.colors.accentPrimary }}
+                >
+                  Maxwell's Equations
+                </div>
               </div>
             </div>
           );

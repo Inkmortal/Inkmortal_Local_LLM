@@ -9,37 +9,15 @@ import { API_BASE_URL } from '../config/api';
  */
 export async function renderMathExpression(expression: string, displayMode: boolean = false) {
   try {
-    // Create form data for the request
-    const formData = new FormData();
-    formData.append('math_expression', expression);
-    formData.append('display_mode', displayMode.toString());
+    // Since we don't have authentication yet, just return a client-side rendered version
+    console.log('Using client-side rendering for LaTeX (authentication not implemented)');
     
-    // Get authentication token from localStorage
-    const token = localStorage.getItem('token');
-    
-    // Send request to the server
-    const response = await fetch(`${API_BASE_URL}/api/artifacts/render-math`, {
-      method: 'POST',
-      headers: {
-        // No Content-Type header when using FormData (browser sets it automatically)
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-      body: formData,
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-      return data.html;
-    } else {
-      console.error('Error rendering math:', data.error);
-      // Return the fallback LaTeX if available
-      return data.fallback_latex ? `${displayMode ? '$$' : '$'}${data.fallback_latex}${displayMode ? '$$' : '$'}` : null;
-    }
+    // For now, just return the expression wrapped in LaTeX delimiters for client-side rendering
+    return expression;
   } catch (error) {
     console.error('Failed to render math expression:', error);
-    // Return the original expression wrapped in LaTeX delimiters as fallback
-    return `${displayMode ? '$$' : '$'}${expression}${displayMode ? '$$' : '$'}`;
+    // Return the original expression
+    return expression;
   }
 }
 
