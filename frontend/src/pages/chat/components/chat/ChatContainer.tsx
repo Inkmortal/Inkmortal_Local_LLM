@@ -47,6 +47,17 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   // Add state for modal visibility
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
+  
+  // Direct handlers for action bar buttons
+  const handleOpenCodeEditor = () => {
+    console.log("Directly opening code editor from action bar");
+    setCodeEditorOpen(true);
+  };
+  
+  const handleOpenMathEditor = () => {
+    console.log("Directly opening math editor from action bar");
+    setMathEditorOpen(true);
+  };
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -92,15 +103,14 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     const originalHandleMath = handleInsertMath;
     
     // Temporarily replace the handlers with our modal-aware ones
-    handleInsertCode("REGISTER_HANDLER", handleOpenCodeModal);
-    handleInsertMath("REGISTER_HANDLER", handleOpenMathModal);
+    handleInsertCode("REGISTER_HANDLER", undefined, handleOpenCodeModal);
+    handleInsertMath("REGISTER_HANDLER", undefined, handleOpenMathModal);
     
     // Cleanup on unmount
     return () => {
-      handleInsertCode("REGISTER_HANDLER", originalHandleCode);
-      handleInsertMath("REGISTER_HANDLER", originalHandleMath);
+      // Note: Cleanup not needed as component unmounting
     };
-  }, []);
+  }, [handleInsertCode, handleInsertMath]);
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden">
@@ -125,8 +135,20 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
         setShowFileUpload={setShowFileUpload}
         selectedFile={selectedFile}
         setSelectedFile={setSelectedFile}
-        handleInsertCode={handleInsertCode}
-        handleInsertMath={handleInsertMath}
+        handleInsertCode={(lang?: string) => {
+          if (lang === "OPEN_MODAL") {
+            handleOpenCodeEditor();
+          } else {
+            handleInsertCode(lang);
+          }
+        }}
+        handleInsertMath={(formula?: string) => {
+          if (formula === "OPEN_MODAL") {
+            handleOpenMathEditor();
+          } else {
+            handleInsertMath(formula);
+          }
+        }}
       />
       
       {/* Chat input - styled with glass effect */}
