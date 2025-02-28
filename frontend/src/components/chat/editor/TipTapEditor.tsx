@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -6,6 +6,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import { MathExtension } from './extensions/MathExtension';
 import { CodeBlockExtension } from './extensions/CodeBlockExtension';
+import MathExpressionEditor from '../../chat/editors/MathExpressionEditor';
+import CodeEditor from '../../chat/editors/CodeEditor';
 
 interface TipTapEditorProps {
   onSend: (html: string) => void;
@@ -21,14 +23,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   isGenerating = false,
 }) => {
   const { currentTheme } = useTheme();
-  const [mathDialogOpen, setMathDialogOpen] = useState(false);
-  const [codeDialogOpen, setCodeDialogOpen] = useState(false);
-  const [mathInput, setMathInput] = useState('');
-  const [codeInput, setCodeInput] = useState('');
-  const [codeLanguage, setCodeLanguage] = useState('javascript');
-  
-  const mathInputRef = useRef<HTMLTextAreaElement>(null);
-  const codeInputRef = useRef<HTMLTextAreaElement>(null);
+  const [mathEditorOpen, setMathEditorOpen] = useState(false);
+  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   
   const editor = useEditor({
     extensions: [
@@ -72,39 +68,27 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   };
 
   const handleInsertMath = useCallback(() => {
-    setMathDialogOpen(true);
-    setTimeout(() => {
-      if (mathInputRef.current) {
-        mathInputRef.current.focus();
-      }
-    }, 100);
+    setMathEditorOpen(true);
   }, []);
 
   const handleInsertCode = useCallback(() => {
-    setCodeDialogOpen(true);
-    setTimeout(() => {
-      if (codeInputRef.current) {
-        codeInputRef.current.focus();
-      }
-    }, 100);
+    setCodeEditorOpen(true);
   }, []);
 
-  const handleMathSubmit = () => {
-    if (mathInput.trim() && editor) {
-      editor.commands.setMathBlock(mathInput.trim());
-      setMathInput('');
-      setMathDialogOpen(false);
+  const handleMathSubmit = (latex: string) => {
+    if (latex.trim() && editor) {
+      editor.commands.setMathBlock(latex.trim());
+      setMathEditorOpen(false);
     }
   };
 
-  const handleCodeSubmit = () => {
-    if (codeInput.trim() && editor) {
-      editor.commands.setCodeBlock(codeInput.trim(), codeLanguage);
-      setCodeInput('');
-      setCodeDialogOpen(false);
+  const handleCodeSubmit = (code: string, language: string) => {
+    if (code.trim() && editor) {
+      editor.commands.setCodeBlock(code.trim(), language);
+      setCodeEditorOpen(false);
     }
   };
-
+  
   return (
     <div className="relative">
       <div
@@ -189,140 +173,20 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         </div>
       </div>
 
-      {/* Math dialog */}
-      {mathDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div 
-            className="bg-white rounded-lg p-4 max-w-md w-full"
-            style={{ 
-              backgroundColor: currentTheme.colors.bgSecondary,
-              boxShadow: `0 10px 25px rgba(0,0,0,0.2)`,
-              border: `1px solid ${currentTheme.colors.borderColor}40`
-            }}
-          >
-            <h3 className="text-lg font-medium mb-3" style={{ color: currentTheme.colors.textPrimary }}>
-              Insert Math Expression
-            </h3>
-            <textarea
-              ref={mathInputRef}
-              value={mathInput}
-              onChange={(e) => setMathInput(e.target.value)}
-              className="w-full p-3 min-h-[120px] rounded-md mb-3"
-              style={{ 
-                backgroundColor: currentTheme.colors.bgPrimary,
-                color: currentTheme.colors.textPrimary,
-                border: `1px solid ${currentTheme.colors.borderColor}40`
-              }}
-              placeholder="Enter LaTeX, e.g.: \sum_{i=1}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}"
-            />
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setMathDialogOpen(false)}
-                className="px-4 py-2 rounded-md"
-                style={{ 
-                  backgroundColor: `${currentTheme.colors.bgTertiary}40`,
-                  color: currentTheme.colors.textSecondary
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMathSubmit}
-                className="px-4 py-2 rounded-md"
-                style={{ 
-                  backgroundColor: currentTheme.colors.accentPrimary,
-                  color: '#fff'
-                }}
-              >
-                Insert
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Advanced Math Expression Editor */}
+      {mathEditorOpen && (
+        <MathExpressionEditor
+          onInsert={handleMathSubmit}
+          onClose={() => setMathEditorOpen(false)}
+        />
       )}
 
-      {/* Code dialog */}
-      {codeDialogOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div 
-            className="bg-white rounded-lg p-4 max-w-md w-full"
-            style={{ 
-              backgroundColor: currentTheme.colors.bgSecondary,
-              boxShadow: `0 10px 25px rgba(0,0,0,0.2)`,
-              border: `1px solid ${currentTheme.colors.borderColor}40`
-            }}
-          >
-            <h3 className="text-lg font-medium mb-3" style={{ color: currentTheme.colors.textPrimary }}>
-              Insert Code Block
-            </h3>
-            <div className="mb-3">
-              <label className="block text-sm mb-1" style={{ color: currentTheme.colors.textSecondary }}>
-                Language
-              </label>
-              <select
-                value={codeLanguage}
-                onChange={(e) => setCodeLanguage(e.target.value)}
-                className="w-full p-2 rounded-md"
-                style={{ 
-                  backgroundColor: currentTheme.colors.bgPrimary,
-                  color: currentTheme.colors.textPrimary,
-                  border: `1px solid ${currentTheme.colors.borderColor}40`
-                }}
-              >
-                <option value="javascript">JavaScript</option>
-                <option value="typescript">TypeScript</option>
-                <option value="html">HTML</option>
-                <option value="css">CSS</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-                <option value="c">C</option>
-                <option value="cpp">C++</option>
-                <option value="csharp">C#</option>
-                <option value="go">Go</option>
-                <option value="rust">Rust</option>
-                <option value="sql">SQL</option>
-                <option value="bash">Bash</option>
-                <option value="json">JSON</option>
-                <option value="yaml">YAML</option>
-                <option value="markdown">Markdown</option>
-              </select>
-            </div>
-            <textarea
-              ref={codeInputRef}
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value)}
-              className="w-full p-3 min-h-[150px] rounded-md mb-3 font-mono text-sm"
-              style={{ 
-                backgroundColor: '#282c34',
-                color: '#abb2bf',
-                border: `1px solid ${currentTheme.colors.borderColor}40`
-              }}
-              placeholder="// Enter your code here"
-            />
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setCodeDialogOpen(false)}
-                className="px-4 py-2 rounded-md"
-                style={{ 
-                  backgroundColor: `${currentTheme.colors.bgTertiary}40`,
-                  color: currentTheme.colors.textSecondary
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCodeSubmit}
-                className="px-4 py-2 rounded-md"
-                style={{ 
-                  backgroundColor: currentTheme.colors.accentPrimary,
-                  color: '#fff'
-                }}
-              >
-                Insert
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Advanced Code Editor */}
+      {codeEditorOpen && (
+        <CodeEditor
+          onInsert={handleCodeSubmit}
+          onClose={() => setCodeEditorOpen(false)}
+        />
       )}
     </div>
   );
