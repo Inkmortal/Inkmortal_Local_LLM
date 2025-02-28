@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -14,6 +14,8 @@ interface TipTapEditorProps {
   disabled?: boolean;
   placeholder?: string;
   isGenerating?: boolean;
+  onInsertCode?: (codeSnippet: string) => void;
+  onInsertMath?: (mathSnippet: string) => void;
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = ({
@@ -21,6 +23,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   disabled = false,
   placeholder = "Type a message...",
   isGenerating = false,
+  onInsertCode,
+  onInsertMath,
 }) => {
   const { currentTheme } = useTheme();
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
@@ -80,6 +84,11 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
       // Command is under mathBlock namespace
       editor.chain().focus().mathBlock.setMathBlock(latex.trim()).run();
       setMathEditorOpen(false);
+      
+      // Call the external handler if provided
+      if (onInsertMath) {
+        onInsertMath(`$$${latex.trim()}$$`);
+      }
     }
   };
 
@@ -88,8 +97,24 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
       // Command is under customCodeBlock namespace
       editor.chain().focus().customCodeBlock.setCodeBlock(code.trim(), language).run();
       setCodeEditorOpen(false);
+      
+      // Call the external handler if provided
+      if (onInsertCode) {
+        onInsertCode(`\`\`\`${language}\n${code.trim()}\n\`\`\``);
+      }
     }
   };
+  
+  // Register with the external system
+  useEffect(() => {
+    if (onInsertCode && typeof onInsertCode === 'function') {
+      onInsertCode(`// Your code will appear in the editor`);
+    }
+    
+    if (onInsertMath && typeof onInsertMath === 'function') {
+      onInsertMath(`\\text{Your math expressions will appear in the editor}`);
+    }
+  }, [onInsertCode, onInsertMath]);
   
   return (
     <div className="relative">

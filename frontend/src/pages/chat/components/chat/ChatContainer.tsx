@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import ChatWindow from '../../../../components/chat/ChatWindow';
-import ChatInput from '../../../../components/chat/ChatInput';
+import TipTapEditor from '../../../../components/chat/editor/TipTapEditor';
 import FileUploadArea from './FileUploadArea';
 import ChatActionBar from './ChatActionBar';
 import { Message } from '../../types/chat';
@@ -49,15 +49,8 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     }
   }, [messages]);
 
-  // This function will be passed to ChatInput to register code insertion
-  const registerCodeInsertHandler = (insertFn: (code: string) => void) => {
-    codeInsertRef.current = insertFn;
-  };
-
-  // This function will be passed to ChatInput to register math insertion
-  const registerMathInsertHandler = (insertFn: (math: string) => void) => {
-    mathInsertRef.current = insertFn;
-  };
+  // With TipTapEditor, we don't need to register external handlers
+  // as it has built-in handling for math and code blocks
 
   return (
     <div className="flex-grow flex flex-col overflow-hidden">
@@ -94,13 +87,13 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
             border: `1px solid rgba(0, 0, 0, 0.1)`,
           }}
         >
-          <ChatInput 
-            onSend={onSendMessage} 
+          <TipTapEditor
+            onSend={onSendMessage}
             disabled={loading}
             placeholder="Message Sea Dragon Inkmortal..."
             isGenerating={isGenerating}
-            onInsertCode={registerCodeInsertHandler}
-            onInsertMath={registerMathInsertHandler}
+            onInsertCode={codeInsertRef.current}
+            onInsertMath={mathInsertRef.current}
           />
         </div>
       </div>
