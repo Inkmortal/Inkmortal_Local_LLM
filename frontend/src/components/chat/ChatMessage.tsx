@@ -230,11 +230,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         
         {/* Message content */}
         <div className="whitespace-pre-wrap break-words relative z-10">
-          {isUser ? (
-            message.content
-          ) : (
-            <MessageParser content={message.content} />
-          )}
+          <MessageParser content={message.content} />
         </div>
         
         {/* Message timestamp */}

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Button from '../ui/Button';
+import MessageParser from './MessageParser';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -25,14 +26,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
-  const [cursorPosition, setCursorPosition] = useState<{top: number, left: number} | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(true);
+  const [selectionRange, setSelectionRange] = useState<{start: number, end: number}>({ start: 0, end: 0 });
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   
   // Track if user is actively typing for advanced effects
   const [isTyping, setIsTyping] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Does the message contain any code or math that should be formatted?
+  const hasFormatting = useCallback(() => {
+    const codeBlockRegex = /```[\s\S]*?```/g;
+    const inlineCodeRegex = /`[^`]+`/g;
+    const mathRegex = /\$\$[\s\S]*?\$\$|\$[^$\n]+\$/g;
+    
+    return codeBlockRegex.test(message) || inlineCodeRegex.test(message) || mathRegex.test(message);
+  }, [message]);
   
   // Focus techniques to maintain focus during streaming responses
   useEffect(() => {
@@ -72,65 +84,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, [isGenerating]);
   
-  // Track cursor position for visual effects
-  const updateCursorPosition = useCallback(() => {
-    if (!textareaRef.current || !containerRef.current) return;
-    
-    const textarea = textareaRef.current;
-    const container = containerRef.current;
-    
-    // Get cursor position
-    const cursorPos = textarea.selectionStart;
-    if (cursorPos === textarea.value.length) {
-      setCursorPosition(null);
-      return;
-    }
-    
-    // Get text until cursor
-    const textUntilCursor = textarea.value.substring(0, cursorPos);
-    
-    // Create a temporary element to measure
-    const temp = document.createElement('div');
-    temp.style.position = 'absolute';
-    temp.style.visibility = 'hidden';
-    temp.style.whiteSpace = 'pre-wrap';
-    temp.style.width = `${textarea.clientWidth}px`;
-    temp.style.fontSize = window.getComputedStyle(textarea).fontSize;
-    temp.style.fontFamily = window.getComputedStyle(textarea).fontFamily;
-    temp.style.lineHeight = window.getComputedStyle(textarea).lineHeight;
-    temp.style.padding = window.getComputedStyle(textarea).padding;
-    
-    // Calculate position after the last line break
-    const lastLineBreak = textUntilCursor.lastIndexOf('\n');
-    if (lastLineBreak !== -1) {
-      temp.textContent = textUntilCursor.substring(lastLineBreak + 1);
-    } else {
-      temp.textContent = textUntilCursor;
-    }
-    
-    document.body.appendChild(temp);
-    
-    // Get the measured position
-    const tempRect = temp.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    
-    document.body.removeChild(temp);
-    
-    // Calculate lines
-    const lines = textUntilCursor.split('\n').length - 1;
-    const lineHeight = parseFloat(window.getComputedStyle(textarea).lineHeight);
-    
-    // Get textarea's scroll position
-    const scrollTop = textarea.scrollTop;
-    
-    // Update cursor position
-    setCursorPosition({
-      left: tempRect.width,
-      top: (lines * lineHeight) - scrollTop + tempRect.height
-    });
-    
-  }, []);
-  
   // Function to handle form submission
   const handleSubmit = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
@@ -156,8 +109,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // Handle Shift+Enter for newlines and Enter for submission
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    updateCursorPosition();
-    
     // Don't submit while IME is composing for international keyboards
     if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault();
@@ -177,7 +128,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setIsTyping(false);
     }, 2000);
     
-  }, [handleSubmit, isComposing, updateCursorPosition]);
+  }, [handleSubmit, isComposing]);
   
   // Handle composition events for international keyboards (CJK)
   const handleCompositionStart = () => setIsComposing(true);
@@ -189,24 +140,58 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (textarea) {
       textarea.style.height = 'auto';
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+      
+      // Also adjust the preview div height to match
+      if (previewRef.current) {
+        previewRef.current.style.height = textarea.style.height;
+      }
+    }
+  }, []);
+
+  // Sync the scrolling between textarea and preview
+  const syncScroll = useCallback(() => {
+    if (textareaRef.current && previewRef.current) {
+      previewRef.current.scrollTop = textareaRef.current.scrollTop;
     }
   }, []);
 
   // Update message state and resize textarea
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
+    
+    // Store selection range
+    if (textareaRef.current) {
+      setSelectionRange({
+        start: textareaRef.current.selectionStart,
+        end: textareaRef.current.selectionEnd
+      });
+    }
+    
     setTimeout(() => {
       adjustTextareaHeight();
-      updateCursorPosition();
+      syncScroll();
     }, 0);
-  }, [adjustTextareaHeight, updateCursorPosition]);
+  }, [adjustTextareaHeight, syncScroll]);
 
   // Focus/blur handlers for styling
-  const handleFocus = useCallback(() => setIsFocused(true), []);
-  const handleBlur = useCallback(() => setIsFocused(false), []);
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+    setPreviewVisible(false);
+    
+    // Brief delay before showing preview to avoid flicker during initial focus
+    setTimeout(() => {
+      setPreviewVisible(true);
+    }, 50);
+  }, []);
   
-  // Update cursor position while scrolling or resizing
-  const handleScroll = useCallback(() => updateCursorPosition(), [updateCursorPosition]);
+  const handleBlur = useCallback(() => {
+    setIsFocused(false);
+  }, []);
+  
+  // Handle scrolling to keep preview and textarea in sync
+  const handleScroll = useCallback(() => {
+    syncScroll();
+  }, [syncScroll]);
   
   // Initialize height
   useEffect(() => {
@@ -215,9 +200,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   
   // Set up window resize listener
   useEffect(() => {
-    window.addEventListener('resize', updateCursorPosition);
-    return () => window.removeEventListener('resize', updateCursorPosition);
-  }, [updateCursorPosition]);
+    window.addEventListener('resize', adjustTextareaHeight);
+    return () => window.removeEventListener('resize', adjustTextareaHeight);
+  }, [adjustTextareaHeight]);
 
   // Function to insert text at cursor position
   const insertTextAtCursor = useCallback((text: string) => {
@@ -261,6 +246,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
       });
     }
   }, [onInsertMath, insertTextAtCursor]);
+
+  // Click handler for preview area to maintain consistent focus
+  const handlePreviewClick = useCallback((e: React.MouseEvent) => {
+    // If clicking inside a code or math block, preserve the click
+    const target = e.target as HTMLElement;
+    const isClickableElement = target.closest('button') || target.closest('a');
+    
+    if (!isClickableElement) {
+      e.preventDefault();
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }
+  }, []);
 
   return (
     <div className="w-full relative z-50">
@@ -306,46 +305,70 @@ const ChatInput: React.FC<ChatInputProps> = ({
             }}
           />
           
-          {/* Cursor glow effect */}
-          {cursorPosition && isFocused && !isGenerating && (
-            <div 
-              className="absolute pointer-events-none transition-all duration-200 ease-out"
-              style={{
-                left: `${cursorPosition.left}px`,
-                top: `${cursorPosition.top}px`,
-                width: '2px',
-                height: '1.2em',
-                transform: 'translateY(-50%)',
-                background: currentTheme.colors.accentPrimary,
-                boxShadow: `0 0 10px 2px ${currentTheme.colors.accentPrimary}80`,
-                opacity: 0.8,
-                animation: 'blink 1s ease-in-out infinite'
+          <div className="relative">
+            {/* Input Textarea (invisible but handles all input) */}
+            <textarea 
+              ref={textareaRef}
+              value={message}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onScroll={handleScroll}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
+              disabled={disabled}
+              placeholder={isGenerating ? "AI is generating..." : placeholder}
+              rows={1}
+              className="w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 absolute inset-0"
+              style={{ 
+                backgroundColor: 'transparent',
+                // Use caretColor for cursor but make text transparent
+                // This makes cursor visible but text is rendered by preview instead
+                color: hasFormatting() ? 'transparent' : currentTheme.colors.textPrimary,
+                caretColor: currentTheme.colors.accentPrimary,
+                maxHeight: '200px',
+                fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
               }}
             />
-          )}
-          
-          <textarea 
-            ref={textareaRef}
-            value={message}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onScroll={handleScroll}
-            onCompositionStart={handleCompositionStart}
-            onCompositionEnd={handleCompositionEnd}
-            disabled={disabled}
-            placeholder={isGenerating ? "AI is generating..." : placeholder}
-            rows={1}
-            className="w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 relative"
-            style={{ 
-              backgroundColor: 'transparent',
-              color: currentTheme.colors.textPrimary,
-              caretColor: currentTheme.colors.accentPrimary,
-              maxHeight: '200px',
-              fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            }}
-          />
+            
+            {/* Preview div that shows formatted content */}
+            {previewVisible && hasFormatting() && (
+              <div 
+                ref={previewRef}
+                className="w-full px-4 pt-3.5 pb-2 overflow-auto relative pointer-events-auto"
+                style={{ 
+                  minHeight: '3.5rem',
+                  maxHeight: '200px',
+                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                  color: currentTheme.colors.textPrimary
+                }}
+                onClick={handlePreviewClick}
+              >
+                <MessageParser content={message} />
+                
+                {/* Render the placeholder text if the message is empty */}
+                {message.length === 0 && (
+                  <div 
+                    className="absolute inset-0 px-4 pt-3.5 pb-2 pointer-events-none"
+                    style={{ color: currentTheme.colors.textMuted, opacity: 0.7 }}
+                  >
+                    {isGenerating ? "AI is generating..." : placeholder}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Placeholder (only visible when the textarea is empty and has focus) */}
+            {message.length === 0 && !hasFormatting() && (
+              <div 
+                className="absolute inset-0 px-4 pt-3.5 pb-2 pointer-events-none"
+                style={{ color: currentTheme.colors.textMuted, opacity: 0.7 }}
+              >
+                {isGenerating ? "AI is generating..." : placeholder}
+              </div>
+            )}
+          </div>
           
           <div className="px-3 pb-2.5 flex justify-between items-center relative z-10">
             <div className="opacity-70 flex-1 text-center" style={{ color: currentTheme.colors.textMuted }}>
