@@ -1,0 +1,35 @@
+import { LanguageOptionType } from '../types/SnippetTypes';
+
+// Available language options for code editor
+export const languageOptions: LanguageOptionType[] = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'html', label: 'HTML' },
+  { value: 'css', label: 'CSS' },
+  { value: 'java', label: 'Java' },
+  { value: 'c', label: 'C' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'csharp', label: 'C#' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+  { value: 'sql', label: 'SQL' },
+  { value: 'bash', label: 'Bash' },
+  { value: 'json', label: 'JSON' },
+  { value: 'yaml', label: 'YAML' },
+  { value: 'markdown', label: 'Markdown' },
+  { value: 'xml', label: 'XML' },
+  { value: 'php', label: 'PHP' },
+  { value: 'ruby', label: 'Ruby' },
+  { value: 'swift', label: 'Swift' },
+  { value: 'kotlin', label: 'Kotlin' },
+  { value: 'objectivec', label: 'Objective-C' },
+  { value: 'scala', label: 'Scala' },
+  { value: 'perl', label: 'Perl' },
+  { value: 'haskell', label: 'Haskell' },
+  { value: 'r', label: 'R' },
+  { value: 'matlab', label: 'MATLAB' },
+  { value: 'dart', label: 'Dart' },
+  { value: 'elixir', label: 'Elixir' },
+  { value: 'clojure', label: 'Clojure' }
+];
