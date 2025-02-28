@@ -1,0 +1,19 @@
+declare module "*.svg" {
+  const content: any;
+  export default content;
+}
+
+declare module "*.png" {
+  const content: any;
+  export default content;
+}
+
+declare module "*.jpg" {
+  const content: any;
+  export default content;
+}
+
+interface Window {
+  navigateTo: (path: string) => boolean;
+  renderMathInElement: (element: Element, options?: any) => void;
+}

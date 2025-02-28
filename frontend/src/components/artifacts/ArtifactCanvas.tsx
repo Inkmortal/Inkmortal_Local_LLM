@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { Artifact, ArtifactType, UploadedDocument } from './ArtifactsSidebar';
 import CodeBlock from '../education/CodeBlock';
@@ -18,6 +18,84 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<'preview' | 'raw'>('preview');
+  
+  // Resizable canvas state
+  const [width, setWidth] = useState('50vw');
+  const resizeRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
+
+  // Initialize KaTeX rendering when the component mounts/updates
+  useEffect(() => {
+    if (isOpen && activeTab === 'preview' && artifact?.type === 'math') {
+      // Wait for the DOM to update before rendering math
+      setTimeout(() => {
+        const katexRender = window.renderMathInElement;
+        const mathElements = document.querySelectorAll('.math-display');
+        if (katexRender && mathElements.length > 0) {
+          mathElements.forEach(el => {
+            try {
+              katexRender(el, {
+                delimiters: [
+                  {left: "$$", right: "$$", display: true},
+                  {left: "$", right: "$", display: false},
+                  {left: "\\begin{align}", right: "\\end{align}", display: true},
+                  {left: "\\begin{equation}", right: "\\end{equation}", display: true}
+                ]
+              });
+            } catch (error) {
+              console.error('KaTeX rendering error:', error);
+            }
+          });
+        } else {
+          console.warn('KaTeX rendering not available or math elements not found');
+        }
+      }, 100);
+    }
+  }, [isOpen, activeTab, artifact]);
+
+  // Handle resize events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const dx = e.clientX - startX;
+      const newWidth = Math.max(400, Math.min(window.innerWidth - 400, startWidth - dx));
+      setWidth(`${newWidth}px`);
+      
+      if (canvasRef.current) {
+        canvasRef.current.style.width = `${newWidth}px`;
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+    
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, startX, startWidth]);
+  
+  const startResize = (e: React.MouseEvent) => {
+    if (canvasRef.current) {
+      setIsResizing(true);
+      setStartX(e.clientX);
+      setStartWidth(canvasRef.current.offsetWidth);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+    }
+  };
 
   const getFileIcon = (type: ArtifactType | string) => {
     switch (type) {
@@ -160,19 +238,9 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
                 className="bg-opacity-30 p-8 rounded-lg" 
                 style={{ backgroundColor: currentTheme.colors.bgTertiary }}
               >
-                <div 
-                  className="text-xl math-display" 
-                  dangerouslySetInnerHTML={{ 
-                    __html: `
-                      \\begin{align}
-                      \\nabla \\cdot \\mathbf{E} &= \\frac{\\rho}{\\varepsilon_0} \\\\
-                      \\nabla \\cdot \\mathbf{B} &= 0 \\\\
-                      \\nabla \\times \\mathbf{E} &= -\\frac{\\partial\\mathbf{B}}{\\partial t} \\\\
-                      \\nabla \\times \\mathbf{B} &= \\mu_0\\mathbf{J} + \\mu_0\\varepsilon_0\\frac{\\partial\\mathbf{E}}{\\partial t}
-                      \\end{align}
-                    ` 
-                  }}
-                />
+                <div className="text-xl math-display">
+                  {artifact.content}
+                </div>
                 <div 
                   className="mt-4 text-center text-sm font-medium"
                   style={{ color: currentTheme.colors.accentPrimary }}
@@ -379,15 +447,34 @@ const ArtifactCanvas: React.FC<ArtifactCanvasProps> = ({
         />
       )}
 
+      {/* Resize handle */}
+      {isOpen && (
+        <div 
+          ref={resizeRef}
+          className="fixed z-50 w-1 h-[calc(100vh-4rem)] top-16 cursor-ew-resize hover:bg-blue-500"
+          style={{
+            right: width,
+            backgroundColor: isResizing 
+              ? currentTheme.colors.accentPrimary
+              : `${currentTheme.colors.borderColor}80`,
+            opacity: isResizing ? 0.7 : 0.3,
+            transition: 'background-color 0.2s, opacity 0.2s',
+          }}
+          onMouseDown={startResize}
+        />
+      )}
+
       {/* Canvas panel */}
       <div
-        className={`fixed top-16 right-0 h-[calc(100vh-4rem)] w-[calc(100vw-18rem)] transition-transform duration-300 ease-in-out z-40 ${
+        ref={canvasRef}
+        className={`fixed top-16 right-0 h-[calc(100vh-4rem)] transition-transform duration-300 ease-in-out z-40 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{
           background: currentTheme.colors.bgPrimary,
           borderLeft: `1px solid ${currentTheme.colors.borderColor}40`,
           boxShadow: `-4px 0 20px rgba(0, 0, 0, 0.08)`,
+          width: width,
         }}
       >
         <div className="h-full flex flex-col overflow-hidden">

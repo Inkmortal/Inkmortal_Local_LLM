@@ -20,7 +20,7 @@
     <!-- KaTeX Scripts for math rendering -->
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" crossorigin="anonymous"
-        onload="renderMathInElement(document.body);"></script>
+        onload="window.renderMathInElement = function(element, options) { renderMathInElement(element, options); }"></script>
         
     <!-- Prism Scripts for code highlighting -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
