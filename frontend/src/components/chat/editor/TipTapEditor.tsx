@@ -79,42 +79,73 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     setCodeEditorOpen(true);
   }, []);
 
+  // Debug logging to see what's happening with the editor
+  useEffect(() => {
+    console.log("Editor initialized:", !!editor);
+    if (editor) {
+      console.log("Editor has mathBlock:", !!editor.commands.mathBlock);
+      console.log("Editor has customCodeBlock:", !!editor.commands.customCodeBlock);
+    }
+  }, [editor]);
+
   const handleMathSubmit = (latex: string) => {
-    if (latex.trim() && editor) {
-      // Command is under mathBlock namespace
-      editor.chain().focus().mathBlock.setMathBlock(latex.trim()).run();
-      setMathEditorOpen(false);
+    if (!latex.trim() || !editor) return;
+
+    console.log("Inserting math:", latex.trim());
+
+    try {
+      // Safe approach with manual content insertion
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: 'mathBlock',
+          content: [{ type: 'text', text: latex.trim() }]
+        })
+        .run();
+
+      console.log("Math block inserted successfully");
       
       // Call the external handler if provided
-      if (onInsertMath) {
+      if (onInsertMath && typeof onInsertMath === 'function') {
         onInsertMath(`$$${latex.trim()}$$`);
       }
+    } catch (error) {
+      console.error("Error inserting math block:", error);
+    } finally {
+      setMathEditorOpen(false);
     }
   };
 
   const handleCodeSubmit = (code: string, language: string) => {
-    if (code.trim() && editor) {
-      // Command is under customCodeBlock namespace
-      editor.chain().focus().customCodeBlock.setCodeBlock(code.trim(), language).run();
-      setCodeEditorOpen(false);
+    if (!code.trim() || !editor) return;
+    
+    console.log("Inserting code:", code.trim(), "language:", language);
+
+    try {
+      // Safe approach with manual content insertion
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: 'customCodeBlock',
+          attrs: { language },
+          content: [{ type: 'text', text: code.trim() }]
+        })
+        .run();
+
+      console.log("Code block inserted successfully");
       
       // Call the external handler if provided
-      if (onInsertCode) {
+      if (onInsertCode && typeof onInsertCode === 'function') {
         onInsertCode(`\`\`\`${language}\n${code.trim()}\n\`\`\``);
       }
+    } catch (error) {
+      console.error("Error inserting code block:", error);
+    } finally {
+      setCodeEditorOpen(false);
     }
   };
-  
-  // Register with the external system
-  useEffect(() => {
-    if (onInsertCode && typeof onInsertCode === 'function') {
-      onInsertCode(`// Your code will appear in the editor`);
-    }
-    
-    if (onInsertMath && typeof onInsertMath === 'function') {
-      onInsertMath(`\\text{Your math expressions will appear in the editor}`);
-    }
-  }, [onInsertCode, onInsertMath]);
   
   return (
     <div className="relative">
