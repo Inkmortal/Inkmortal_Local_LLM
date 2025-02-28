@@ -8,7 +8,6 @@ import RegistrationTokens from './pages/admin/RegistrationTokens';
 import APIKeys from './pages/admin/APIKeys';
 import QueueMonitor from './pages/admin/QueueMonitor';
 import UserManagement from './pages/admin/UserManagement';
-import ThemeCustomizer from './pages/admin/ThemeCustomizer';
 import SystemStats from './pages/admin/SystemStats';
 import AdminLogin from './pages/admin/Login';
 import UserLogin from './pages/auth/Login';
@@ -29,7 +28,6 @@ const ProtectedRegistrationTokens = withAuth(RegistrationTokens, true);
 const ProtectedAPIKeys = withAuth(APIKeys, true);
 const ProtectedQueueMonitor = withAuth(QueueMonitor, true);
 const ProtectedUserManagement = withAuth(UserManagement, true);
-const ProtectedThemeCustomizer = withAuth(ThemeCustomizer, true);
 const ProtectedSystemStats = withAuth(SystemStats, true);
 
 // User protected components
@@ -44,7 +42,6 @@ type Route =
   | 'admin/api-keys'
   | 'admin/queue' 
   | 'admin/users' 
-  | 'admin/theme'
   | 'admin/stats' 
   | 'admin/login' 
   | 'login'
@@ -137,8 +134,6 @@ function App() {
         return <ProtectedQueueMonitor currentRoute={currentRoute} />;
       case 'admin/users':
         return <ProtectedUserManagement currentRoute={currentRoute} />;
-      case 'admin/theme':
-        return <ProtectedThemeCustomizer currentRoute={currentRoute} />;
       case 'admin/stats':
         return <ProtectedSystemStats currentRoute={currentRoute} />;
       case 'admin/login':
