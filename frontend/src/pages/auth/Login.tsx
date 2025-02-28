@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
 import LoginForm from '../../components/auth/LoginForm';
 
@@ -100,6 +101,14 @@ const Login: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost"
+            size="sm"
+            onClick={handleHomeClick}
+            className="hover-float transition-all duration-300"
+          >
+            Home
+          </Button>
           <ThemeSelector />
         </div>
       </div>
