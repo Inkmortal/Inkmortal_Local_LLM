@@ -30,8 +30,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const mathInsertRef = useRef<(mathSnippet: string) => void>();
 
   // For storing modal opening functions
-  const openMathModalRef = useRef<() => void>();
-  const openCodeModalRef = useRef<() => void>();
+  const openMathModalRef = useRef<() => void>(() => console.log("Math modal ref not initialized"));
+  const openCodeModalRef = useRef<() => void>(() => console.log("Code modal ref not initialized"));
 
   // Handle sending a message
   const handleSendMessage = async (messageText: string) => {
@@ -196,13 +196,17 @@ ${template}
     
     // If this is a registration call from the editor
     if (typeof formulaArg === 'string' && formulaArg.startsWith("REGISTER_MODAL:")) {
-      const openModalFn = () => {
-        console.log("Opening math modal...");
-        // Registration call from the TipTapEditor
-        // The function to open modal is serialized in the string after ":"
-        // This is a bit of a hack but avoids complex prop drilling
+      // Extract the open function provided by the editor
+      // The string after "REGISTER_MODAL:" should be the serialized function or identifier
+      const openFn = () => {
+        console.log("Opening math modal via registered function");
+        // In a real implementation, this would deserialize or call the function
+        // But for now we'll just set a flag that the TipTapEditor will check
+        if (mathInsertRef.current) {
+          mathInsertRef.current("OPEN_MODAL");
+        }
       };
-      openMathModalRef.current = openModalFn;
+      openMathModalRef.current = openFn;
       return;
     }
     

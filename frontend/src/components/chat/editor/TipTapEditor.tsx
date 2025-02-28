@@ -87,39 +87,68 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   // Register handlers for external components to open these modals
   useEffect(() => {
     if (onInsertMath) {
-      // Store a reference to our handler function in the ref from parent
-      const originalHandler = onInsertMath;
-      const newHandler = (input: string) => {
+      // Important: Pass a new function that directly opens the modal
+      // when the special "OPEN_MODAL" command is received
+      onInsertMath((input: string) => {
+        console.log("Math handler called with:", input);
+        
         if (input === "OPEN_MODAL") {
-          // Direct command to open the modal
+          console.log("Opening math modal directly!");
           setMathEditorOpen(true);
           return;
         }
-        // Otherwise use the original function
-        originalHandler(input);
-      };
-      
-      // Replace the function
-      onInsertMath(newHandler);
+        
+        // Otherwise handle as regular math content
+        if (editor) {
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'mathBlock',
+              content: [{ type: 'text', text: input.replace(/\$\$/g, '').trim() }]
+            })
+            .run();
+        }
+      });
     }
     
     if (onInsertCode) {
-      // Store a reference to our handler function in the ref from parent
-      const originalHandler = onInsertCode;
-      const newHandler = (input: string) => {
+      // Important: Pass a new function that directly opens the modal
+      // when the special "OPEN_MODAL" command is received
+      onInsertCode((input: string) => {
+        console.log("Code handler called with:", input);
+        
         if (input === "OPEN_MODAL") {
-          // Direct command to open the modal
+          console.log("Opening code modal directly!");
           setCodeEditorOpen(true);
           return;
         }
-        // Otherwise use the original function
-        originalHandler(input);
-      };
-      
-      // Replace the function
-      onInsertCode(newHandler);
+        
+        // Otherwise handle as regular code content
+        if (editor) {
+          // Extract language and code from markdown code block syntax if present
+          let language = 'javascript';
+          let code = input;
+          
+          const codeBlockMatch = input.match(/```(\w+)?\s*([\s\S]*?)```/);
+          if (codeBlockMatch) {
+            language = codeBlockMatch[1] || 'javascript';
+            code = codeBlockMatch[2].trim();
+          }
+          
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'customCodeBlock',
+              attrs: { language },
+              content: [{ type: 'text', text: code }]
+            })
+            .run();
+        }
+      });
     }
-  }, [onInsertMath, onInsertCode]);
+  }, [onInsertMath, onInsertCode, editor]);
 
   // Debug logging to see what's happening with the editor
   useEffect(() => {
