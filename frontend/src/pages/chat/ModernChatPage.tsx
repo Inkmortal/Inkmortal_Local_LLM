@@ -65,6 +65,8 @@ const ModernChatPage: React.FC = () => {
         }
         
         // Load all conversations from the server
+        let fetchedConversations: Conversation[] = [];
+        
         try {
           const response = await fetch('/api/chat/conversations', {
             headers: {
@@ -76,16 +78,25 @@ const ModernChatPage: React.FC = () => {
             const conversationsData = await response.json();
             
             // Convert to UI format
-            const uiConversations = conversationsData.map((conv: any) => ({
+            fetchedConversations = conversationsData.map((conv: any) => ({
               id: conv.conversation_id,
               title: conv.title || "Untitled Conversation",
               date: new Date(conv.created_at)
             }));
             
-            setConversations(uiConversations);
+            setConversations(fetchedConversations);
           }
         } catch (err) {
           console.error('Error loading conversations:', err);
+          // If we can't load conversations, at least add the current one
+          if (chatState.conversationId) {
+            fetchedConversations = [{
+              id: chatState.conversationId,
+              title: "Current Conversation",
+              date: new Date()
+            }];
+            setConversations(fetchedConversations);
+          }
         }
       } catch (error) {
         console.error('Error initializing conversation:', error);
