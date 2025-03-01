@@ -108,14 +108,11 @@ async def revoke_registration_token(
             detail="Token not found"
         )
     
-    if token.used:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot revoke a token that has already been used"
-        )
-    
     # Get token info for logging
     token_info = f"Registration token {token.token[:8]}..."
+    
+    # Different log message based on whether token was used or not
+    action = "deleted" if token.used else "revoked"
     
     # Delete the token
     db.delete(token)
@@ -125,9 +122,9 @@ async def revoke_registration_token(
     await log_activity(
         db,
         current_user.username,
-        "revoked",
+        action,
         "token",
         token_info
     )
     
-    return {"message": "Token revoked successfully"}
+    return {"message": f"Token {action} successfully"}

@@ -98,58 +98,38 @@ const RegistrationTokens: React.FC = () => {
                 <p className="text-sm font-medium mb-1" style={{ color: currentTheme.colors.success }}>
                   New token generated!
                 </p>
-                <div className="flex items-center justify-between">
-                  <span style={{ color: currentTheme.colors.textPrimary }}>{newTokenGenerated}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(newTokenGenerated)}
-                  >
-                    Copy
-                  </Button>
-                </div>
+                <p className="text-xs font-mono">{newTokenGenerated}</p>
+                <button
+                  className="mt-2 text-xs font-medium"
+                  style={{ color: currentTheme.colors.accentPrimary }}
+                  onClick={() => copyToClipboard(newTokenGenerated)}
+                >
+                  Copy to clipboard
+                </button>
               </div>
             )}
 
-            <div>
-              <label 
-                htmlFor="expiry-days" 
-                className="block mb-1"
-                style={{ color: currentTheme.colors.textSecondary }}
-              >
-                Expiry (days)
+            <div className="space-y-2">
+              <label className="block text-sm font-medium" style={{ color: currentTheme.colors.textSecondary }}>
+                Expires after (days)
               </label>
-              <div className="flex items-center">
-                <input
-                  id="expiry-days"
-                  type="number"
-                  min="0"
-                  max="365"
-                  value={expiryDays}
-                  onChange={(e) => setExpiryDays(parseInt(e.target.value))}
-                  className="w-full p-2 rounded-md border"
-                  style={{
-                    backgroundColor: currentTheme.colors.bgTertiary,
-                    color: currentTheme.colors.textPrimary,
-                    borderColor: currentTheme.colors.borderColor
-                  }}
-                />
-                <span className="ml-2 text-sm" style={{ color: currentTheme.colors.textMuted }}>
-                  (0 = never expires)
-                </span>
-              </div>
+              <input
+                type="number"
+                value={expiryDays}
+                onChange={(e) => setExpiryDays(parseInt(e.target.value) || 0)}
+                min="0"
+                max="365"
+                className="w-full p-2 rounded-md border"
+                style={{
+                  backgroundColor: currentTheme.colors.bgTertiary,
+                  color: currentTheme.colors.textPrimary,
+                  borderColor: currentTheme.colors.borderColor,
+                }}
+              />
+              <p className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                Set to 0 for tokens that never expire
+              </p>
             </div>
-
-            {error && (
-              <div
-                className="p-3 rounded-md mb-2"
-                style={{ backgroundColor: `${currentTheme.colors.error}20` }}
-              >
-                <p className="text-sm" style={{ color: currentTheme.colors.error }}>
-                  {error}
-                </p>
-              </div>
-            )}
 
             <Button
               onClick={generateToken}
@@ -251,11 +231,11 @@ const RegistrationTokens: React.FC = () => {
                         )}
                         {token.used && (
                           <Button 
-                            variant="outline" 
+                            variant="danger" 
                             size="sm"
-                            disabled
+                            onClick={() => revokeToken(token.id)}
                           >
-                            Used
+                            Delete
                           </Button>
                         )}
                       </td>

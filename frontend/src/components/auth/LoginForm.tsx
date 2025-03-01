@@ -10,7 +10,7 @@ interface LoginFormProps {
 
 const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => {
   const { currentTheme } = useTheme();
-  const { userLogin } = useAuth();
+  const { regularLogin } = useAuth();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +23,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
     setLoading(true);
     
     try {
-      const success = await userLogin(username, password);
+      const success = await regularLogin(username, password);
       if (success) {
         if (onSuccess) onSuccess();
       } else {
