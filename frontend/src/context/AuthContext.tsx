@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { fetchApi } from '../config/api';
+import { fetchApi, ApiResponse } from '../config/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -48,16 +48,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userData, setUserData] = useState<any>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
-  // Check authentication on mount
+  // Check JWT from localStorage on initial load
   useEffect(() => {
-    const initialCheck = async () => {
-      await checkAuth();
-    };
-    
-    initialCheck();
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      // Set initially authenticated but will verify with backend
+      setIsAuthenticated(true);
+      
+      // Check if token is valid
+      checkAuth().then((valid) => {
+        if (\!valid) {
+          // Token invalid, clear state
+          logout();
+        }
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
   }, []);
   
-  // Helper to store auth token
+  // Store token in localStorage
   const storeToken = (token: string) => {
     localStorage.setItem('authToken', token);
   };
@@ -86,7 +97,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
       
-      const data = await fetchApi('/auth/admin/login', {
+      // Use our enhanced fetchApi with consistent response structure
+      const response = await fetchApi<{
+        access_token: string;
+        token_type: string;
+        username: string;
+        is_admin: boolean;
+      }>('/auth/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -94,50 +111,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: formData,
       });
       
-      console.log('Admin login data.status:', data.status);
+      console.log('Admin login response:', response);
       
-      if (data.ok) {
-        try {
-          // Response is already parsed JSON
-          // Data is already parsed
-          console.log('Admin login successful');
-          
-          // Store token and update auth state
-          login(data.access_token, data.username, true);
-          
-          // Explicitly redirect to admin dashboard
-          window.navigateTo('/admin');
-          
-          return true;
-        } catch (e) {
-          console.error('Error parsing login response:', e);
-          setConnectionError('Invalid response format from server');
-          setLoading(false);
-          return false;
-        }
-      } else {
-        let errorMessage = 'Invalid credentials';
-        try {
-          const errorText = JSON.stringify(data);
-          if (errorText) {
-            try {
-              const errorData = JSON.parse(errorText);
-              errorMessage = errorData.detail || errorMessage;
-            } catch (e) {
-              errorMessage = errorText;
-            }
-          }
-        } catch (e) {
-          // Fallback to default error
-        }
+      if (response.success && response.data) {
+        // Store token and update auth state
+        login(response.data.access_token, response.data.username, response.data.is_admin);
         
+        // Explicitly redirect to admin dashboard
+        window.navigateTo('/admin');
+        
+        return true;
+      } else {
+        // Login failed
+        const errorMessage = response.error || 'Invalid credentials. Please try again.';
         setConnectionError(errorMessage);
         setLoading(false);
         return false;
       }
     } catch (error) {
       console.error('Error during admin login:', error);
-      setConnectionError('Network error while logging in');
+      setConnectionError('Connection error. Please try again later.');
       setLoading(false);
       return false;
     }
@@ -149,14 +142,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setConnectionError(null);
     
     try {
-      console.log('Attempting user login...');
-      
       // Create form data for OAuth2 compatibility
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
       
-      const data = await fetchApi('/auth/token', {
+      // Use our enhanced fetchApi with consistent response structure
+      const response = await fetchApi<{
+        access_token: string;
+        token_type: string;
+        username: string;
+        is_admin: boolean;
+      }>('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -164,130 +161,105 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: formData,
       });
       
-      console.log('User login data.status:', data.status);
-      
-      if (data.ok) {
-        try {
-          // Response is already parsed JSON
-          // Data is already parsed
-          console.log('User login successful');
-          
-          // Store token and update auth state
-          login(data.access_token, data.username, data.is_admin || false);
-          if (data.email) {
-            setUserEmail(data.email);
-          }
-          
-          // Redirect user based on their role
-          if (data.is_admin) {
-            window.navigateTo('/admin');
-          } else {
-            window.navigateTo('/chat');
-          }
-          
-          return true;
-        } catch (e) {
-          console.error('Error parsing login response:', e);
-          setConnectionError('Invalid response format from server');
-          setLoading(false);
-          return false;
-        }
+      if (response.success && response.data) {
+        // Store token and update auth state
+        login(response.data.access_token, response.data.username, response.data.is_admin);
+        return true;
       } else {
-        let errorMessage = 'Invalid credentials';
-        try {
-          const errorText = JSON.stringify(data);
-          if (errorText) {
-            try {
-              const errorData = JSON.parse(errorText);
-              errorMessage = errorData.detail || errorMessage;
-            } catch (e) {
-              errorMessage = errorText;
-            }
-          }
-        } catch (e) {
-          // Fallback to default error
-        }
-        
+        // Login failed
+        const errorMessage = response.error || 'Invalid credentials. Please try again.';
         setConnectionError(errorMessage);
         setLoading(false);
         return false;
       }
     } catch (error) {
-      console.error('Error during user login:', error);
-      setConnectionError('Network error while logging in');
+      console.error('Error during login:', error);
+      setConnectionError('Connection error. Please try again later.');
       setLoading(false);
       return false;
     }
   };
   
-  // User registration handler
-  const register = async (username: string, email: string, password: string, token?: string): Promise<boolean> => {
+  // Register new user
+  const register = async (
+    username: string,
+    email: string,
+    password: string,
+    token?: string
+  ): Promise<boolean> => {
     setLoading(true);
     setConnectionError(null);
     
     try {
-      const body: any = {
+      // Create request body
+      const body = JSON.stringify({
         username,
         email,
         password,
-      };
+        token
+      });
       
-      // Add token if provided
-      if (token) {
-        body.token = token;
-      }
-      
-      console.log('Attempting user registration...');
-      const data = await fetchApi('/auth/register', {
+      // Use our enhanced fetchApi with consistent response structure
+      const response = await fetchApi<{
+        access_token: string;
+        token_type: string;
+        username: string;
+      }>('/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body,
       });
       
-      console.log('Registration data.status:', data.status);
-      
-      if (data.ok) {
-        console.log('Registration successful');
-        
-        // After successful registration, attempt to log in with provided credentials
-        const loginSuccess = await regularLogin(username, password);
-        if (!loginSuccess) {
-          setConnectionError('Registration successful but automatic login failed. Please try logging in manually.');
-          setLoading(false);
-        }
-        
+      if (response.success && response.data) {
+        // Store token and update auth state
+        login(response.data.access_token, response.data.username, false);
         return true;
       } else {
-        let errorMessage = 'Registration failed';
-        try {
-          const errorText = JSON.stringify(data);
-          if (errorText) {
-            try {
-              const errorData = JSON.parse(errorText);
-              errorMessage = errorData.detail || errorMessage;
-            } catch (e) {
-              errorMessage = errorText;
-            }
-          }
-        } catch (e) {
-          // Fallback to default error
-        }
-        
+        // Registration failed
+        const errorMessage = response.error || 'Registration failed. Please try again.';
         setConnectionError(errorMessage);
         setLoading(false);
         return false;
       }
     } catch (error) {
       console.error('Error during registration:', error);
-      setConnectionError('Network error during registration');
+      setConnectionError('Connection error. Please try again later.');
       setLoading(false);
       return false;
     }
   };
   
-  // Logout handler
+  // Check if token is still valid
+  const checkAuth = async (): Promise<boolean> => {
+    try {
+      // Use our enhanced fetchApi with consistent response structure
+      const response = await fetchApi<{
+        username: string;
+        email: string;
+        is_admin: boolean;
+      }>('/auth/me', {
+        method: 'GET',
+      });
+      
+      if (response.success && response.data) {
+        // Update user information
+        setUsername(response.data.username);
+        setUserEmail(response.data.email);
+        setIsAdmin(response.data.is_admin);
+        setUserData(response.data);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking authentication:', error);
+      return false;
+    }
+  };
+  
+  // Log out and clear token
   const logout = () => {
     localStorage.removeItem('authToken');
     setIsAuthenticated(false);
@@ -296,62 +268,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserEmail(null);
     setUserData(null);
     
-    // Redirect based on previous role
-    const redirectPath = isAdmin ? '/admin/login' : '/login';
     // Always use navigateTo for client-side navigation
-    window.navigateTo(redirectPath);
+    window.navigateTo('/');
   };
   
-  const checkAuth = async (): Promise<boolean> => {
-    setLoading(true);
-    setConnectionError(null);
-    
-    try {
-      console.log('Checking authentication...');
-      // Get token from localStorage
-      const token = localStorage.getItem('authToken');
-      
-      if (!token) {
-        console.log('No auth token found');
-        setLoading(false);
-        return false;
-      }
-      
-      // Verify the token with backend
-      const data = await fetchApi('/auth/users/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (data.ok) {
-        const userData = await response.json();
-        console.log('Token verified, user data:', userData);
-        
-        // Update auth state
-        setIsAuthenticated(true);
-        setIsAdmin(userData.is_admin || false);
-        setUsername(userData.username);
-        setUserEmail(userData.email);
-        setUserData(userData);
-        setLoading(false);
-        return true;
-      } else {
-        console.log('Token verification failed');
-        // Clear invalid token
-        localStorage.removeItem('authToken');
-        setLoading(false);
-        return false;
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      setConnectionError('Network error while checking authentication');
-      setLoading(false);
-      return false;
-    }
-  };
-  
+  // Context value
   const contextValue: AuthContextType = {
     isAuthenticated,
     isAdmin,
@@ -382,26 +303,23 @@ export const withAuth = (Component: React.ComponentType<any>, requireAdmin: bool
   return (props: any) => {
     const { isAuthenticated, isAdmin, loading } = useAuth();
     
-    // Show loader while checking auth
+    // Redirect to login if not authenticated or admin access required but not admin
+    if (\!loading && (\!isAuthenticated || (requireAdmin && \!isAdmin))) {
+      // Redirect to appropriate login page
+      if (requireAdmin) {
+        window.navigateTo('/admin/login');
+      } else {
+        window.navigateTo('/unauthorized');
+      }
+      return null;
+    }
+    
+    // Show loading indicator while checking auth status
     if (loading) {
-      return <div>Loading...</div>;
+      return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
     }
     
-    // Check if authenticated
-    if (!isAuthenticated) {
-      // Redirect to login
-      window.navigateTo(requireAdmin ? '/admin/login' : '/login');
-      return null;
-    }
-    
-    // Check admin requirement
-    if (requireAdmin && !isAdmin) {
-      // Redirect to unauthorized page
-      window.navigateTo('/unauthorized');
-      return null;
-    }
-    
-    // Render protected component
+    // Render the protected component
     return <Component {...props} />;
   };
 };

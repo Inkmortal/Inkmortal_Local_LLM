@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
 import { createConversation, getConversation } from '../../services/chatService';
 import { useLocation } from 'react-router-dom';
-import { fetchApi } from '../../config/api';
+import { fetchApi, ApiResponse } from '../../config/api';
 
 // Import components
 import ChatHeader from './components/layout/ChatHeader';
@@ -71,9 +71,15 @@ const ModernChatPage: React.FC = () => {
       
       // Then try to load all conversations from the server
       try {
-        const conversationsData = await fetchApi('/api/chat/conversations', {
+        const response = await fetchApi<any[]>('/api/chat/conversations', {
           method: 'GET'
         });
+        
+        if (!response.success || !response.data) {
+          throw new Error(response.error || 'Failed to load conversations');
+        }
+        
+        const conversationsData = response.data;
         
         // Convert to UI format
         const fetchedConversations = conversationsData.map((conv: any) => ({
