@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
 import { createConversation, getConversation } from '../../services/chatService';
 import { useLocation } from 'react-router-dom';
+import { fetchApi } from '../../config/api';
 
 // Import components
 import ChatHeader from './components/layout/ChatHeader';
@@ -70,10 +71,8 @@ const ModernChatPage: React.FC = () => {
       
       // Then try to load all conversations from the server
       try {
-        const response = await fetch('/api/chat/conversations', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          }
+        const response = await fetchApi('/api/chat/conversations', {
+          method: 'GET'
         });
         
         if (response.ok) {

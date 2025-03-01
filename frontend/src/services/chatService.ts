@@ -31,14 +31,18 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
     }
     
     // Use fetchApi with FormData
-    return await fetchApi<ChatResponse>('/api/chat/message', {
+    const response = await fetchApi('/api/chat/message', {
       method: 'POST',
       body: formData,
       // Don't set Content-Type header - browser will set it with boundary for FormData
     });
+    
+    // Parse the JSON response
+    const data = await response.json();
+    return data;
   } else {
     // Regular JSON request for text-only messages
-    return await fetchApi<ChatResponse>('/api/chat/message', {
+    const response = await fetchApi('/api/chat/message', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,6 +52,10 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
         conversation_id: params.conversation_id,
       }),
     });
+    
+    // Parse the JSON response
+    const data = await response.json();
+    return data;
   }
 }
 
@@ -56,9 +64,13 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
  * @returns Promise with the new conversation ID
  */
 export async function createConversation(): Promise<{ conversation_id: string }> {
-  return await fetchApi<{ conversation_id: string }>('/api/chat/conversation', {
+  const response = await fetchApi('/api/chat/conversation', {
     method: 'POST',
   });
+  
+  // Parse the JSON response
+  const data = await response.json();
+  return data;
 }
 
 /**
@@ -70,12 +82,13 @@ export async function getConversation(conversationId: string): Promise<{
   conversation_id: string;
   messages: ChatResponse[];
 }> {
-  return await fetchApi<{
-    conversation_id: string;
-    messages: ChatResponse[];
-  }>(`/api/chat/conversation/${conversationId}`, {
+  const response = await fetchApi(`/api/chat/conversation/${conversationId}`, {
     method: 'GET',
   });
+  
+  // Parse the JSON response
+  const data = await response.json();
+  return data;
 }
 
 // Mock implementation for development until backend is ready
