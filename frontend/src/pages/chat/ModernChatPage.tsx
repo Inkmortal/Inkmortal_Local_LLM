@@ -47,9 +47,9 @@ const ModernChatPage: React.FC = () => {
   // Initialize conversation and load conversation history when component mounts
   useEffect(() => {
     const initConversation = async () => {
-      try {
-        // Initialize conversation if needed
-        if (!chatState.conversationId) {
+      // First try to initialize the conversation if needed
+      if (!chatState.conversationId) {
+        try {
           // Create a new conversation through the chat state
           await chatState.createNewConversation();
           
@@ -61,45 +61,43 @@ const ModernChatPage: React.FC = () => {
                 title: "New Conversation",
                 date: new Date()
               }
-          ]);
+            ]);
+          }
+        } catch (error) {
+          console.error('Error creating new conversation:', error);
         }
+      }
+      
+      // Then try to load all conversations from the server
+      try {
+        const response = await fetch('/api/chat/conversations', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        });
         
-        // Load all conversations from the server
-        let fetchedConversations: Conversation[] = [];
-        
-        try {
-          const response = await fetch('/api/chat/conversations', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-            }
-          });
+        if (response.ok) {
+          const conversationsData = await response.json();
           
-          if (response.ok) {
-            const conversationsData = await response.json();
-            
-            // Convert to UI format
-            fetchedConversations = conversationsData.map((conv: any) => ({
-              id: conv.conversation_id,
-              title: conv.title || "Untitled Conversation",
-              date: new Date(conv.created_at)
-            }));
-            
-            setConversations(fetchedConversations);
-          }
-        } catch (err) {
-          console.error('Error loading conversations:', err);
-          // If we can't load conversations, at least add the current one
-          if (chatState.conversationId) {
-            fetchedConversations = [{
-              id: chatState.conversationId,
-              title: "Current Conversation",
-              date: new Date()
-            }];
-            setConversations(fetchedConversations);
-          }
+          // Convert to UI format
+          const fetchedConversations = conversationsData.map((conv: any) => ({
+            id: conv.conversation_id,
+            title: conv.title || "Untitled Conversation",
+            date: new Date(conv.created_at)
+          }));
+          
+          setConversations(fetchedConversations);
         }
-      } catch (error) {
-        console.error('Error initializing conversation:', error);
+      } catch (err) {
+        console.error('Error loading conversations:', err);
+        // If we can't load conversations but have a current one, show just that
+        if (chatState.conversationId) {
+          setConversations([{
+            id: chatState.conversationId,
+            title: "Current Conversation",
+            date: new Date()
+          }]);
+        }
       }
     };
     
