@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchApi, ApiResponse } from '../config/api';
 
 interface AuthContextType {
@@ -7,7 +8,12 @@ interface AuthContextType {
   loading: boolean;
   username: string | null;
   userEmail: string | null;
-  userData: any;
+  userData: {
+    username: string;
+    email: string;
+    is_admin: boolean;
+    [key: string]: any;
+  } | null;
   connectionError: string | null;
   login: (token: string, username: string, isAdmin: boolean) => void;
   adminLogin: (username: string, password: string) => Promise<boolean>;
@@ -40,12 +46,21 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [username, setUsername] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userData, setUserData] = useState<any>(null);
+  // Define a proper user data interface instead of using 'any'
+  interface UserData {
+    username: string;
+    email: string;
+    is_admin: boolean;
+    [key: string]: any; // For additional fields we might not know about
+  }
+  
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
   // Check JWT from localStorage on initial load
@@ -57,7 +72,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Check if token is valid
       checkAuth().then((valid) => {
-        if (\!valid) {
+        if (!valid) {
           // Token invalid, clear state
           logout();
         }
@@ -117,8 +132,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Store token and update auth state
         login(response.data.access_token, response.data.username, response.data.is_admin);
         
-        // Explicitly redirect to admin dashboard
-        window.navigateTo('/admin');
+        // Explicitly redirect to admin dashboard using React Router
+        navigate('/admin');
         
         return true;
       } else {
@@ -268,8 +283,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserEmail(null);
     setUserData(null);
     
-    // Always use navigateTo for client-side navigation
-    window.navigateTo('/');
+    // Navigate to home page using React Router
+    navigate('/');
   };
   
   // Context value
@@ -299,17 +314,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 export const useAuth = () => useContext(AuthContext);
 
 // HOC to protect routes
-export const withAuth = (Component: React.ComponentType<any>, requireAdmin: boolean = false) => {
-  return (props: any) => {
+// Type for any component props to avoid using 'any'
+interface ComponentProps {
+  [key: string]: unknown;
+}
+
+export const withAuth = <P extends ComponentProps>(
+  Component: React.ComponentType<P>, 
+  requireAdmin: boolean = false
+) => {
+  return (props: P) => {
     const { isAuthenticated, isAdmin, loading } = useAuth();
+    const navigate = useNavigate();
     
     // Redirect to login if not authenticated or admin access required but not admin
-    if (\!loading && (\!isAuthenticated || (requireAdmin && \!isAdmin))) {
+    if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
       // Redirect to appropriate login page
       if (requireAdmin) {
-        window.navigateTo('/admin/login');
+        navigate('/admin/login');
       } else {
-        window.navigateTo('/unauthorized');
+        navigate('/unauthorized');
       }
       return null;
     }

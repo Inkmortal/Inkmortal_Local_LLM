@@ -39,7 +39,9 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
     });
     
     if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to send message');
+      const errorMessage = response.error || 'Failed to send message';
+      console.error(errorMessage);
+      throw new Error(errorMessage);
     }
     
     return response.data;
@@ -57,7 +59,9 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
     });
     
     if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to send message');
+      const errorMessage = response.error || 'Failed to send message';
+      console.error(errorMessage);
+      throw new Error(errorMessage);
     }
     
     return response.data;
@@ -74,7 +78,9 @@ export async function createConversation(): Promise<{ conversation_id: string }>
   });
   
   if (!response.success || !response.data) {
-    throw new Error(response.error || 'Failed to create conversation');
+    const errorMessage = response.error || 'Failed to create conversation';
+    console.error(errorMessage);
+    throw new Error(errorMessage);
   }
   
   return response.data;
@@ -97,7 +103,9 @@ export async function getConversation(conversationId: string): Promise<{
   });
   
   if (!response.success || !response.data) {
-    throw new Error(response.error || 'Failed to retrieve conversation');
+    const errorMessage = response.error || 'Failed to retrieve conversation';
+    console.error(errorMessage);
+    throw new Error(errorMessage);
   }
   
   return response.data;

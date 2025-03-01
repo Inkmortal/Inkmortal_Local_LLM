@@ -8,10 +8,22 @@
 // Load environment variables or use defaults
 // For production, these would be set in the build environment or runtime config
 // For local development, we'll fall back to hardcoded defaults
+// Define the expected window environment variables
+interface WindowEnv {
+  __ENV?: {
+    API_BASE_URL?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 const getApiBaseUrl = (): string => {
   // Check for environment variables (injected during build or runtime)
-  if (typeof window !== 'undefined' && (window as any).__ENV && (window as any).__ENV.API_BASE_URL) {
-    return (window as any).__ENV.API_BASE_URL;
+  if (typeof window !== 'undefined') {
+    const windowWithEnv = window as WindowEnv;
+    if (windowWithEnv.__ENV?.API_BASE_URL) {
+      return windowWithEnv.__ENV.API_BASE_URL;
+    }
   }
   
   // Use hardcoded default as fallback
@@ -55,7 +67,7 @@ const isProtectedRoute = (endpoint: string): boolean => {
  * Standard response structure for all API calls
  * Provides a consistent way to handle both success and error responses
  */
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T> {
   success: boolean;     // Whether the request was successful
   status: number;       // HTTP status code
   data: T | null;       // Response data (null for errors)
@@ -74,7 +86,7 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
   const headers = new Headers(options.headers || {});
   
   // Add default Content-Type if not provided
-  if (\!headers.has('Content-Type')) {
+  if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   
@@ -112,10 +124,8 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
       console.warn('Authentication failed for protected route - clearing token');
       localStorage.removeItem('authToken');
       
-      // If we're in the browser, redirect to login
-      if (typeof window !== 'undefined' && window.navigateTo) {
-        window.navigateTo('/login');
-      }
+      // Authentication redirects should be handled in the auth context component
+      // rather than directly in the API utility
     }
     
     // For successful responses, parse JSON data
@@ -161,11 +171,23 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
  */
 export const checkBackendConnection = async (): Promise<boolean> => {
   try {
+    // First check if the health endpoint exists
     const response = await fetchApi('/health');
     if (response.success) {
       console.log('Backend connection established successfully');
       return true;
     }
+    
+    // Fallback to another endpoint if health check endpoint doesn't exist
+    if (response.status === 404) {
+      // Try the root endpoint as fallback
+      const rootResponse = await fetchApi('');
+      if (rootResponse.status !== 0) { // Any response except network error
+        console.log('Backend connection established via root endpoint');
+        return true;
+      }
+    }
+    
     console.warn('Backend responded but status indicates an issue:', response.status);
     return false;
   } catch (error) {

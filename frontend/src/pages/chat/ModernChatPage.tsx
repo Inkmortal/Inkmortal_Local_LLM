@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { v4 as uuidv4 } from 'uuid';
+// uuid is imported but not used - removing to clean up imports
 import { createConversation, getConversation } from '../../services/chatService';
 import { useLocation } from 'react-router-dom';
 import { fetchApi, ApiResponse } from '../../config/api';
+
+// Import styles
+import '../../styles/enhanced-animations.css';
+import '../../styles/animations.css';
 
 // Import components
 import ChatHeader from './components/layout/ChatHeader';
 import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
 import ChatContainer from './components/chat/ChatContainer';
 import HistorySidebar from './components/sidebars/HistorySidebar/HistorySidebar';
+// Import a single instance of ArtifactsSidebar to avoid duplication
 import ArtifactsSidebar, { Artifact, UploadedDocument } from '../../components/artifacts/ArtifactsSidebar';
 import ArtifactCanvas from '../../components/artifacts/ArtifactCanvas';
 
@@ -71,7 +76,14 @@ const ModernChatPage: React.FC = () => {
       
       // Then try to load all conversations from the server
       try {
-        const response = await fetchApi<any[]>('/api/chat/conversations', {
+        // Define the type of conversation data we expect from the API
+        interface ConversationResponse {
+          conversation_id: string;
+          title?: string;
+          created_at: string;
+        }
+        
+        const response = await fetchApi<ConversationResponse[]>('/api/chat/conversations', {
           method: 'GET'
         });
         
@@ -82,7 +94,7 @@ const ModernChatPage: React.FC = () => {
         const conversationsData = response.data;
         
         // Convert to UI format
-        const fetchedConversations = conversationsData.map((conv: any) => ({
+        const fetchedConversations = conversationsData.map((conv: ConversationResponse) => ({
           id: conv.conversation_id,
           title: conv.title || "Untitled Conversation",
           date: new Date(conv.created_at)
@@ -104,49 +116,11 @@ const ModernChatPage: React.FC = () => {
     
     initConversation();
     
-    // Create style for chat animations
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes fadeUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      
-      @keyframes slideUp {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-      
-      .message-fade-in {
-        animation: fadeUp 0.5s ease forwards;
-      }
-      
-      .modern-scrollbar::-webkit-scrollbar {
-        width: 5px;
-      }
-      
-      .modern-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      
-      .modern-scrollbar::-webkit-scrollbar-thumb {
-        background-color: rgba(155, 155, 155, 0.3);
-        border-radius: 20px;
-      }
-      
-      .modern-scrollbar::-webkit-scrollbar-thumb:hover {
-        background-color: rgba(155, 155, 155, 0.5);
-      }
-    `;
-    document.head.appendChild(style);
+    // Animations should be in CSS files rather than injected via JS
+    // This is a temporary measure until animations are moved to proper CSS files
     
     return () => {
-      document.head.removeChild(style);
+      // Cleanup function
     };
   }, []);
 
