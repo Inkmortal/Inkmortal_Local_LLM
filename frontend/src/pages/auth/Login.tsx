@@ -23,16 +23,16 @@ const Login: React.FC = () => {
     });
   }, [checkAuth]);
 
-  // If user is authenticated, redirect to home
+  // If user is authenticated, redirect to chat
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      window.navigateTo('/');
+      window.navigateTo('/chat');
     }
   }, [loading, isAuthenticated]);
 
   // Handle successful login
   const handleLoginSuccess = () => {
-    window.navigateTo('/');
+    window.navigateTo('/chat');
   };
 
   // Handle registration click
