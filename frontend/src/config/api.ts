@@ -10,7 +10,7 @@
 // For local development, we'll fall back to hardcoded defaults
 const getApiBaseUrl = (): string => {
   // Check for environment variables (injected during build or runtime)
-  if (typeof window \!== 'undefined' && (window as any).__ENV && (window as any).__ENV.API_BASE_URL) {
+  if (typeof window !== 'undefined' && (window as any).__ENV && (window as any).__ENV.API_BASE_URL) {
     return (window as any).__ENV.API_BASE_URL;
   }
   
@@ -113,14 +113,14 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
       localStorage.removeItem('authToken');
       
       // If we're in the browser, redirect to login
-      if (typeof window \!== 'undefined' && window.navigateTo) {
+      if (typeof window !== 'undefined' && window.navigateTo) {
         window.navigateTo('/login');
       }
     }
     
     // For successful responses, parse JSON data
     if (response.ok) {
-      if (response.status \!== 204) {
+      if (response.status !== 204) {
         apiResponse.data = await response.json();
       }
     } else {
