@@ -3,6 +3,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { sendMessage, createConversation, getConversation } from '../../../services/chatService';
 import { Message, ChatRequestParams } from '../types/chat';
 
+// Token counting utility function (rough estimate)
+// This is a simplified version - a proper tokenizer would be more accurate
+function estimateTokenCount(text: string): number {
+  // Average English word is ~4 characters + 1 for space
+  // GPT models use ~1.3 tokens per word
+  const words = text.trim().split(/\s+/).length;
+  return Math.ceil(words * 1.3);
+}
+
 interface UseChatStateProps {
   initialConversationId?: string;
 }
@@ -91,6 +100,10 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const handleSendMessage = async (messageText: string) => {
     if (messageText.trim() === '') return;
     
+    // Estimate token count for analytics
+    const estimatedTokens = estimateTokenCount(messageText);
+    console.log(`Estimated tokens in message: ${estimatedTokens}`);
+    
     // Add user message
     const userMessage: Message = {
       id: uuidv4(),
@@ -123,6 +136,11 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       };
       
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Track token usage of response
+      const responseTokens = estimateTokenCount(response.content);
+      console.log(`Estimated tokens in response: ${responseTokens}`);
+      console.log(`Total estimated token usage: ${estimatedTokens + responseTokens}`);
       
       // Save conversation ID if not already set
       if (!conversationId && response.conversation_id) {

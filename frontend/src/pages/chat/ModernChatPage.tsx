@@ -3,6 +3,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
 import { createConversation, getConversation } from '../../services/chatService';
+import { useLocation } from 'react-router-dom';
 
 // Import components
 import ChatHeader from './components/layout/ChatHeader';
@@ -19,9 +20,17 @@ import { Conversation } from './types/chat';
 const ModernChatPage: React.FC = () => {
   const { currentTheme } = useTheme();
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
   
-  // Chat state management
-  const chatState = useChatState();
+  // Extract conversation ID from URL query parameters
+  const getConversationIdFromUrl = () => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('conversation') || undefined;
+  };
+  
+  // Chat state management - pass conversation ID from URL
+  const conversationId = getConversationIdFromUrl();
+  const chatState = useChatState({ initialConversationId: conversationId });
   
   // UI state
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);
@@ -39,20 +48,19 @@ const ModernChatPage: React.FC = () => {
   useEffect(() => {
     const initConversation = async () => {
       try {
-        // Initialize with existing conversation or create a new one if none exists
-        const existingConversationId = chatState.conversationId;
-        
-        if (!existingConversationId) {
-          // Create a new conversation
-          const { conversation_id } = await createConversation();
+        // Initialize conversation if needed
+        if (!chatState.conversationId) {
+          // Create a new conversation through the chat state
+          await chatState.createNewConversation();
           
-          // Set as current conversation
-          setConversations([
-            {
-              id: conversation_id,
-              title: "New Conversation",
-              date: new Date()
-            }
+          if (chatState.conversationId) {
+            // Add to local state if successful
+            setConversations([
+              {
+                id: chatState.conversationId,
+                title: "New Conversation",
+                date: new Date()
+              }
           ]);
         }
         

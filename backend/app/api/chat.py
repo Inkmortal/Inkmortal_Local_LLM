@@ -282,14 +282,15 @@ async def send_message(
     chat_body = {
         "model": settings.default_model,
         "messages": [
-            {"role": "system", "content": "You are an educational AI assistant that helps with math, science, and programming questions."},
+            {"role": "system", "content": "You are a helpful, creative, and versatile AI assistant. You can discuss any topic, answer questions, generate content, help with tasks, and provide thoughtful insights. Be concise, accurate, and respectful."},
         ]
     }
     
-    # Get previous messages in conversation for context (limited to last 10)
+    # Get all previous messages in conversation for context (taking advantage of 128K token window)
+    # We can include much more history with Llama 3.3's large context window
     prev_messages = db.query(Message).filter(
         Message.conversation_id == conversation.id
-    ).order_by(Message.created_at.desc()).limit(10).all()
+    ).order_by(Message.created_at.desc()).limit(100).all()
     
     # Add previous messages in chronological order
     for msg in reversed(prev_messages):

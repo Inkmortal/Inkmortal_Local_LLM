@@ -6,6 +6,7 @@ import ChatActionBar from './ChatActionBar';
 import { Message } from '../../types/chat';
 import CodeEditor from '../../../../components/chat/editors/CodeEditor';
 import MathExpressionEditor from '../../../../components/chat/editors/MathExpressionEditor';
+import LanguageSelector from './languageSelector/LanguageSelector';
 
 interface ChatContainerProps {
   messages: Message[];
