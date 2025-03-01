@@ -30,19 +30,15 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
       formData.append('conversation_id', params.conversation_id);
     }
     
-    // Use fetchApi with FormData
-    const response = await fetchApi('/api/chat/message', {
+    // Use fetchApi with FormData - it will automatically parse JSON
+    return await fetchApi('/api/chat/message', {
       method: 'POST',
       body: formData,
       // Don't set Content-Type header - browser will set it with boundary for FormData
     });
-    
-    // Parse the JSON response
-    const data = await response.json();
-    return data;
   } else {
     // Regular JSON request for text-only messages
-    const response = await fetchApi('/api/chat/message', {
+    return await fetchApi('/api/chat/message', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,10 +48,6 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
         conversation_id: params.conversation_id,
       }),
     });
-    
-    // Parse the JSON response
-    const data = await response.json();
-    return data;
   }
 }
 
@@ -64,13 +56,9 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
  * @returns Promise with the new conversation ID
  */
 export async function createConversation(): Promise<{ conversation_id: string }> {
-  const response = await fetchApi('/api/chat/conversation', {
+  return await fetchApi('/api/chat/conversation', {
     method: 'POST',
   });
-  
-  // Parse the JSON response
-  const data = await response.json();
-  return data;
 }
 
 /**
@@ -82,13 +70,9 @@ export async function getConversation(conversationId: string): Promise<{
   conversation_id: string;
   messages: ChatResponse[];
 }> {
-  const response = await fetchApi(`/api/chat/conversation/${conversationId}`, {
+  return await fetchApi(`/api/chat/conversation/${conversationId}`, {
     method: 'GET',
   });
-  
-  // Parse the JSON response
-  const data = await response.json();
-  return data;
 }
 
 // Mock implementation for development until backend is ready

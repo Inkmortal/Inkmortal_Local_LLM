@@ -71,12 +71,9 @@ const ModernChatPage: React.FC = () => {
       
       // Then try to load all conversations from the server
       try {
-        const response = await fetchApi('/api/chat/conversations', {
+        const conversationsData = await fetchApi('/api/chat/conversations', {
           method: 'GET'
         });
-        
-        if (response.ok) {
-          const conversationsData = await response.json();
           
           // Convert to UI format
           const fetchedConversations = conversationsData.map((conv: any) => ({

@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
       
-      const response = await fetchApi('/auth/admin/login', {
+      const data = await fetchApi('/auth/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -94,12 +94,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: formData,
       });
       
-      console.log('Admin login response status:', response.status);
+      console.log('Admin login data.status:', data.status);
       
-      if (response.ok) {
+      if (data.ok) {
         try {
-          const responseText = await response.text();
-          const data = JSON.parse(responseText);
+          // Response is already parsed JSON
+          // Data is already parsed
           console.log('Admin login successful');
           
           // Store token and update auth state
@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         let errorMessage = 'Invalid credentials';
         try {
-          const errorText = await response.text();
+          const errorText = JSON.stringify(data);
           if (errorText) {
             try {
               const errorData = JSON.parse(errorText);
@@ -156,7 +156,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
       
-      const response = await fetchApi('/auth/token', {
+      const data = await fetchApi('/auth/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -164,12 +164,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: formData,
       });
       
-      console.log('User login response status:', response.status);
+      console.log('User login data.status:', data.status);
       
-      if (response.ok) {
+      if (data.ok) {
         try {
-          const responseText = await response.text();
-          const data = JSON.parse(responseText);
+          // Response is already parsed JSON
+          // Data is already parsed
           console.log('User login successful');
           
           // Store token and update auth state
@@ -195,7 +195,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         let errorMessage = 'Invalid credentials';
         try {
-          const errorText = await response.text();
+          const errorText = JSON.stringify(data);
           if (errorText) {
             try {
               const errorData = JSON.parse(errorText);
@@ -238,7 +238,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       console.log('Attempting user registration...');
-      const response = await fetchApi('/auth/register', {
+      const data = await fetchApi('/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -246,9 +246,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         body: JSON.stringify(body),
       });
       
-      console.log('Registration response status:', response.status);
+      console.log('Registration data.status:', data.status);
       
-      if (response.ok) {
+      if (data.ok) {
         console.log('Registration successful');
         
         // After successful registration, attempt to log in with provided credentials
@@ -262,7 +262,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         let errorMessage = 'Registration failed';
         try {
-          const errorText = await response.text();
+          const errorText = JSON.stringify(data);
           if (errorText) {
             try {
               const errorData = JSON.parse(errorText);
@@ -318,14 +318,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       
       // Verify the token with backend
-      const response = await fetchApi('/auth/users/me', {
+      const data = await fetchApi('/auth/users/me', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       
-      if (response.ok) {
+      if (data.ok) {
         const userData = await response.json();
         console.log('Token verified, user data:', userData);
         
