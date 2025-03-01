@@ -160,7 +160,6 @@ const ModernChatPage: React.FC = () => {
           toggleHistorySidebar={toggleHistorySidebar}
           toggleSidebar={toggleArtifactsSidebar}
           showSidebar={showArtifactsSidebar}
-          isAuthenticated={isAuthenticated}
         />
         
         {/* Main Chat Interface */}

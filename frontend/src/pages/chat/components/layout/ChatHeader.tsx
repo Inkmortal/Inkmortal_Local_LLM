@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../../../context/ThemeContext';
+import { useAuth } from '../../../../context/AuthContext';
 import Button from '../../../../components/ui/Button';
 import ThemeSelector from '../../../../components/ui/ThemeSelector';
 
@@ -8,7 +9,6 @@ interface ChatHeaderProps {
   toggleHistorySidebar: () => void;
   toggleSidebar: () => void;
   showSidebar: boolean;
-  isAuthenticated: boolean;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -16,9 +16,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   toggleHistorySidebar,
   toggleSidebar,
   showSidebar,
-  isAuthenticated,
 }) => {
   const { currentTheme } = useTheme();
+  const { isAuthenticated, isAdmin, logout } = useAuth();
 
   return (
     <header 
@@ -88,7 +88,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       </div>
       
       <div className="flex items-center space-x-3">
-        {/* New conversation button - more exciting and prominent */}
+        {/* Page specific actions in consistent order */}
+        
+        {/* 1. New conversation button */}
         <Button 
           size="sm"
           variant="default"
@@ -106,7 +108,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           New Chat
         </Button>
 
-        {/* Artifact Panel button */}
+        {/* 2. Artifact Panel button */}
         <Button 
           size="sm"
           variant="ghost"
@@ -124,7 +126,11 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           Artifacts
         </Button>
         
-        {isAuthenticated && (
+        {/* 3. Theme selector - always visible */}
+        <ThemeSelector />
+        
+        {/* 4. Admin button - only visible to admin users */}
+        {isAuthenticated && isAdmin && (
           <Button 
             size="sm"
             variant="ghost"
@@ -138,7 +144,26 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             Admin
           </Button>
         )}
-        <ThemeSelector />
+        
+        {/* 5. Logout button - visible to all authenticated users */}
+        {isAuthenticated && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={logout}
+            className="text-sm transition-all rounded-lg"
+            style={{
+              color: currentTheme.colors.error,
+              background: `${currentTheme.colors.error}15`,
+            }}
+            title="Logout"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </Button>
+        )}
       </div>
     </header>
   );
