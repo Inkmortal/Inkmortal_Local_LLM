@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
-import { MockChatService } from '../../services/chatService';
+import { createConversation, getConversation } from '../../services/chatService';
 
 // Import components
 import ChatHeader from './components/layout/ChatHeader';
@@ -35,32 +35,52 @@ const ModernChatPage: React.FC = () => {
   // Mock conversations
   const [conversations, setConversations] = useState<Conversation[]>([]);
   
-  // Initialize conversation when component mounts
+  // Initialize conversation and load conversation history when component mounts
   useEffect(() => {
     const initConversation = async () => {
       try {
-        const { conversation_id } = await MockChatService.createConversation();
+        // Initialize with existing conversation or create a new one if none exists
+        const existingConversationId = chatState.conversationId;
         
-        // Mock loading previous conversations for demo
-        setConversations([
-          {
-            id: conversation_id,
-            title: "Current Conversation",
-            date: new Date()
-          },
-          {
-            id: `conv_${Date.now() - 86400000}_abc123`,
-            title: "Math Discussion",
-            date: new Date(Date.now() - 86400000)
-          },
-          {
-            id: `conv_${Date.now() - 172800000}_def456`,
-            title: "Python Examples",
-            date: new Date(Date.now() - 172800000)
+        if (!existingConversationId) {
+          // Create a new conversation
+          const { conversation_id } = await createConversation();
+          
+          // Set as current conversation
+          setConversations([
+            {
+              id: conversation_id,
+              title: "New Conversation",
+              date: new Date()
+            }
+          ]);
+        }
+        
+        // Load all conversations from the server
+        try {
+          const response = await fetch('/api/chat/conversations', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+          });
+          
+          if (response.ok) {
+            const conversationsData = await response.json();
+            
+            // Convert to UI format
+            const uiConversations = conversationsData.map((conv: any) => ({
+              id: conv.conversation_id,
+              title: conv.title || "Untitled Conversation",
+              date: new Date(conv.created_at)
+            }));
+            
+            setConversations(uiConversations);
           }
-        ]);
+        } catch (err) {
+          console.error('Error loading conversations:', err);
+        }
       } catch (error) {
-        console.error('Error creating conversation:', error);
+        console.error('Error initializing conversation:', error);
       }
     };
     

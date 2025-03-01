@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { MockChatService } from '../../../services/chatService';
+import { sendMessage, createConversation, getConversation } from '../../../services/chatService';
 import { Message, ChatRequestParams } from '../types/chat';
 
 interface UseChatStateProps {
@@ -24,6 +24,60 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  
+  // Load conversation if ID is provided
+  const loadConversation = useCallback(async () => {
+    if (initialConversationId) {
+      setLoading(true);
+      try {
+        const conversationData = await getConversation(initialConversationId);
+        
+        // Map API messages to UI format
+        const uiMessages: Message[] = conversationData.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+          timestamp: new Date(msg.created_at)
+        }));
+        
+        setMessages(uiMessages);
+        setConversationId(conversationData.conversation_id);
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+        // If conversation doesn't exist, create a new one
+        createNewConversation();
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [initialConversationId]);
+  
+  // Run loadConversation when the component mounts
+  useEffect(() => {
+    if (initialConversationId) {
+      loadConversation();
+    } else if (!conversationId) {
+      // Create a new conversation if no ID is provided
+      createNewConversation();
+    }
+  }, [initialConversationId, loadConversation]);
+  
+  // Function to create a new conversation
+  const createNewConversation = async () => {
+    try {
+      const response = await createConversation();
+      setConversationId(response.conversation_id);
+      // Reset messages to just the welcome message
+      setMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+        timestamp: new Date()
+      }]);
+    } catch (error) {
+      console.error('Error creating new conversation:', error);
+    }
+  };
   
   // Code and math insertion refs
   const codeInsertRef = useRef<(codeSnippet: string) => void>();
@@ -57,8 +111,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         file: selectedFile || undefined
       };
       
-      // Call mock service (will be replaced with real API)
-      const response = await MockChatService.sendMessage(requestParams);
+      // Call real API service
+      const response = await sendMessage(requestParams);
       
       // Add assistant response
       const assistantMessage: Message = {
@@ -121,7 +175,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         conversation_id: conversationId
       };
       
-      const response = await MockChatService.sendMessage(requestParams);
+      const response = await sendMessage(requestParams);
       
       // Add new assistant response
       const assistantMessage: Message = {
@@ -257,6 +311,10 @@ ${template}
     handleInsertCode,
     handleInsertMath,
     handleFileSelect,
+    
+    // Conversation management
+    loadConversation,
+    createNewConversation,
   };
 };
 

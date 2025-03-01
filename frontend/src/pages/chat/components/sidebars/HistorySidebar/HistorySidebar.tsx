@@ -73,6 +73,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
             color: currentTheme.colors.textSecondary,
             border: `1px solid ${currentTheme.colors.borderColor}40`,
           }}
+          onClick={() => window.location.href = '/chat'}
         >
           <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -94,7 +95,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
                   ? `2px solid ${currentTheme.colors.accentPrimary}` 
                   : `2px solid transparent`,
               }}
-              onClick={() => {/* Load conversation */}}
+              onClick={() => window.location.href = `/chat?conversation=${conv.id}`}
             >
               <h4 
                 className="text-sm font-medium mb-1 flex items-center"
