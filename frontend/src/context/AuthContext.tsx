@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchApi, ApiResponse } from '../config/api';
 
 interface AuthContextType {
@@ -132,7 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Store token and update auth state
         login(response.data.access_token, response.data.username, response.data.is_admin);
         
-        // Explicitly redirect to admin dashboard using React Router
+        // Explicitly redirect to admin dashboard
         navigate('/admin');
         
         return true;
@@ -283,7 +283,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserEmail(null);
     setUserData(null);
     
-    // Navigate to home page using React Router
+    // Navigate to home page
     navigate('/');
   };
   
@@ -319,6 +319,37 @@ interface ComponentProps {
   [key: string]: unknown;
 }
 
+// Modern auth protection using React Router
+export const RequireAuth = ({
+  children,
+  requireAdmin = false
+}: {
+  children: React.ReactNode;
+  requireAdmin?: boolean;
+}) => {
+  const { isAuthenticated, isAdmin, loading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  React.useEffect(() => {
+    if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
+      const redirectPath = requireAdmin ? '/admin/login' : '/unauthorized';
+      navigate(redirectPath, { state: { from: location.pathname } });
+    }
+  }, [isAuthenticated, isAdmin, loading, requireAdmin, navigate, location]);
+  
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+  
+  if (!isAuthenticated || (requireAdmin && !isAdmin)) {
+    return null;
+  }
+  
+  return <>{children}</>;
+};
+
+// Legacy HOC for backward compatibility
 export const withAuth = <P extends ComponentProps>(
   Component: React.ComponentType<P>, 
   requireAdmin: boolean = false
@@ -326,14 +357,15 @@ export const withAuth = <P extends ComponentProps>(
   return (props: P) => {
     const { isAuthenticated, isAdmin, loading } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     
     // Redirect to login if not authenticated or admin access required but not admin
     if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
       // Redirect to appropriate login page
       if (requireAdmin) {
-        navigate('/admin/login');
+        navigate('/admin/login', { state: { from: location.pathname } });
       } else {
-        navigate('/unauthorized');
+        navigate('/unauthorized', { state: { from: location.pathname } });
       }
       return null;
     }

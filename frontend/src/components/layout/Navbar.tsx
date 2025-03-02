@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 
 interface NavbarProps {
@@ -11,28 +12,29 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, isAdmin, username: authUsername, logout } = useAuth();
+  const navigate = useNavigate();
 
   // Use the username from either props or auth context
   const username = propUsername || authUsername;
 
   const handleHomeClick = () => {
-    window.navigateTo('/');  // Use client-side routing for consistent navigation
+    navigate('/');  // Use React Router navigation
   };
 
   const handleLoginClick = () => {
-    window.navigateTo('/login');
+    navigate('/login');
   };
 
   const handleRegisterClick = () => {
-    window.navigateTo('/register');
+    navigate('/register');
   };
 
   const handleProfileClick = () => {
-    window.navigateTo('/profile');
+    navigate('/user/profile');
   };
 
   const handleAdminDashboardClick = () => {
-    window.navigateTo('/admin');
+    navigate('/admin');
   };
 
   return (
@@ -137,7 +139,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
         <Button 
           size="sm"
           variant="primary"
-          onClick={() => window.navigateTo('/chat')}
+          onClick={() => navigate('/chat')}
         >
           Chat
         </Button>
