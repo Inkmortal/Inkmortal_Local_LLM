@@ -331,21 +331,32 @@ export const RequireAuth = ({
   const navigate = useNavigate();
   const location = useLocation();
   
+  // Use effect to handle redirection when auth state changes
   React.useEffect(() => {
     if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
       const redirectPath = requireAdmin ? '/admin/login' : '/unauthorized';
-      navigate(redirectPath, { state: { from: location.pathname } });
+      // Store the location they were trying to access for later redirect
+      navigate(redirectPath, { 
+        state: { from: location.pathname },
+        replace: true 
+      });
     }
   }, [isAuthenticated, isAdmin, loading, requireAdmin, navigate, location]);
   
+  // Show loading indicator
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+    </div>;
   }
   
+  // Don't render children if not authenticated
+  // The useEffect above will handle redirection
   if (!isAuthenticated || (requireAdmin && !isAdmin)) {
     return null;
   }
   
+  // Render children when authenticated
   return <>{children}</>;
 };
 

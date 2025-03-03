@@ -1,5 +1,6 @@
 import React from 'react';
-import { RouteObject } from 'react-router-dom';
+import { RouteObject, Navigate, Outlet } from 'react-router-dom';
+import ROUTES from './routes.constants';
 
 // Layout Components
 import Layout from './components/layout/Layout';
@@ -38,19 +39,35 @@ const AdminLayout = () => {
   return (
     <RequireAuth requireAdmin={true}>
       <Layout>
-        {/* This Outlet will render the child routes */}
+        <Outlet />
       </Layout>
     </RequireAuth>
   );
 };
+
+// Main layout with Outlet
+const MainLayout = () => (
+  <Layout>
+    <Outlet />
+  </Layout>
+);
+
+// Protected User Layout
+const ProtectedUserLayout = () => (
+  <RequireAuth>
+    <Layout>
+      <Outlet />
+    </Layout>
+  </RequireAuth>
+);
 
 // Export routes for reuse
 export const routes: AppRoutes = {
   mainRoutes: [
     // Public Routes
     {
-      path: '/',
-      element: <Layout />,
+      path: ROUTES.HOME,
+      element: <MainLayout />,
       children: [
         { index: true, element: <ModernHomePage /> },
         { path: 'login', element: <UserLogin /> },
@@ -62,12 +79,8 @@ export const routes: AppRoutes = {
     
     // Protected User Routes
     {
-      path: '/user',
-      element: (
-        <RequireAuth>
-          <Layout />
-        </RequireAuth>
-      ),
+      path: 'user',
+      element: <ProtectedUserLayout />,
       children: [
         { path: 'profile', element: <Profile /> },
         { path: 'chat', element: <ChatPage /> },
@@ -76,7 +89,7 @@ export const routes: AppRoutes = {
     
     // Admin Routes
     {
-      path: '/admin',
+      path: 'admin',
       element: <AdminLayout />,
       children: [
         { index: true, element: <AdminDashboard /> },
@@ -90,23 +103,18 @@ export const routes: AppRoutes = {
     },
     
     // Admin Login - Public
-    { path: '/admin/login', element: <AdminLogin /> },
+    { path: 'admin/login', element: <AdminLogin /> },
     
-    // Direct chat access
+    // Direct chat access - redirect to user/chat for consistency
     { 
-      path: '/chat', 
-      element: (
-        <RequireAuth>
-          <ChatPage />
-        </RequireAuth>
-      ),
+      path: 'chat', 
+      element: <Navigate to={ROUTES.USER.CHAT} replace /> 
     },
     
     // Catch all - 404
-    { path: '*', element: <Navigate to="/" /> },
+    { path: '*', element: <Navigate to={ROUTES.HOME} replace /> },
   ],
 };
 
-// Add this helper for type safety in useRoutes
-import { Navigate } from 'react-router-dom';
+// Export routes for App.tsx
 export const appRoutes = routes.mainRoutes;

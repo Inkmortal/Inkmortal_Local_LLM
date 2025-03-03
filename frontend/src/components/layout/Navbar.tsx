@@ -1,8 +1,9 @@
 import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Button from '../ui/Button';
+import ROUTES from '../../routes.constants';
 
 interface NavbarProps {
   toggleSidebar: () => void;
@@ -18,23 +19,23 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
   const username = propUsername || authUsername;
 
   const handleHomeClick = () => {
-    navigate('/');  // Use React Router navigation
+    navigate(ROUTES.HOME);
   };
 
   const handleLoginClick = () => {
-    navigate('/login');
+    navigate(ROUTES.LOGIN);
   };
 
   const handleRegisterClick = () => {
-    navigate('/register');
+    navigate(ROUTES.REGISTER);
   };
 
   const handleProfileClick = () => {
-    navigate('/user/profile');
+    navigate(ROUTES.USER.PROFILE);
   };
 
   const handleAdminDashboardClick = () => {
-    navigate('/admin');
+    navigate(ROUTES.ADMIN.ROOT);
   };
 
   return (
@@ -71,7 +72,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
             />
           </svg>
         </button>
-        <div className="flex items-center cursor-pointer" onClick={handleHomeClick}>
+        <Link to={ROUTES.HOME} className="flex items-center cursor-pointer">
           <svg 
             className="w-8 h-8 mr-3" 
             viewBox="0 0 24 24" 
@@ -91,19 +92,19 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
               Cultivating Wisdom
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       <div className="flex items-center gap-4">
         {/* User Profile/Avatar (when authenticated) */}
         {isAuthenticated && username && (
-          <div 
+          <Link 
+            to={ROUTES.USER.PROFILE}
             className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer" 
             style={{ 
               backgroundColor: `${currentTheme.colors.bgTertiary}30`,
               boxShadow: `0 2px 8px rgba(0, 0, 0, 0.05)`
             }}
-            onClick={handleProfileClick}
           >
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center"
@@ -122,7 +123,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
                 {isAdmin ? 'Administrator' : 'User'}
               </span>
             </div>
-          </div>
+          </Link>
         )}
         
         {/* Home Button */}
@@ -139,7 +140,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
         <Button 
           size="sm"
           variant="primary"
-          onClick={() => navigate('/chat')}
+          onClick={() => navigate(ROUTES.USER.CHAT)}
         >
           Chat
         </Button>

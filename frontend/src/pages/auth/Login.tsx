@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
 import LoginForm from '../../components/auth/LoginForm';
+import ROUTES from '../../routes.constants';
 
 const Login: React.FC = () => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, checkAuth } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  // Get the intended destination from location state or default to chat
+  const from = location.state?.from || ROUTES.USER.CHAT;
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -23,26 +30,21 @@ const Login: React.FC = () => {
     });
   }, [checkAuth]);
 
-  // If user is authenticated, redirect to chat
+  // If user is authenticated, redirect to intended destination
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      window.navigateTo('/chat');
+      navigate(from, { replace: true });
     }
-  }, [loading, isAuthenticated]);
+  }, [loading, isAuthenticated, navigate, from]);
 
   // Handle successful login
   const handleLoginSuccess = () => {
-    window.navigateTo('/chat');
+    navigate(from, { replace: true });
   };
 
   // Handle registration click
   const handleRegisterClick = () => {
-    window.navigateTo('/register');
-  };
-
-  // Handle home navigation
-  const handleHomeClick = () => {
-    window.location.href = '/';
+    navigate(ROUTES.REGISTER, { state: { from } });
   };
 
   if (loading) {
@@ -78,7 +80,7 @@ const Login: React.FC = () => {
           borderBottom: `1px solid ${currentTheme.colors.borderColor}40`,
           boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`
         }}>
-        <div className="flex items-center cursor-pointer" onClick={handleHomeClick}>
+        <Link to={ROUTES.HOME} className="flex items-center">
           <svg 
             className="w-8 h-8 mr-3" 
             viewBox="0 0 24 24" 
@@ -98,13 +100,13 @@ const Login: React.FC = () => {
               Local LLM Server
             </div>
           </div>
-        </div>
+        </Link>
         
         <div className="flex items-center gap-3">
           <Button 
             variant="ghost"
             size="sm"
-            onClick={handleHomeClick}
+            onClick={() => navigate(ROUTES.HOME)}
             className="hover-float transition-all duration-300"
           >
             Home
