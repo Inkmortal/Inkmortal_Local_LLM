@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import { fetchApi } from '../../config/api';
 
@@ -41,6 +41,7 @@ interface SystemStatsData {
 
 const SystemStats: React.FC = () => {
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -85,16 +86,17 @@ const SystemStats: React.FC = () => {
   const fetchSystemStats = async () => {
     try {
       setIsLoading(true);
-      const response = await fetchApi('/admin/system/stats');
+      const response = await fetchApi<SystemStatsData>('/admin/system/stats');
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch system stats: ${response.status}`);
+      if (!response.success) {
+        throw new Error(`Failed to fetch system stats: ${response.error || response.status}`);
       }
       
-      const data = await response.json();
-      setStats(data);
-      setLastUpdated(new Date());
-      setError(null);
+      if (response.data) {
+        setStats(response.data);
+        setLastUpdated(new Date());
+        setError(null);
+      }
     } catch (error) {
       console.error('Error fetching system stats:', error);
       setError('Failed to load system statistics');
@@ -120,7 +122,7 @@ const SystemStats: React.FC = () => {
   };
 
   return (
-    <Layout>
+    <div className="mb-8 pb-8">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>
           System Statistics
@@ -340,7 +342,7 @@ const SystemStats: React.FC = () => {
           </div>
         </Card>
       </div>
-    </Layout>
+    </div>
   );
 };
 
