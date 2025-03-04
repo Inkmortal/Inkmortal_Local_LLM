@@ -1,172 +1,101 @@
 /**
- * AdminDashboardData.ts
+ * Utility functions and data sources for the Admin Dashboard
  * 
- * This file provides functions to fetch admin dashboard data from the backend API.
+ * This file defines the data structure and API interactions for the admin dashboard
+ * components, keeping them separate from the UI components themselves.
  */
 
 import { fetchApi } from '../../config/api';
 
-// Interface for dashboard card data
-export interface DashboardCard {
+// Types and interfaces for admin data
+// =======================================================
+
+// Registration Token Types
+export interface RegistrationToken {
   id: string;
-  title: string;
-  count: number;
-  active?: number;
-  processing?: number;
-  path: string;
+  token: string;
+  created_at: string;
+  expires_at: string | null;
+  description: string;
+  is_used: boolean;
+  used_by?: string;
+  used_at?: string;
+  created_by: string;
 }
 
-// Interface for system stats data
+// API Key Types
+export interface ApiKey {
+  id: string;
+  key: string;
+  description: string;
+  created_at: string;
+  expires_at: string | null;
+  is_active: boolean;
+  user_id: string;
+  priority: number;
+  created_by: string;
+  usage_count: number;
+}
+
+// IP Whitelist Types
+export interface IPWhitelistEntry {
+  id: string;
+  ip_address: string;
+  description: string;
+  created_at: string;
+  expires_at: string | null;
+  is_active: boolean;
+  created_by: string;
+}
+
+// System Stats Types
 export interface SystemStats {
-  cpu: number;
-  memory: number;
-  storage: number;
-  uptime: string;
-  ollama: {
-    status: string;
-    model: string;
-    version: string;
+  cpu_usage: number;
+  memory_usage: number;
+  disk_usage: number;
+  system_uptime: number;
+  queue_status: {
+    active_connections: number;
+    messages_waiting: number;
+    messages_processing: number;
   };
-  queue_connected?: boolean;
+  python_version: string;
+  ollama_version: string;
+  os_info: string;
 }
 
-// Interface for activity data
-export interface Activity {
-  id: number;
-  type: string;
-  action: string;
-  user: string;
-  target: string;
-  time: string;
+// Usage Stats
+export interface UsageStats {
+  total_requests: number;
+  active_users: number;
+  average_response_time: number;
+  total_tokens: number;
+  requests_by_day: {
+    date: string;
+    count: number;
+  }[];
+  models_usage: {
+    model: string;
+    requests: number;
+    tokens: number;
+  }[];
 }
 
-// Interface for complete dashboard data
-export interface DashboardData {
-  dashboard_cards: DashboardCard[];
-  system_stats: SystemStats;
-  recent_activities: Activity[];
-}
+// API functions for Admin Dashboard
+// =======================================================
 
 /**
- * Fetch all dashboard data from the API
+ * Fetch registration tokens
  */
-export const fetchDashboardData = async (): Promise<DashboardData> => {
+export const fetchRegistrationTokens = async (): Promise<RegistrationToken[]> => {
   try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi('/admin/dashboard', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch dashboard data: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
+    const response = await fetchApi<RegistrationToken[]>('/auth/admin/registration-tokens');
     
-    // Return minimal data structure to avoid breaking UI but indicate service is unavailable
-    return {
-      dashboard_cards: [
-        {
-          id: 'ip-whitelist',
-          title: 'IP Whitelist',
-          count: 0,
-          path: '/admin/ip-whitelist'
-        },
-        {
-          id: 'tokens',
-          title: 'Registration Tokens',
-          count: 0,
-          active: 0,
-          path: '/admin/tokens'
-        },
-        {
-          id: 'api-keys',
-          title: 'API Keys',
-          count: 0,
-          path: '/admin/api-keys'
-        },
-        {
-          id: 'queue',
-          title: 'Queue Monitor',
-          count: 0,
-          processing: 0,
-          path: '/admin/queue'
-        }
-      ],
-      system_stats: {
-        cpu: 0,
-        memory: 0,
-        storage: 0,
-        uptime: 'Service Unavailable',
-        ollama: {
-          status: 'Offline',
-          model: 'Service Unavailable',
-          version: 'Service Unavailable'
-        },
-        queue_connected: false
-      },
-      recent_activities: []
-    };
-  }
-};
-
-/**
- * Fetch IP whitelist data from the API
- */
-export const fetchIpWhitelist = async () => {
-  try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
+    if (!response.success) {
+      throw new Error(`Failed to fetch registration tokens: ${response.error || response.status}`);
     }
-
-    const response = await fetchApi('/admin/ip-whitelist', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch IP whitelist: ${response.status} ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching IP whitelist:', error);
-    return [];
-  }
-};
-
-/**
- * Fetch registration tokens from the API
- */
-export const fetchRegistrationTokens = async () => {
-  try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi('/auth/tokens', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch registration tokens: ${response.status} ${response.statusText}`);
-    }
-
-    return await response.json();
+    
+    return response.data || [];
   } catch (error) {
     console.error('Error fetching registration tokens:', error);
     return [];
@@ -174,84 +103,170 @@ export const fetchRegistrationTokens = async () => {
 };
 
 /**
- * Generate a new registration token
+ * Create a new registration token
  */
-export const generateRegistrationToken = async (expiryDays: number) => {
+export const createRegistrationToken = async (description: string, expiresIn: number | null = null): Promise<RegistrationToken | null> => {
   try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi('/auth/tokens', {
+    const payload = {
+      description,
+      expires_in: expiresIn, // in hours, null means never expires
+    };
+    
+    const response = await fetchApi<RegistrationToken>('/auth/admin/registration-tokens', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ expires_days: expiryDays })
+      body: JSON.stringify(payload),
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to generate token: ${response.status} ${response.statusText}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to create registration token: ${response.error || response.status}`);
     }
-
-    return await response.json();
+    
+    return response.data;
   } catch (error) {
-    console.error('Error generating registration token:', error);
-    throw error;
+    console.error('Error creating registration token:', error);
+    return null;
   }
 };
 
 /**
- * Revoke a registration token
+ * Delete a registration token
  */
-export const revokeRegistrationToken = async (tokenId: number) => {
+export const deleteRegistrationToken = async (tokenId: string): Promise<boolean> => {
   try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi(`/admin/tokens/${tokenId}`, {
+    const response = await fetchApi(`/auth/admin/registration-tokens/${tokenId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to revoke token: ${response.status} ${response.statusText}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete registration token: ${response.error || response.status}`);
     }
-
-    return await response.json();
+    
+    return true;
   } catch (error) {
-    console.error('Error revoking registration token:', error);
-    throw error;
+    console.error('Error deleting registration token:', error);
+    return false;
   }
 };
 
 /**
- * Fetch API keys from the server
+ * Fetch system stats
  */
-export const fetchApiKeys = async () => {
+export const fetchSystemStats = async (): Promise<SystemStats | null> => {
   try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
+    const response = await fetchApi<SystemStats>('/admin/system/stats');
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch system stats: ${response.error || response.status}`);
     }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching system stats:', error);
+    return null;
+  }
+};
 
-    const response = await fetchApi('/auth/apikeys', {
+/**
+ * Fetch usage stats
+ */
+export const fetchUsageStats = async (): Promise<UsageStats | null> => {
+  try {
+    const response = await fetchApi<UsageStats>('/admin/usage/stats');
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch usage stats: ${response.error || response.status}`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching usage stats:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetch IP whitelist entries
+ */
+export const fetchIPWhitelist = async (): Promise<IPWhitelistEntry[]> => {
+  try {
+    const response = await fetchApi<IPWhitelistEntry[]>('/auth/admin/ip-whitelist');
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch IP whitelist: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching IP whitelist:', error);
+    return [];
+  }
+};
+
+/**
+ * Add a new IP whitelist entry
+ */
+export const addIPWhitelistEntry = async (ipAddress: string, description: string, expiresIn: number | null = null): Promise<IPWhitelistEntry | null> => {
+  try {
+    const payload = {
+      ip_address: ipAddress,
+      description,
+      expires_in: expiresIn, // in hours, null means never expires
+    };
+    
+    const response = await fetchApi<IPWhitelistEntry>('/auth/admin/ip-whitelist', {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch API keys: ${response.status} ${response.statusText}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to add IP whitelist entry: ${response.error || response.status}`);
     }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error adding IP whitelist entry:', error);
+    return null;
+  }
+};
 
-    return await response.json();
+/**
+ * Delete an IP whitelist entry
+ */
+export const deleteIPWhitelistEntry = async (entryId: string): Promise<boolean> => {
+  try {
+    const response = await fetchApi(`/auth/admin/ip-whitelist/${entryId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete IP whitelist entry: ${response.error || response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting IP whitelist entry:', error);
+    return false;
+  }
+};
+
+/**
+ * Fetch API keys
+ */
+export const fetchApiKeys = async (): Promise<ApiKey[]> => {
+  try {
+    const response = await fetchApi<ApiKey[]>('/auth/apikeys');
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch API keys: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
   } catch (error) {
     console.error('Error fetching API keys:', error);
     return [];
@@ -261,165 +276,48 @@ export const fetchApiKeys = async () => {
 /**
  * Create a new API key
  */
-export const createApiKey = async (description: string, priority: number) => {
+export const createApiKey = async (description: string, priority: number): Promise<ApiKey | null> => {
   try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi('/auth/apikeys', {
+    const payload = {
+      description,
+      priority,
+    };
+    
+    const response = await fetchApi<ApiKey>('/auth/apikeys', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ description, priority })
+      body: JSON.stringify(payload),
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create API key: ${response.status} ${response.statusText}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to create API key: ${response.error || response.status}`);
     }
-
-    return await response.json();
+    
+    return response.data;
   } catch (error) {
     console.error('Error creating API key:', error);
-    throw error;
+    return null;
   }
 };
 
 /**
- * Delete/revoke an API key
+ * Delete an API key
  */
-export const deleteApiKey = async (keyId: number) => {
+export const deleteApiKey = async (keyId: string): Promise<boolean> => {
   try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
     const response = await fetchApi(`/auth/apikeys/${keyId}`, {
       method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete API key: ${response.status} ${response.statusText}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete API key: ${response.error || response.status}`);
     }
-
-    return await response.json();
+    
+    return true;
   } catch (error) {
     console.error('Error deleting API key:', error);
-    throw error;
+    return false;
   }
 };
-
-/**
- * Fetch all users from the API
- */
-export const fetchUsers = async () => {
-  try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi('/auth/users', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return [];
-  }
-};
-
-/**
- * Delete a user
- */
-export const deleteUser = async (userId: number) => {
-  try {
-    const token = localStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetchApi(`/auth/users/${userId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete user: ${response.status} ${response.statusText}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    throw error;
-  }
-};
-
-// Admin dashboard navigation items
-interface AdminDashboardItem {
-  title: string;
-  description: string;
-  icon: string;
-  path: string;
-}
-
-export const adminDashboardItems: AdminDashboardItem[] = [
-  {
-    title: 'Dashboard',
-    description: 'System overview and status',
-    icon: '📊',
-    path: '/admin'
-  },
-  {
-    title: 'System Stats',
-    description: 'CPU, Memory and GPU utilization',
-    icon: '📈',
-    path: '/admin/stats'
-  },
-  {
-    title: 'Queue Monitor',
-    description: 'Manage request queue and priorities',
-    icon: '⏱️',
-    path: '/admin/queue'
-  },
-  {
-    title: 'User Management',
-    description: 'Manage system users',
-    icon: '👥',
-    path: '/admin/users'
-  },
-  {
-    title: 'Registration Tokens',
-    description: 'Manage user registration tokens',
-    icon: '🔑',
-    path: '/admin/tokens'
-  },
-  {
-    title: 'IP Whitelist',
-    description: 'Control allowed IP addresses',
-    icon: '🔒',
-    path: '/admin/ip-whitelist'
-  },
-  {
-    title: 'API Keys',
-    description: 'Manage API access keys',
-    icon: '🔐',
-    path: '/admin/api-keys'
-  }
-];

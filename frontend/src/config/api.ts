@@ -128,27 +128,35 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
       // rather than directly in the API utility
     }
     
-    // For successful responses, parse JSON data
-    if (response.ok) {
-      if (response.status !== 204) {
-        apiResponse.data = await response.json();
+    // For all responses, try to parse JSON data
+    try {
+      // Only attempt to parse if there's actual content
+      if (response.status !== 204 && response.headers.get('content-length') !== '0') {
+        const responseText = await response.text();
+        if (responseText) {
+          try {
+            apiResponse.data = JSON.parse(responseText);
+          } catch (jsonError) {
+            console.warn('Response was not valid JSON, using as text:', responseText);
+            apiResponse.data = responseText as unknown as T;
+          }
+        }
       }
-    } else {
-      // For errors, include error details
-      try {
-        const errorText = await response.text();
-        try {
-          // Try to parse error as JSON
-          const errorJson = JSON.parse(errorText);
-          apiResponse.error = errorJson.detail || errorText;
-        } catch (jsonError) {
-          // If not JSON, use as plain text
-          apiResponse.error = errorText;
+      
+      // For error responses, set error message from response data
+      if (!response.ok) {
+        if (apiResponse.data && typeof apiResponse.data === 'object' && (apiResponse.data as any).detail) {
+          apiResponse.error = (apiResponse.data as any).detail;
+        } else if (apiResponse.data && typeof apiResponse.data === 'string') {
+          apiResponse.error = apiResponse.data;
+        } else {
+          apiResponse.error = `Error ${response.status}: ${response.statusText}`;
         }
         console.error(`API error (${response.status}): ${apiResponse.error}`);
-      } catch (e) {
-        apiResponse.error = `Error ${response.status}: ${response.statusText}`;
       }
+    } catch (e) {
+      console.error('Error processing response:', e);
+      apiResponse.error = `Error ${response.status}: ${response.statusText}`;
     }
     
     return apiResponse;

@@ -92,13 +92,10 @@ export const routes: AppRoutes = {
           ],
         },
         
-        // Protected Chat Route
-        {
-          path: 'chat',
-          element: <ProtectedUserLayout />,
-          children: [
-            { index: true, element: <ChatPage /> }
-          ],
+        // Protected Chat Route - direct render without nested layout
+        { 
+          path: 'chat', 
+          element: <RequireAuth><ChatPage /></RequireAuth>
         },
         
         // Protected User Routes
