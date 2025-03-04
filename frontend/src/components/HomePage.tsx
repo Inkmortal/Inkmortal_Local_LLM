@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import Button from './ui/Button';
 import Card from './ui/Card';
 import ThemeSelector from './ui/ThemeSelector';
+import ROUTES from '../routes.constants';
 
 const HomePage: React.FC = () => {
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
   
   // Feature cards data
   const features = [
@@ -124,9 +127,9 @@ const HomePage: React.FC = () => {
               // Check if user is logged in
               const token = localStorage.getItem('authToken');
               if (token) {
-                window.navigateTo('/chat');
+                navigate(ROUTES.CHAT);
               } else {
-                window.navigateTo('/login');
+                navigate(ROUTES.LOGIN);
               }
             }}
             className="hover-float transition-all duration-300"
@@ -136,7 +139,7 @@ const HomePage: React.FC = () => {
           <Button 
             size="sm"
             variant="ghost"
-            onClick={() => window.navigateTo('/admin/login')}
+            onClick={() => navigate(ROUTES.ADMIN.LOGIN)}
             className="hover-float transition-all duration-300"
           >
             Admin
@@ -181,9 +184,9 @@ const HomePage: React.FC = () => {
                   // Check if user is logged in
                   const token = localStorage.getItem('authToken');
                   if (token) {
-                    window.navigateTo('/chat');
+                    navigate(ROUTES.CHAT);
                   } else {
-                    window.navigateTo('/login');
+                    navigate(ROUTES.LOGIN);
                   }
                 }}
                 className="button-shimmer group"
@@ -374,14 +377,14 @@ const HomePage: React.FC = () => {
                   style={{ color: currentTheme.colors.accentPrimary }}
                   onClick={() => {
                     if (feature.title === "Rich Formatting") {
-                      window.navigateTo('/rich-input-demo');
+                      navigate('/rich-input-demo');
                     } else {
                       // Check if user is logged in
                       const token = localStorage.getItem('authToken');
                       if (token) {
-                        window.navigateTo('/chat');
+                        navigate(ROUTES.CHAT);
                       } else {
-                        window.navigateTo('/login');
+                        navigate(ROUTES.LOGIN);
                       }
                     }
                   }}
@@ -439,9 +442,9 @@ const HomePage: React.FC = () => {
                   // Check if user is logged in
                   const token = localStorage.getItem('authToken');
                   if (token) {
-                    window.navigateTo('/chat');
+                    navigate(ROUTES.CHAT);
                   } else {
-                    window.navigateTo('/login');
+                    navigate(ROUTES.LOGIN);
                   }
                 }}
                 className="button-shimmer"

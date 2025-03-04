@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme, Theme, ThemeName, themes } from '../../context/ThemeContext';
 import Button from '../../components/ui/Button';
 import ThemeCard from '../../components/themes/ThemeCard';
 import ThemeCustomizer from '../../components/themes/ThemeCustomizer';
 import { popularThemes, PREVIOUS_ROUTE_KEY, DEFAULT_THEME } from '../../components/themes/ThemeData';
+import ROUTES from '../../routes.constants';
 
 const ThemeGallery: React.FC = () => {
   const { currentTheme, setTheme, customThemes, addCustomTheme } = useTheme();
+  const navigate = useNavigate();
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [workingTheme, setWorkingTheme] = useState<Theme | null>(null);
   const [previousRoute, setPreviousRoute] = useState<string | null>(null);
@@ -49,9 +52,9 @@ const ThemeGallery: React.FC = () => {
   // Function to go back to previous route
   const goBack = () => {
     if (previousRoute) {
-      window.navigateTo(previousRoute);
+      navigate(previousRoute);
     } else {
-      window.navigateTo('/');
+      navigate(ROUTES.HOME);
     }
   };
 

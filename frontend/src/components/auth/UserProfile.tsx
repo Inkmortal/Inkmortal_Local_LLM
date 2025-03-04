@@ -1,7 +1,9 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
+import ROUTES from '../../routes.constants';
 
 interface UserProfileProps {
   onLogout?: () => void;
@@ -10,6 +12,7 @@ interface UserProfileProps {
 const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
   const { currentTheme } = useTheme();
   const { username, userEmail, isAdmin, userData, logout } = useAuth();
+  const navigate = useNavigate();
   
   const handleLogout = () => {
     logout();
@@ -130,7 +133,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onLogout }) => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => window.navigateTo('/admin')}
+              onClick={() => navigate(ROUTES.ADMIN.ROOT)}
             >
               Admin Dashboard
             </Button>

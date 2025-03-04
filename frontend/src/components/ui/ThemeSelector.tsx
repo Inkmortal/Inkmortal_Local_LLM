@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme, themes, ThemeName } from '../../context/ThemeContext';
 import { PREVIOUS_ROUTE_KEY } from '../../components/themes/ThemeData';
+import ROUTES from '../../routes.constants';
 
 interface ThemeSelectorProps {
   compact?: boolean;
@@ -12,6 +14,7 @@ const MAX_RECENT_THEMES = 3;
 
 const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
   const { currentTheme, themeName, setTheme } = useTheme();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [recentThemes, setRecentThemes] = useState<ThemeName[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -80,7 +83,7 @@ const ThemeSelector: React.FC<ThemeSelectorProps> = ({ compact = false }) => {
     const currentPath = window.location.pathname;
     localStorage.setItem(PREVIOUS_ROUTE_KEY, currentPath);
     
-    window.navigateTo('/themes');
+    navigate(ROUTES.THEMES);
     setIsOpen(false);
   };
 

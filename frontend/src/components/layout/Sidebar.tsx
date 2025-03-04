@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -88,11 +89,12 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentPath, onNavigate }) => {
   const { currentTheme } = useTheme();
   const { logout, username } = useAuth();
+  const navigate = useNavigate();
   
   // Handle navigation
   const handleNavigate = (path: string) => {
-    // Use the global navigation function
-    window.navigateTo(path);
+    // Use React Router's navigate
+    navigate(path);
     
     // Call the provided onNavigate for sidebar state management
     onNavigate(path);

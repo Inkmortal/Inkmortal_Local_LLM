@@ -1,10 +1,11 @@
 # Active Context
 
 ## Current Focus
-- Fine-tuning the authentication system and ensuring proper route protection.
-- Expanding and enhancing the chat interface features.
-- Connecting the chat interface to the backend API services.
-- Completing the admin panel implementation with real backend data.
+- Fixing routing refactor issues across the application
+- Fine-tuning the authentication system and ensuring proper route protection
+- Expanding and enhancing the chat interface features
+- Connecting the chat interface to the backend API services
+- Completing the admin panel implementation with real backend data
 
 ## Implementation Plan Rationale
 The implementation order begins with authentication components and API Gateway because they are prerequisites for testing and managing other parts of the system. This approach allows us to:
@@ -20,7 +21,14 @@ The implementation order begins with authentication components and API Gateway b
 - Delegate specific responsibilities to appropriate components
 
 ## Immediate Next Steps
-1. Continue with detailed implementation of each major component in the `implementation/` directory, following this order:
+1. Fix routing refactor issues:
+   - Replace all uses of `window.navigateTo` with React Router's `useNavigate` hook
+   - Standardize navigation methods across all components
+   - Ensure consistent API response handling in Login.tsx and all components
+   - Verify all component imports in routes.tsx
+   - Standardize route constant usage throughout the application
+
+2. Continue with detailed implementation of each major component in the `implementation/` directory, following this order:
     - `01_core_infrastructure.md`: Base system setup, project structure, and initial deployment scripts. (**Completed**)
     - `03_authentication.md`: Implementing user registration, authentication, and authorization. (**Implemented**)
     - `04_api_gateway.md`: Configuring the API gateway, routing, and request handling. (**Implemented**)
@@ -29,13 +37,13 @@ The implementation order begins with authentication components and API Gateway b
     - `05_web_interface.md`: Building the React-based chat interface with educational features. (Partially Implemented)
     - `07_monitoring.md`: Implementing system monitoring, logging, and usage tracking.
 
-2. Connect chat interface to real backend API:
+3. Connect chat interface to real backend API:
     - Replace mock chat service with actual API calls
     - Implement streaming responses for chat messages
     - Add error handling for API failures
     - Implement user session persistence
 
-3. Complete the Admin Panel:
+4. Complete the Admin Panel:
     - Connect dashboard to real backend data
     - Finish implementing user management features
     - Complete registration token and API key management interfaces
@@ -49,19 +57,27 @@ The web interface should emphasize educational assistant capabilities:
 - User-friendly, beautiful, and functional design (In Progress)
 
 ## Key Decisions
-- Using a microservices architecture with a central API gateway.
-- Implementing a priority-based queue system with request aging to prevent starvation.
-- Using FastAPI for the backend and React for the frontend.
-- Using Ollama for LLM serving, now updated to use Llama 3.3 70B model.
-- Using RabbitMQ for reliable queue management with component-based architecture.
-- Using Cloudflare Tunnel for secure remote access.
-- Prioritizing Admin Panel implementation, with necessary authentication and API support.
-- Designing the system as a hobby project focused on personal educational use.
-- Chaycards application will connect as a client via API rather than direct integration.
+- Using a microservices architecture with a central API gateway
+- Implementing a priority-based queue system with request aging to prevent starvation
+- Using FastAPI for the backend and React for the frontend
+- Using Ollama for LLM serving, now updated to use Llama 3.3 70B model
+- Using RabbitMQ for reliable queue management with component-based architecture
+- Using Cloudflare Tunnel for secure remote access
+- Prioritizing Admin Panel implementation, with necessary authentication and API support
+- Designing the system as a hobby project focused on personal educational use
+- Chaycards application will connect as a client via API rather than direct integration
 
 ## Recent Progress
 
-### Authentication System and Chat Interface Enhancements (Latest)
+### Routing Refactor Issues (Latest)
+- Identified issues with recent routing refactor:
+  - `window.navigateTo` function being used throughout components but explicitly removed in App.tsx
+  - Inconsistent navigation methods between different components
+  - API response handling issues in Login.tsx causing "response.text is not a function" errors
+  - Potential component import issues in routes.tsx
+  - Need to standardize React Router usage across the application
+
+### Authentication System and Chat Interface Enhancements
 - Fixed authentication system with proper token handling:
   - Ensured the correct Content-Type for OAuth2 form submissions
   - Implemented robust protected routes with role-based access control
@@ -130,6 +146,11 @@ The web interface should emphasize educational assistant capabilities:
   - Currently using mock data for demonstration purposes
 
 ## Current Challenges
+- Routing refactor issues causing navigation failures:
+  - `window.navigateTo` not working due to removal in App.tsx
+  - Inconsistent navigation patterns across components
+  - API response handling issues in Login.tsx
+  - Need to standardize React Router usage application-wide
 - Admin dashboard displays mock data instead of real backend data
 - Chat interface still uses mock services instead of real backend API
 - Need to connect admin panel components to actual API endpoints

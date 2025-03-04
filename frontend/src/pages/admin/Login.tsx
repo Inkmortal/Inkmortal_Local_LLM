@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { fetchApi, checkBackendConnection } from '../../config/api';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
+import ROUTES from '../../routes.constants';
 
 type LoginMode = 'login' | 'setup';
 
@@ -14,6 +16,7 @@ const EXPECTED_PASSPHRASE = "i will defy the heavens";
 const AdminLogin: React.FC = () => {
   const { currentTheme } = useTheme();
   const { login, adminLogin } = useAuth();
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -31,7 +34,7 @@ const AdminLogin: React.FC = () => {
 
   // Navigate to home
   const handleHomeClick = () => {
-    window.navigateTo('/');
+    navigate(ROUTES.HOME);
   };
 
   // Check backend connection and admin setup status on component mount
@@ -53,11 +56,10 @@ const AdminLogin: React.FC = () => {
           console.log('Checking admin setup status...');
           const response = await fetchApi('/auth/admin/setup-status');
           
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Admin exists?', data.admin_exists);
+          if (response.success && response.data) {
+            console.log('Admin exists?', response.data.admin_exists);
             
-            if (!data.admin_exists) {
+            if (!response.data.admin_exists) {
               console.log('No admin exists, showing setup form');
               setNeedsSetup(true);
               setMode('setup');
@@ -68,9 +70,7 @@ const AdminLogin: React.FC = () => {
               setMode('login');
             }
           } else {
-            const errorText = await response.text();
-            console.error('Error checking admin status:', errorText);
-            setError('Error checking admin setup status. Please try again later.');
+            setError('Error checking admin setup status: ' + (response.error || 'Unknown error'));
           }
         } catch (error) {
           console.error('Error during admin status check:', error);
@@ -112,25 +112,16 @@ const AdminLogin: React.FC = () => {
       
       const response = await fetchApi('/auth/admin/fetch-setup-token');
       
-      const responseText = await response.text();
-      console.log('Token response text:', responseText);
-      
-      if (response.ok) {
-        try {
-          const data = JSON.parse(responseText);
-          console.log('Parsed token data:', data);
-          if (data.token) {
-            setSetupTokenFetched(data.token);
-            setSetupToken(data.token); // Auto-fill the token field
-          } else {
-            setError('No token available. An admin account may already exist.');
-          }
-        } catch (e) {
-          console.error('Error parsing token response:', e);
-          setError('Invalid response format from server');
+      if (response.success && response.data) {
+        console.log('Parsed token data:', response.data);
+        if (response.data.token) {
+          setSetupTokenFetched(response.data.token);
+          setSetupToken(response.data.token); // Auto-fill the token field
+        } else {
+          setError('No token available. An admin account may already exist.');
         }
       } else {
-        setError('Failed to fetch setup token: ' + responseText);
+        setError('Failed to fetch setup token: ' + (response.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Network error fetching token:', error);
@@ -190,29 +181,16 @@ const AdminLogin: React.FC = () => {
       });
       
       console.log('Setup response status:', response.status);
-      const responseText = await response.text();
-      console.log('Setup response text:', responseText);
       
-      if (response.ok) {
-        try {
-          const data = JSON.parse(responseText);
-          console.log('Admin setup successful, token received');
-          
-          // Use AuthContext login function
-          login(data.access_token, data.username, true);
-          
-          // AuthContext will handle the redirect
-        } catch (e) {
-          console.error('Error parsing setup response:', e);
-          setError('Invalid response format from server');
-        }
+      if (response.success && response.data) {
+        console.log('Admin setup successful, token received');
+        
+        // Use AuthContext login function
+        login(response.data.access_token, response.data.username, true);
+        
+        // AuthContext will handle the redirect
       } else {
-        try {
-          const errorData = JSON.parse(responseText);
-          setError(errorData.detail || 'Admin setup failed');
-        } catch {
-          setError('Admin setup failed: ' + responseText);
-        }
+        setError('Admin setup failed: ' + (response.error || 'Unknown error'));
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Network error';

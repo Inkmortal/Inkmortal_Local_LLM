@@ -1,24 +1,27 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import UserProfile from '../../components/auth/UserProfile';
 import ThemeSelector from '../../components/ui/ThemeSelector';
 import Button from '../../components/ui/Button';
+import ROUTES from '../../routes.constants';
 
 const Profile: React.FC = () => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, loading } = useAuth();
+  const navigate = useNavigate();
   
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      window.navigateTo('/login');
+      navigate(ROUTES.LOGIN);
     }
-  }, [isAuthenticated, loading]);
+  }, [isAuthenticated, loading, navigate]);
   
   // Handle home navigation
   const handleHomeClick = () => {
-    window.navigateTo('/');
+    navigate(ROUTES.HOME);
   };
 
   if (loading) {
