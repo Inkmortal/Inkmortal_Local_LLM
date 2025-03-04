@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
@@ -12,6 +13,7 @@ import {
 
 const AdminDashboard: React.FC = () => {
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -93,7 +95,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <Layout>
+    <div className="mb-8 pb-8">
       <div className="mb-8 pb-4 border-b" style={{ borderColor: `${currentTheme.colors.borderColor}40` }}>
         <h1 className="text-2xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>
           Admin Dashboard
@@ -158,7 +160,7 @@ const AdminDashboard: React.FC = () => {
                   color: accentColor,
                   boxShadow: `0 2px 8px ${accentColor}20`
                 }}
-                onClick={() => window.navigateTo(card.path)}
+                onClick={() => navigate(card.path)}
               >
                 View Details
               </button>
@@ -291,7 +293,7 @@ const AdminDashboard: React.FC = () => {
                 color: currentTheme.colors.accentPrimary,
                 boxShadow: `0 2px 8px ${currentTheme.colors.accentPrimary}20`
               }}
-              onClick={() => window.navigateTo('/admin/stats')}
+              onClick={() => navigate('/admin/stats')}
             >
               Detailed Stats
             </button>
@@ -391,7 +393,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </Card>
       </div>
-    </Layout>
+    </div>
   );
 };
 

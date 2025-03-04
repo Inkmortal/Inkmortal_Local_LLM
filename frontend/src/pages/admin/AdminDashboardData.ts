@@ -7,6 +7,162 @@
 
 import { fetchApi } from '../../config/api';
 
+// Types for Admin Dashboard
+export interface DashboardCard {
+  id: string;
+  title: string;
+  count: number;
+  active?: number;
+  processing?: number;
+  path: string;
+}
+
+export interface SystemStats {
+  cpu: number;
+  memory: number;
+  storage: number;
+  uptime: string;
+  ollama: {
+    status: string;
+    model: string;
+    version: string;
+  };
+  queue_connected: boolean;
+}
+
+export interface Activity {
+  id: string;
+  user: string;
+  action: string;
+  target: string;
+  time: string;
+  type: 'api-key' | 'ip' | 'token' | 'queue';
+}
+
+export interface DashboardData {
+  dashboard_cards: DashboardCard[];
+  system_stats: SystemStats;
+  recent_activities: Activity[];
+}
+
+export const fetchDashboardData = async (): Promise<DashboardData> => {
+  try {
+    const statsResponse = await fetchSystemStats();
+    
+    // Mock dashboard cards data
+    const cards: DashboardCard[] = [
+      {
+        id: 'ip-whitelist',
+        title: 'IP Whitelist',
+        count: 12,
+        active: 8,
+        path: '/admin/ip-whitelist'
+      },
+      {
+        id: 'tokens',
+        title: 'Registration Tokens',
+        count: 5,
+        active: 2,
+        path: '/admin/tokens'
+      },
+      {
+        id: 'api-keys',
+        title: 'API Keys',
+        count: 18,
+        active: 15,
+        path: '/admin/api-keys'
+      },
+      {
+        id: 'queue',
+        title: 'Queue Status',
+        count: 3,
+        processing: 1,
+        path: '/admin/queue'
+      }
+    ];
+    
+    // Mock activity data
+    const activities: Activity[] = [
+      {
+        id: '1',
+        user: 'admin',
+        action: 'created',
+        target: 'API Key',
+        time: '5 minutes ago',
+        type: 'api-key'
+      },
+      {
+        id: '2',
+        user: 'system',
+        action: 'added',
+        target: 'IP Address 192.168.1.100',
+        time: '10 minutes ago',
+        type: 'ip'
+      },
+      {
+        id: '3',
+        user: 'admin',
+        action: 'generated',
+        target: 'Registration Token',
+        time: '1 hour ago',
+        type: 'token'
+      },
+      {
+        id: '4',
+        user: 'system',
+        action: 'processed',
+        target: 'Queue Item',
+        time: '2 hours ago',
+        type: 'queue'
+      },
+      {
+        id: '5',
+        user: 'admin',
+        action: 'revoked',
+        target: 'API Key',
+        time: '3 hours ago',
+        type: 'api-key'
+      }
+    ];
+    
+    return {
+      dashboard_cards: cards,
+      system_stats: statsResponse || {
+        cpu: 35,
+        memory: 60,
+        storage: 45,
+        uptime: '5 days, 6 hours',
+        ollama: {
+          status: 'Running',
+          model: 'llama3.1-70b',
+          version: '0.1.18'
+        },
+        queue_connected: true
+      },
+      recent_activities: activities
+    };
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    // Return fallback data
+    return {
+      dashboard_cards: [],
+      system_stats: {
+        cpu: 0,
+        memory: 0,
+        storage: 0,
+        uptime: 'Unknown',
+        ollama: {
+          status: 'Unknown',
+          model: 'Unknown',
+          version: 'Unknown'
+        },
+        queue_connected: false
+      },
+      recent_activities: []
+    };
+  }
+};
+
 // Types and interfaces for admin data
 // =======================================================
 
@@ -46,39 +202,6 @@ export interface IPWhitelistEntry {
   expires_at: string | null;
   is_active: boolean;
   created_by: string;
-}
-
-// System Stats Types
-export interface SystemStats {
-  cpu_usage: number;
-  memory_usage: number;
-  disk_usage: number;
-  system_uptime: number;
-  queue_status: {
-    active_connections: number;
-    messages_waiting: number;
-    messages_processing: number;
-  };
-  python_version: string;
-  ollama_version: string;
-  os_info: string;
-}
-
-// Usage Stats
-export interface UsageStats {
-  total_requests: number;
-  active_users: number;
-  average_response_time: number;
-  total_tokens: number;
-  requests_by_day: {
-    date: string;
-    count: number;
-  }[];
-  models_usage: {
-    model: string;
-    requests: number;
-    tokens: number;
-  }[];
 }
 
 // API functions for Admin Dashboard
@@ -172,9 +295,9 @@ export const fetchSystemStats = async (): Promise<SystemStats | null> => {
 /**
  * Fetch usage stats
  */
-export const fetchUsageStats = async (): Promise<UsageStats | null> => {
+export const fetchUsageStats = async (): Promise<any | null> => {
   try {
-    const response = await fetchApi<UsageStats>('/admin/usage/stats');
+    const response = await fetchApi('/admin/usage/stats');
     
     if (!response.success) {
       throw new Error(`Failed to fetch usage stats: ${response.error || response.status}`);
