@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
 import RegisterForm from '../../components/auth/RegisterForm';
+import ROUTES from '../../routes.constants';
 
 const Register: React.FC = () => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, checkAuth } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -26,23 +29,23 @@ const Register: React.FC = () => {
   // If user is authenticated, redirect to home
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      window.navigateTo('/');
+      navigate(ROUTES.HOME);
     }
-  }, [loading, isAuthenticated]);
+  }, [loading, isAuthenticated, navigate]);
 
   // Handle successful registration
   const handleRegisterSuccess = () => {
-    window.navigateTo('/chat');
+    navigate(ROUTES.CHAT);
   };
 
   // Handle login click
   const handleLoginClick = () => {
-    window.navigateTo('/login');
+    navigate(ROUTES.LOGIN);
   };
 
   // Handle home navigation
   const handleHomeClick = () => {
-    window.location.href = '/';
+    navigate(ROUTES.HOME);
   };
 
   if (loading) {

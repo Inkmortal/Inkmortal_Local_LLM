@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
+import ROUTES from '../../routes.constants';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +13,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, username } = useAuth();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState('/admin');
 
@@ -35,9 +38,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated) {
       // Redirect to login if not authenticated
-      window.navigateTo('/admin/login');
+      navigate(ROUTES.ADMIN.LOGIN);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigate]);
 
   // Create style for animations
   useEffect(() => {

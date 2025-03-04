@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAuth } from '../../../../context/AuthContext';
 import Button from '../../../../components/ui/Button';
 import ThemeSelector from '../../../../components/ui/ThemeSelector';
+import ROUTES from '../../../../routes.constants';
 
 interface ChatHeaderProps {
   showHistorySidebar: boolean;
@@ -19,6 +21,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header 
@@ -57,7 +60,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             color: currentTheme.colors.textSecondary,
             backgroundColor: `${currentTheme.colors.bgTertiary}40`,
           }}
-          onClick={() => window.navigateTo('/')}
+          onClick={() => navigate(ROUTES.HOME)}
         >
           <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7m-14 0l2 2m0 0l7 7 7-7" />
@@ -134,7 +137,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Button 
             size="sm"
             variant="ghost"
-            onClick={() => window.navigateTo('/admin')}
+            onClick={() => navigate(ROUTES.ADMIN.ROOT)}
             className="text-sm transition-all rounded-lg"
             style={{
               color: currentTheme.colors.textSecondary,

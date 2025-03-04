@@ -1,19 +1,22 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import Button from '../../components/ui/Button';
 import ThemeSelector from '../../components/ui/ThemeSelector';
+import ROUTES from '../../routes.constants';
 
 const Unauthorized: React.FC = () => {
   const { currentTheme } = useTheme();
+  const navigate = useNavigate();
 
   // Handle home navigation
   const handleHomeClick = () => {
-    window.navigateTo('/');
+    navigate(ROUTES.HOME);
   };
 
   // Handle login navigation
   const handleLoginClick = () => {
-    window.navigateTo('/login');
+    navigate(ROUTES.LOGIN);
   };
 
   return (
