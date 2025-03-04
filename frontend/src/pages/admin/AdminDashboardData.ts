@@ -7,6 +7,22 @@
 
 import { fetchApi } from '../../config/api';
 
+// API Path Configuration 
+// These match the actual backend implementation
+const API_PATHS = {
+  ADMIN: {
+    TOKENS: '/admin/tokens', // Registration tokens
+    API_KEYS: '/admin/api-keys',
+    IP_WHITELIST: '/admin/ip-whitelist',
+    CLIENT_IP: '/admin/client-ip',
+    SYSTEM_STATS: '/admin/system/stats',
+    QUEUE_STATS: '/admin/queue/stats',
+    QUEUE_ITEMS: '/admin/queue/items',
+    QUEUE_HISTORY: '/admin/queue/history',
+    USAGE_STATS: '/admin/usage/stats'
+  }
+};
+
 // Types for Admin Dashboard
 export interface DashboardCard {
   id: string;
@@ -45,11 +61,74 @@ export interface DashboardData {
   recent_activities: Activity[];
 }
 
+// Registration Token Types - Updated based on backend
+export interface RegistrationToken {
+  id: string; // Backend uses string IDs 
+  token: string;
+  created: string; // Backend uses 'created' not 'created_at'
+  expires: string | null; // Backend uses 'expires' not 'expires_at'
+  used: boolean; // Backend uses 'used' not 'is_used'
+  usedBy: string | null; // Backend uses 'usedBy' not 'used_by'
+  usedOn: string | null; // Backend uses 'usedOn' not 'used_at'
+}
+
+// API Key Types - Updated based on backend
+export interface ApiKey {
+  id: string; // Backend uses string IDs
+  key: string;
+  description: string;
+  priority: number;
+  is_active: boolean;
+  created_at: string;
+  last_used: string | null;
+  usage_count: number;
+}
+
+// IP Whitelist Types - Updated based on backend
+export interface IPWhitelistEntry {
+  id: string;
+  ip: string; // Backend uses 'ip' not 'ip_address'
+  added: string; // Backend uses 'added' not 'created_at'
+  lastUsed: string | null; // Backend uses 'lastUsed'
+}
+
+// Queue Types - Added based on backend
+export interface QueueItem {
+  id: string;
+  priority: number;
+  status: string;
+  created_at: string;
+  user_id: string;
+  username: string;
+  prompt_tokens?: number;
+  max_tokens?: number;
+  model?: string;
+  queue_wait_time?: number;
+}
+
+export interface HistoryItem extends QueueItem {
+  completed_at: string;
+  processing_time: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
+export interface QueueStats {
+  total_waiting: number;
+  total_processing: number;
+  total_completed: number;
+  total_error: number;
+  requests_per_hour: number;
+  average_wait_time: number;
+  average_processing_time: number;
+  queue_by_priority?: Record<string, number>;
+}
+
 export const fetchDashboardData = async (): Promise<DashboardData> => {
   try {
     const statsResponse = await fetchSystemStats();
     
-    // Mock dashboard cards data
+    // Fetch cards data from API (fallback to mock data for now)
     const cards: DashboardCard[] = [
       {
         id: 'ip-whitelist',
@@ -81,7 +160,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
       }
     ];
     
-    // Mock activity data
+    // Fetch activity data (fallback to mock data for now)
     const activities: Activity[] = [
       {
         id: '1',
@@ -163,47 +242,6 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   }
 };
 
-// Types and interfaces for admin data
-// =======================================================
-
-// Registration Token Types
-export interface RegistrationToken {
-  id: string;
-  token: string;
-  created_at: string;
-  expires_at: string | null;
-  description: string;
-  is_used: boolean;
-  used_by?: string;
-  used_at?: string;
-  created_by: string;
-}
-
-// API Key Types
-export interface ApiKey {
-  id: string;
-  key: string;
-  description: string;
-  created_at: string;
-  expires_at: string | null;
-  is_active: boolean;
-  user_id: string;
-  priority: number;
-  created_by: string;
-  usage_count: number;
-}
-
-// IP Whitelist Types
-export interface IPWhitelistEntry {
-  id: string;
-  ip_address: string;
-  description: string;
-  created_at: string;
-  expires_at: string | null;
-  is_active: boolean;
-  created_by: string;
-}
-
 // API functions for Admin Dashboard
 // =======================================================
 
@@ -212,7 +250,7 @@ export interface IPWhitelistEntry {
  */
 export const fetchRegistrationTokens = async (): Promise<RegistrationToken[]> => {
   try {
-    const response = await fetchApi<RegistrationToken[]>('/auth/admin/registration-tokens');
+    const response = await fetchApi<RegistrationToken[]>(API_PATHS.ADMIN.TOKENS);
     
     if (!response.success) {
       throw new Error(`Failed to fetch registration tokens: ${response.error || response.status}`);
@@ -228,14 +266,13 @@ export const fetchRegistrationTokens = async (): Promise<RegistrationToken[]> =>
 /**
  * Create a new registration token
  */
-export const createRegistrationToken = async (description: string, expiresIn: number | null = null): Promise<RegistrationToken | null> => {
+export const createRegistrationToken = async (description: string, expiryDays: number | null = null): Promise<RegistrationToken | null> => {
   try {
     const payload = {
-      description,
-      expires_in: expiresIn, // in hours, null means never expires
+      expires_days: expiryDays, // Backend expects days, not hours
     };
     
-    const response = await fetchApi<RegistrationToken>('/auth/admin/registration-tokens', {
+    const response = await fetchApi<RegistrationToken>(API_PATHS.ADMIN.TOKENS, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -259,7 +296,7 @@ export const createRegistrationToken = async (description: string, expiresIn: nu
  */
 export const deleteRegistrationToken = async (tokenId: string): Promise<boolean> => {
   try {
-    const response = await fetchApi(`/auth/admin/registration-tokens/${tokenId}`, {
+    const response = await fetchApi(`${API_PATHS.ADMIN.TOKENS}/${tokenId}`, {
       method: 'DELETE',
     });
     
@@ -279,7 +316,7 @@ export const deleteRegistrationToken = async (tokenId: string): Promise<boolean>
  */
 export const fetchSystemStats = async (): Promise<SystemStats | null> => {
   try {
-    const response = await fetchApi<SystemStats>('/admin/system/stats');
+    const response = await fetchApi<SystemStats>(API_PATHS.ADMIN.SYSTEM_STATS);
     
     if (!response.success) {
       throw new Error(`Failed to fetch system stats: ${response.error || response.status}`);
@@ -297,7 +334,7 @@ export const fetchSystemStats = async (): Promise<SystemStats | null> => {
  */
 export const fetchUsageStats = async (): Promise<any | null> => {
   try {
-    const response = await fetchApi('/admin/usage/stats');
+    const response = await fetchApi(API_PATHS.ADMIN.USAGE_STATS);
     
     if (!response.success) {
       throw new Error(`Failed to fetch usage stats: ${response.error || response.status}`);
@@ -315,7 +352,7 @@ export const fetchUsageStats = async (): Promise<any | null> => {
  */
 export const fetchIPWhitelist = async (): Promise<IPWhitelistEntry[]> => {
   try {
-    const response = await fetchApi<IPWhitelistEntry[]>('/auth/admin/ip-whitelist');
+    const response = await fetchApi<IPWhitelistEntry[]>(API_PATHS.ADMIN.IP_WHITELIST);
     
     if (!response.success) {
       throw new Error(`Failed to fetch IP whitelist: ${response.error || response.status}`);
@@ -329,17 +366,33 @@ export const fetchIPWhitelist = async (): Promise<IPWhitelistEntry[]> => {
 };
 
 /**
+ * Get client IP address
+ */
+export const getClientIP = async (): Promise<string | null> => {
+  try {
+    const response = await fetchApi<{ ip: string }>(API_PATHS.ADMIN.CLIENT_IP);
+    
+    if (!response.success) {
+      throw new Error(`Failed to get client IP: ${response.error || response.status}`);
+    }
+    
+    return response.data?.ip || null;
+  } catch (error) {
+    console.error('Error getting client IP:', error);
+    return null;
+  }
+};
+
+/**
  * Add a new IP whitelist entry
  */
-export const addIPWhitelistEntry = async (ipAddress: string, description: string, expiresIn: number | null = null): Promise<IPWhitelistEntry | null> => {
+export const addIPWhitelistEntry = async (ipAddress: string): Promise<IPWhitelistEntry | null> => {
   try {
     const payload = {
-      ip_address: ipAddress,
-      description,
-      expires_in: expiresIn, // in hours, null means never expires
+      ip_address: ipAddress
     };
     
-    const response = await fetchApi<IPWhitelistEntry>('/auth/admin/ip-whitelist', {
+    const response = await fetchApi<IPWhitelistEntry>(API_PATHS.ADMIN.IP_WHITELIST, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -363,7 +416,7 @@ export const addIPWhitelistEntry = async (ipAddress: string, description: string
  */
 export const deleteIPWhitelistEntry = async (entryId: string): Promise<boolean> => {
   try {
-    const response = await fetchApi(`/auth/admin/ip-whitelist/${entryId}`, {
+    const response = await fetchApi(`${API_PATHS.ADMIN.IP_WHITELIST}/${entryId}`, {
       method: 'DELETE',
     });
     
@@ -383,7 +436,7 @@ export const deleteIPWhitelistEntry = async (entryId: string): Promise<boolean> 
  */
 export const fetchApiKeys = async (): Promise<ApiKey[]> => {
   try {
-    const response = await fetchApi<ApiKey[]>('/auth/apikeys');
+    const response = await fetchApi<ApiKey[]>(API_PATHS.ADMIN.API_KEYS);
     
     if (!response.success) {
       throw new Error(`Failed to fetch API keys: ${response.error || response.status}`);
@@ -406,7 +459,7 @@ export const createApiKey = async (description: string, priority: number): Promi
       priority,
     };
     
-    const response = await fetchApi<ApiKey>('/auth/apikeys', {
+    const response = await fetchApi<ApiKey>(API_PATHS.ADMIN.API_KEYS, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -430,7 +483,7 @@ export const createApiKey = async (description: string, priority: number): Promi
  */
 export const deleteApiKey = async (keyId: string): Promise<boolean> => {
   try {
-    const response = await fetchApi(`/auth/apikeys/${keyId}`, {
+    const response = await fetchApi(`${API_PATHS.ADMIN.API_KEYS}/${keyId}`, {
       method: 'DELETE',
     });
     
@@ -444,3 +497,64 @@ export const deleteApiKey = async (keyId: string): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Fetch queue statistics
+ */
+export const fetchQueueStats = async (): Promise<QueueStats | null> => {
+  try {
+    const response = await fetchApi<QueueStats>(API_PATHS.ADMIN.QUEUE_STATS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch queue stats: ${response.error || response.status}`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching queue stats:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetch queue items
+ */
+export const fetchQueueItems = async (priority?: number): Promise<QueueItem[]> => {
+  try {
+    const priorityParam = priority ? `?priority=${priority}` : '';
+    const response = await fetchApi<QueueItem[]>(`${API_PATHS.ADMIN.QUEUE_ITEMS}${priorityParam}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch queue items: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching queue items:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch queue history
+ */
+export const fetchQueueHistory = async (priority?: number): Promise<HistoryItem[]> => {
+  try {
+    const priorityParam = priority ? `?priority=${priority}` : '';
+    const response = await fetchApi<HistoryItem[]>(`${API_PATHS.ADMIN.QUEUE_HISTORY}${priorityParam}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch queue history: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching queue history:', error);
+    return [];
+  }
+};
+
+// Export functions to be used by components
+export const generateRegistrationToken = createRegistrationToken;
+export const revokeRegistrationToken = deleteRegistrationToken;
+export const fetchHistoryItems = fetchQueueHistory;

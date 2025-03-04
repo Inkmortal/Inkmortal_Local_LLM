@@ -3,10 +3,11 @@ import { useTheme } from '../../context/ThemeContext';
 import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import { fetchRegistrationTokens, createRegistrationToken, deleteRegistrationToken } from './AdminDashboardData';
+import { fetchRegistrationTokens, generateRegistrationToken, revokeRegistrationToken } from './AdminDashboardData';
 
+// Interface matches the API response format
 interface Token {
-  id: number;
+  id: string;
   token: string;
   created: string;
   expires: string | null;
@@ -29,17 +30,7 @@ const RegistrationTokens: React.FC = () => {
       try {
         setLoading(true);
         const data = await fetchRegistrationTokens();
-        // Map backend data format to component format
-        const formattedTokens = data.map(token => ({
-          id: parseInt(token.id),
-          token: token.token,
-          created: token.created_at,
-          expires: token.expires_at,
-          used: token.is_used,
-          usedBy: token.used_by || null,
-          usedOn: token.used_at || null
-        }));
-        setTokens(formattedTokens);
+        setTokens(data);
         setError(null);
       } catch (err) {
         console.error('Error loading registration tokens:', err);
@@ -56,19 +47,9 @@ const RegistrationTokens: React.FC = () => {
   const generateToken = async () => {
     try {
       const description = `Registration token (${new Date().toLocaleDateString()})`;
-      const newToken = await createRegistrationToken(description, expiryDays);
+      const newToken = await generateRegistrationToken(description, expiryDays);
       if (newToken) {
-        // Convert the backend format to the format used by this component
-        const formattedToken: Token = {
-          id: parseInt(newToken.id),
-          token: newToken.token,
-          created: newToken.created_at,
-          expires: newToken.expires_at,
-          used: newToken.is_used,
-          usedBy: newToken.used_by || null,
-          usedOn: newToken.used_at || null
-        };
-        setTokens([formattedToken, ...tokens]);
+        setTokens([newToken, ...tokens]);
         setNewTokenGenerated(newToken.token);
         setError(null);
       }
@@ -79,10 +60,9 @@ const RegistrationTokens: React.FC = () => {
   };
 
   // Revoke a token
-  const revokeToken = async (id: number) => {
+  const revokeToken = async (id: string) => {
     try {
-      // Convert number ID to string for the API
-      await deleteRegistrationToken(id.toString());
+      await revokeRegistrationToken(id);
       setTokens(tokens.filter(token => token.id !== id));
       setError(null);
     } catch (err: any) {

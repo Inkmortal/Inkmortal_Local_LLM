@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchIPWhitelist, addIPWhitelistEntry, deleteIPWhitelistEntry, IPWhitelistEntry } from './AdminDashboardData';
-import { fetchApi } from '../../config/api';
+import { fetchIPWhitelist, addIPWhitelistEntry, deleteIPWhitelistEntry, IPWhitelistEntry, getClientIP } from './AdminDashboardData';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -41,16 +40,14 @@ const IPWhitelist: React.FC = () => {
     try {
       setFetchingClientIP(true);
       
-      const response = await fetchApi<{ip: string}>('/admin/client-ip');
+      const ip = await getClientIP();
       
-      if (!response.success) {
-        throw new Error(`Failed to fetch client IP: ${response.error || response.status}`);
-      }
-      
-      if (response.data) {
-        setNewIP(response.data.ip);
-        setIsValidIP(validateIP(response.data.ip));
+      if (ip) {
+        setNewIP(ip);
+        setIsValidIP(validateIP(ip));
         setErrorMessage('');
+      } else {
+        setErrorMessage('Failed to fetch your IP address. Please enter it manually.');
       }
     } catch (error) {
       console.error('Error fetching client IP:', error);
@@ -113,8 +110,8 @@ const IPWhitelist: React.FC = () => {
     try {
       setAddingIP(true);
       
-      // Add the IP to whitelist
-      const result = await addIPWhitelistEntry(newIP, newDescription);
+      // Add the IP to whitelist - backend API only requires IP address
+      const result = await addIPWhitelistEntry(newIP);
       
       if (result) {
         // Clear form and refresh list
@@ -290,7 +287,7 @@ const IPWhitelist: React.FC = () => {
                     <th className="p-3 text-left font-medium">IP Address</th>
                     <th className="p-3 text-left font-medium">Description</th>
                     <th className="p-3 text-left font-medium">Added On</th>
-                    <th className="p-3 text-left font-medium">Status</th>
+                    <th className="p-3 text-left font-medium">Last Used</th>
                     <th className="p-3 text-left font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -302,22 +299,10 @@ const IPWhitelist: React.FC = () => {
                         borderBottom: `1px solid ${currentTheme.colors.borderColor}30`,
                       }}
                     >
-                      <td className="p-3 font-mono">{item.ip_address}</td>
-                      <td className="p-3">{item.description}</td>
-                      <td className="p-3">{formatDate(item.created_at)}</td>
-                      <td className="p-3">
-                        <span 
-                          className="px-2 py-1 rounded-full text-xs font-medium"
-                          style={{ 
-                            backgroundColor: item.is_active ? 
-                              `${currentTheme.colors.success}20` : `${currentTheme.colors.error}20`,
-                            color: item.is_active ? 
-                              currentTheme.colors.success : currentTheme.colors.error
-                          }}
-                        >
-                          {item.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
+                      <td className="p-3 font-mono">{item.ip}</td>
+                      <td className="p-3">IP Whitelist Entry</td>
+                      <td className="p-3">{formatDate(item.added)}</td>
+                      <td className="p-3">{item.lastUsed ? formatDate(item.lastUsed) : 'Never'}</td>
                       <td className="p-3">
                         <Button
                           variant="danger"
