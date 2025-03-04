@@ -1,15 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import Layout from '../../components/layout/Layout';
 import Card from '../../components/ui/Card';
+
+// Import from the dashboard data file
 import {
-  fetchDashboardData,
-  DashboardData,
-  DashboardCard,
   SystemStats,
-  Activity
+  fetchSystemStats,
+  fetchRegistrationTokens,
+  fetchApiKeys,
+  fetchIPWhitelist
 } from './AdminDashboardData';
+
+// Define types locally since they aren't exported
+interface DashboardCard {
+  id: string;
+  title: string;
+  count: number;
+  active?: number;
+  processing?: number;
+  path: string;
+}
+
+interface Activity {
+  id: string;
+  user: string;
+  action: string;
+  target: string;
+  time: string;
+  type: 'api-key' | 'ip' | 'token' | 'queue';
+}
+
+interface DashboardData {
+  dashboard_cards: DashboardCard[];
+  system_stats: SystemStats;
+  recent_activities: Activity[];
+}
 
 const AdminDashboard: React.FC = () => {
   const { currentTheme } = useTheme();
@@ -47,7 +73,107 @@ const AdminDashboard: React.FC = () => {
     const loadDashboardData = async () => {
       try {
         setLoading(true);
-        const data = await fetchDashboardData();
+        
+        // Fetch all required data for dashboard
+        const statsResponse = await fetchSystemStats();
+        const tokensResponse = await fetchRegistrationTokens();
+        const apiKeysResponse = await fetchApiKeys();
+        const ipWhitelistResponse = await fetchIPWhitelist();
+        
+        // Create dashboard cards
+        const cards: DashboardCard[] = [
+          {
+            id: 'ip-whitelist',
+            title: 'IP Whitelist',
+            count: ipWhitelistResponse.length,
+            active: ipWhitelistResponse.filter(ip => ip.is_active).length,
+            path: '/admin/ip-whitelist'
+          },
+          {
+            id: 'tokens',
+            title: 'Registration Tokens',
+            count: tokensResponse.length,
+            active: tokensResponse.filter(token => !token.is_used).length,
+            path: '/admin/tokens'
+          },
+          {
+            id: 'api-keys',
+            title: 'API Keys',
+            count: apiKeysResponse.length,
+            active: apiKeysResponse.filter(key => key.is_active).length,
+            path: '/admin/api-keys'
+          },
+          {
+            id: 'queue',
+            title: 'Queue Status',
+            count: 3,  // Mocked for now
+            processing: 1, // Mocked for now
+            path: '/admin/queue'
+          }
+        ];
+        
+        // Create mock activity data
+        const activities: Activity[] = [
+          {
+            id: '1',
+            user: 'admin',
+            action: 'created',
+            target: 'API Key',
+            time: '5 minutes ago',
+            type: 'api-key'
+          },
+          {
+            id: '2',
+            user: 'system',
+            action: 'added',
+            target: 'IP Address 192.168.1.100',
+            time: '10 minutes ago',
+            type: 'ip'
+          },
+          {
+            id: '3',
+            user: 'admin',
+            action: 'generated',
+            target: 'Registration Token',
+            time: '1 hour ago',
+            type: 'token'
+          },
+          {
+            id: '4',
+            user: 'system',
+            action: 'processed',
+            target: 'Queue Item',
+            time: '2 hours ago',
+            type: 'queue'
+          },
+          {
+            id: '5',
+            user: 'admin',
+            action: 'revoked',
+            target: 'API Key',
+            time: '3 hours ago',
+            type: 'api-key'
+          }
+        ];
+        
+        // Build dashboard data object
+        const data: DashboardData = {
+          dashboard_cards: cards,
+          system_stats: statsResponse || {
+            cpu: 35,
+            memory: 60,
+            storage: 45,
+            uptime: '5 days, 6 hours',
+            ollama: {
+              status: 'Running',
+              model: 'llama3.1-70b',
+              version: '0.1.18'
+            },
+            queue_connected: true
+          },
+          recent_activities: activities
+        };
+        
         setDashboardData(data);
         setError(null);
       } catch (err) {
