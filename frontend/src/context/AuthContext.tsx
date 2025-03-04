@@ -334,7 +334,20 @@ export const RequireAuth = ({
   // Use effect to handle redirection when auth state changes
   React.useEffect(() => {
     if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
-      const redirectPath = requireAdmin ? '/admin/login' : '/unauthorized';
+      // Use proper redirect strategy based on what they're trying to access
+      let redirectPath;
+      
+      if (requireAdmin) {
+        // Admin routes go to admin login
+        redirectPath = '/admin/login';
+      } else if (location.pathname.includes('/chat')) {
+        // Chat routes go to regular login
+        redirectPath = '/login';
+      } else {
+        // Other routes go to unauthorized page
+        redirectPath = '/unauthorized';
+      }
+      
       // Store the location they were trying to access for later redirect
       navigate(redirectPath, { 
         state: { from: location.pathname },

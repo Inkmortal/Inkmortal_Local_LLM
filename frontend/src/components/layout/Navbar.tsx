@@ -4,13 +4,19 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../ui/Button';
 import ROUTES from '../../routes.constants';
+import ThemeSelector from '../ui/ThemeSelector';
 
 interface NavbarProps {
   toggleSidebar: () => void;
   username?: string;
+  isAdminLayout?: boolean;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }) => {
+const Navbar: React.FC<NavbarProps> = ({ 
+  toggleSidebar, 
+  username: propUsername,
+  isAdminLayout = false 
+}) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, isAdmin, username: authUsername, logout } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +34,10 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
 
   const handleRegisterClick = () => {
     navigate(ROUTES.REGISTER);
+  };
+
+  const handleChatClick = () => {
+    navigate(ROUTES.CHAT);
   };
 
   const handleProfileClick = () => {
@@ -49,29 +59,32 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
       }}
     >
       <div className="flex items-center">
-        <button
-          onClick={toggleSidebar}
-          className="mr-4 lg:hidden p-2 rounded-lg transition-transform duration-200 hover:scale-105"
-          style={{ 
-            color: currentTheme.colors.textPrimary,
-            backgroundColor: `${currentTheme.colors.bgTertiary}40`
-          }}
-        >
-          <svg 
-            className="w-5 h-5" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
+        {isAdminLayout && (
+          <button
+            onClick={toggleSidebar}
+            className="mr-4 lg:hidden p-2 rounded-lg transition-transform duration-200 hover:scale-105"
+            style={{ 
+              color: currentTheme.colors.textPrimary,
+              backgroundColor: `${currentTheme.colors.bgTertiary}40`
+            }}
           >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M4 6h16M4 12h16M4 18h16" 
-            />
-          </svg>
-        </button>
+            <svg 
+              className="w-5 h-5" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M4 6h16M4 12h16M4 18h16" 
+              />
+            </svg>
+          </button>
+        )}
+        
         <Link to={ROUTES.HOME} className="flex items-center cursor-pointer">
           <svg 
             className="w-8 h-8 mr-3" 
@@ -96,6 +109,9 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Theme selector - always visible */}
+        <ThemeSelector />
+        
         {/* User Profile/Avatar (when authenticated) */}
         {isAuthenticated && username && (
           <Link 
@@ -126,7 +142,7 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
           </Link>
         )}
         
-        {/* Home Button */}
+        {/* Home Button - always show */}
         <Button 
           size="sm"
           variant="outline"
@@ -136,28 +152,17 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
           Home
         </Button>
         
-        {/* Chat Button */}
-        <Button 
-          size="sm"
-          variant="primary"
-          onClick={() => navigate(ROUTES.USER.CHAT)}
-        >
-          Chat
-        </Button>
-        
-        {/* Authentication Buttons */}
-        {isAuthenticated ? (
-          <div className="flex items-center gap-2">
-            {/* Admin Dashboard Button (for admins only) */}
-            {isAdmin && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleAdminDashboardClick}
-              >
-                Admin
-              </Button>
-            )}
+        {/* Admin layout has different buttons than regular layout */}
+        {isAdminLayout ? (
+          <>
+            {/* Chat Button */}
+            <Button 
+              size="sm"
+              variant="primary"
+              onClick={handleChatClick}
+            >
+              Chat
+            </Button>
             
             {/* Logout Button */}
             <button
@@ -174,24 +179,68 @@ const Navbar: React.FC<NavbarProps> = ({ toggleSidebar, username: propUsername }
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
             </button>
-          </div>
+          </>
         ) : (
-          <div className="flex items-center gap-2">
-            <Button
+          /* Non-admin layout */
+          <>
+            {/* Chat Button */}
+            <Button 
               size="sm"
-              variant="ghost"
-              onClick={handleLoginClick}
+              variant="primary"
+              onClick={handleChatClick}
             >
-              Login
+              Chat
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleRegisterClick}
-            >
-              Register
-            </Button>
-          </div>
+            
+            {/* Authentication Buttons */}
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                {/* Admin Dashboard Button (for admins only) */}
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleAdminDashboardClick}
+                  >
+                    Admin
+                  </Button>
+                )}
+                
+                {/* Logout Button */}
+                <button
+                  onClick={logout}
+                  className="p-2 rounded-lg transition-all duration-200 hover:scale-105"
+                  title="Logout"
+                  style={{ 
+                    color: currentTheme.colors.error,
+                    backgroundColor: `${currentTheme.colors.error}15`,
+                    boxShadow: `0 2px 8px ${currentTheme.colors.error}15`
+                  }}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleLoginClick}
+                >
+                  Login
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleRegisterClick}
+                >
+                  Register
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </header>

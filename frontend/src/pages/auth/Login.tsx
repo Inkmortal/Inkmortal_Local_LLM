@@ -17,7 +17,7 @@ const Login: React.FC = () => {
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Get the intended destination from location state or default to chat
-  const from = location.state?.from || ROUTES.USER.CHAT;
+  const from = location.state?.from || ROUTES.CHAT;
 
   useEffect(() => {
     // Check if user is already authenticated

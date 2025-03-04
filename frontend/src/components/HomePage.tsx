@@ -124,13 +124,7 @@ const HomePage: React.FC = () => {
             size="sm"
             variant="ghost"
             onClick={() => {
-              // Check if user is logged in
-              const token = localStorage.getItem('authToken');
-              if (token) {
-                navigate(ROUTES.CHAT);
-              } else {
-                navigate(ROUTES.LOGIN);
-              }
+              navigate(ROUTES.CHAT);
             }}
             className="hover-float transition-all duration-300"
           >
@@ -181,13 +175,7 @@ const HomePage: React.FC = () => {
               <Button 
                 size="lg"
                 onClick={() => {
-                  // Check if user is logged in
-                  const token = localStorage.getItem('authToken');
-                  if (token) {
-                    navigate(ROUTES.CHAT);
-                  } else {
-                    navigate(ROUTES.LOGIN);
-                  }
+                  navigate(ROUTES.CHAT);
                 }}
                 className="button-shimmer group"
                 style={{ 
@@ -379,13 +367,7 @@ const HomePage: React.FC = () => {
                     if (feature.title === "Rich Formatting") {
                       navigate('/rich-input-demo');
                     } else {
-                      // Check if user is logged in
-                      const token = localStorage.getItem('authToken');
-                      if (token) {
-                        navigate(ROUTES.CHAT);
-                      } else {
-                        navigate(ROUTES.LOGIN);
-                      }
+                      navigate(ROUTES.CHAT);
                     }
                   }}
                 >
@@ -439,13 +421,7 @@ const HomePage: React.FC = () => {
               <Button
                 size="lg"
                 onClick={() => {
-                  // Check if user is logged in
-                  const token = localStorage.getItem('authToken');
-                  if (token) {
-                    navigate(ROUTES.CHAT);
-                  } else {
-                    navigate(ROUTES.LOGIN);
-                  }
+                  navigate(ROUTES.CHAT);
                 }}
                 className="button-shimmer"
               >

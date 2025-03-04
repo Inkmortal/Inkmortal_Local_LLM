@@ -8,9 +8,10 @@ import ROUTES from '../../routes.constants';
 
 interface LayoutProps {
   children: React.ReactNode;
+  isAdminLayout?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ children, isAdminLayout = false }) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, username } = useAuth();
   const navigate = useNavigate();
@@ -34,13 +35,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     };
   }, []);
 
-  // Check authentication status
+  // Only redirect to admin login if this is an admin layout
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isAdminLayout && !isAuthenticated) {
       // Redirect to login if not authenticated
       navigate(ROUTES.ADMIN.LOGIN);
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, isAdminLayout]);
 
   // Create style for animations
   useEffect(() => {
@@ -107,6 +108,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
+  // Show sidebar only for admin layout
+  const showSidebar = isAdminLayout;
+
   return (
     <div 
       className="min-h-screen flex flex-col"
@@ -119,17 +123,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <Navbar 
         toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
         username={username || ''}
+        isAdminLayout={isAdminLayout}
       />
       
       <div className="flex flex-1 pt-16 h-[calc(100vh-4rem)]">
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          currentPath={currentPath}
-          onNavigate={handleNavigate}
-        />
+        {showSidebar && (
+          <Sidebar 
+            isOpen={isSidebarOpen} 
+            currentPath={currentPath}
+            onNavigate={handleNavigate}
+          />
+        )}
         
         <main 
-          className="flex-1 p-6 lg:ml-64 transition-all duration-300 overflow-y-auto admin-scrollbar"
+          className={`flex-1 p-6 transition-all duration-300 overflow-y-auto admin-scrollbar ${showSidebar ? 'lg:ml-64' : ''}`}
           style={{ color: currentTheme.colors.textPrimary }}
         >
           <div className="max-w-7xl mx-auto fade-in">

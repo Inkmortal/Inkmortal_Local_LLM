@@ -34,28 +34,24 @@ interface AppRoutes {
   mainRoutes: RouteObject[];
 }
 
-// Admin layout wrapper
+// Clean public layout that doesn't force theme headers everywhere
+const PublicLayout = () => <Outlet />;
+
+// Admin layout wrapper - standalone component with its own layout
 const AdminLayout = () => {
   return (
     <RequireAuth requireAdmin={true}>
-      <Layout>
+      <Layout isAdminLayout={true}>
         <Outlet />
       </Layout>
     </RequireAuth>
   );
 };
 
-// Main layout with Outlet
-const MainLayout = () => (
-  <Layout>
-    <Outlet />
-  </Layout>
-);
-
 // Protected User Layout
 const ProtectedUserLayout = () => (
   <RequireAuth>
-    <Layout>
+    <Layout isAdminLayout={false}>
       <Outlet />
     </Layout>
   </RequireAuth>
@@ -64,55 +60,60 @@ const ProtectedUserLayout = () => (
 // Export routes for reuse
 export const routes: AppRoutes = {
   mainRoutes: [
-    // Public Routes
+    // Root structure with public pages
     {
-      path: ROUTES.HOME,
-      element: <MainLayout />,
+      path: '/',
+      element: <PublicLayout />,
       children: [
+        // Home page at root
         { index: true, element: <ModernHomePage /> },
+        
+        // Auth routes
         { path: 'login', element: <UserLogin /> },
         { path: 'register', element: <Register /> },
         { path: 'unauthorized', element: <Unauthorized /> },
         { path: 'themes', element: <ThemeGallery /> },
+        
+        // Admin Login - Public but separate
+        { path: 'admin/login', element: <AdminLogin /> },
+        
+        // Admin section with its own layout
+        {
+          path: 'admin',
+          element: <AdminLayout />,
+          children: [
+            { index: true, element: <AdminDashboard /> },
+            { path: 'ip-whitelist', element: <IPWhitelist /> },
+            { path: 'tokens', element: <RegistrationTokens /> },
+            { path: 'api-keys', element: <APIKeys /> },
+            { path: 'queue', element: <QueueMonitor /> },
+            { path: 'users', element: <UserManagement /> },
+            { path: 'stats', element: <SystemStats /> },
+          ],
+        },
+        
+        // Protected Chat Route
+        {
+          path: 'chat',
+          element: <ProtectedUserLayout />,
+          children: [
+            { index: true, element: <ChatPage /> }
+          ],
+        },
+        
+        // Protected User Routes
+        {
+          path: 'user',
+          element: <ProtectedUserLayout />,
+          children: [
+            { path: 'profile', element: <Profile /> }
+          ],
+        },
+        
+        // Catch all - 404
+        { path: '*', element: <Navigate to={ROUTES.HOME} replace /> },
       ],
     },
-    
-    // Protected User Routes
-    {
-      path: 'user',
-      element: <ProtectedUserLayout />,
-      children: [
-        { path: 'profile', element: <Profile /> },
-        { path: 'chat', element: <ChatPage /> },
-      ],
-    },
-    
-    // Admin Routes
-    {
-      path: 'admin',
-      element: <AdminLayout />,
-      children: [
-        { index: true, element: <AdminDashboard /> },
-        { path: 'ip-whitelist', element: <IPWhitelist /> },
-        { path: 'tokens', element: <RegistrationTokens /> },
-        { path: 'api-keys', element: <APIKeys /> },
-        { path: 'queue', element: <QueueMonitor /> },
-        { path: 'users', element: <UserManagement /> },
-        { path: 'stats', element: <SystemStats /> },
-      ],
-    },
-    
-    // Admin Login - Public
-    { path: 'admin/login', element: <AdminLogin /> },
-    
-    // Direct chat access - redirect to user/chat for consistency
-    { 
-      path: 'chat', 
-      element: <Navigate to={ROUTES.USER.CHAT} replace /> 
-    },
-    
-    // Catch all - 404
-    { path: '*', element: <Navigate to={ROUTES.HOME} replace /> },
   ],
 };
 
