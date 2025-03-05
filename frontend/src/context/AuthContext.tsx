@@ -61,8 +61,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Simple token storage - no fancy format
   const storeToken = (token: string) => {
-    localStorage.setItem('authToken', token);
-    console.log("Token stored successfully");
+    if (!token) {
+      console.error("Attempted to store empty token!");
+      setConnectionError("Authentication failed: Invalid token received");
+      return;
+    }
+    
+    try {
+      localStorage.setItem('authToken', token);
+      console.log("Token stored successfully");
+    } catch (error) {
+      console.error("Failed to store auth token:", error);
+      setConnectionError("Failed to save login information. Please check browser settings.");
+    }
   };
 
   // Log out and clear token

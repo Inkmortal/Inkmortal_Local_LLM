@@ -42,6 +42,7 @@ const isProtectedRoute = (endpoint: string): boolean => {
     '/auth/login',
     '/auth/admin/login',
     '/auth/register',
+    '/auth/token',  // Add token endpoint explicitly
     '/auth/admin/setup-status',
     '/auth/admin/fetch-setup-token',
     '/auth/admin/setup'
@@ -121,9 +122,12 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
       // 2. Register endpoint - needed for registration 
       // 3. Login endpoint - obviously needed for login
       // For all other protected routes, we should fail early rather than make the API call
-      if (!endpoint.includes('/auth/token') && 
-          !endpoint.includes('/auth/register') && 
-          !endpoint.includes('/auth/login')) {
+      // Fix login issue: must normalize path format by ensuring all have leading slash
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+      if (!normalizedEndpoint.includes('/auth/token') && 
+          !normalizedEndpoint.includes('/auth/register') && 
+          !normalizedEndpoint.includes('/auth/login') &&
+          !normalizedEndpoint.includes('/auth/admin/login')) {
         console.error('Authentication required for protected route:', endpoint);
         return {
           success: false,
