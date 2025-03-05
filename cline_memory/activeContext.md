@@ -67,9 +67,20 @@ The web interface should emphasize educational assistant capabilities:
 - Designing the system as a hobby project focused on personal educational use
 - Chaycards application will connect as a client via API rather than direct integration
 
-## Recent Progress
-
-### Code Cleanup and Modernization (Latest)
+## Recent Progress
+
+### Model Management Implementation (Latest)
+- Implemented dynamic model selection within System Stats dashboard:
+  - Added model dropdown directly in the System Status card 
+  - Created API endpoints to get available models and set active model
+  - Fetches models dynamically from Ollama via API
+  - Shows clear loading and success states during model changes
+  - Provides a unified experience by integrating model management with system stats
+  - Removed separate Model Management page in favor of this streamlined approach
+  - Added redirect from /admin/models to /admin/stats for compatibility
+  - Uses the default_model setting from the backend config
+
+### Code Cleanup and Modernization (Previous)
 - Removed redundant and deprecated code to improve maintainability:
   - Eliminated function aliases in favor of direct function names
   - Removed legacy path definitions that are no longer needed
@@ -77,6 +88,7 @@ The web interface should emphasize educational assistant capabilities:
   - Simplified interface definitions by removing duplicate fields
   - Ensured consistent return types across service functions
   - Updated all components to reference the standardized function names
+
 
 ### Routing Refactor Issues
 - Identified issues with recent routing refactor:

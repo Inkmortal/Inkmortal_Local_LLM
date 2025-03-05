@@ -126,7 +126,16 @@
 - Chat interface still using mock services instead of real backend (In Progress)
 
 ## Latest Updates
+- **Model management implementation:**
+  - Added model selection dropdown in the System Stats dashboard
+  - Implemented backend endpoints to get models and set the active model
+  - Integrated model management directly in the existing System Stats UI
+  - Added loading states, success messages, and error handling
+  - Implemented model filtering to only show non-active models in dropdown
+  - Removed separate Model Management page in favor of more intuitive approach
+
 - **Code cleanup and modernization:**
+
   - Removed deprecated function aliases (`generateRegistrationToken`, `revokeRegistrationToken`, `fetchHistoryItems`) 
   - Standardized naming to use direct function names (`createRegistrationToken`, `deleteRegistrationToken`, `fetchQueueHistory`)
   - Removed legacy `ADMIN_AUTH` paths that are no longer needed

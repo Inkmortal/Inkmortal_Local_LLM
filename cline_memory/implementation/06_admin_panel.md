@@ -306,3 +306,64 @@ These challenges highlight the importance of:
 - Centralized API configuration
 - Clear error messages and status reporting
 - Fallback mechanisms for development scenarios
+
+14. **Model Management Integration:**
+
+    *Task Description:* Integrate model management directly into the System Stats dashboard instead of having a separate page. This provides a more intuitive experience where administrators can see and change the active model in the same place where they view system statistics.
+    
+    Key improvements:
+    - Added model dropdown directly in the System Status card
+    - Implemented real-time model switching with clear feedback
+    - Removed separate Model Management page to simplify the admin interface
+    - Added loading states and success messages for better user experience
+    - Connected to backend endpoints that interact with Ollama API
+    
+    ```typescript
+    // Integrated model management in SystemStats.tsx
+    <div className="col-span-2 p-4 rounded-lg border" style={{ borderColor: currentTheme.colors.borderColor }}>
+      <div className="flex flex-col space-y-2">
+        <label className="text-sm font-medium" style={{ color: currentTheme.colors.textSecondary }}>
+          Active Model
+        </label>
+        <div className="flex items-center space-x-2">
+          <select
+            value={stats.ollama.model}
+            onChange={(e) => handleModelChange(e.target.value)}
+            disabled={modelChangeInProgress || modelsLoading}
+            className="w-full p-2 rounded-md border focus:outline-none"
+            style={{
+              backgroundColor: currentTheme.colors.bgSecondary,
+              color: currentTheme.colors.textPrimary,
+              borderColor: currentTheme.colors.borderColor
+            }}
+          >
+            <option value={stats.ollama.model}>
+              {stats.ollama.model} (Current)
+            </option>
+            {models
+              .filter(model => model.name !== stats.ollama.model)
+              .map(model => (
+                <option key={model.name} value={model.name}>
+                  {model.name}
+                </option>
+              ))
+            }
+          </select>
+          {modelChangeInProgress && (
+            <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full"
+              style={{ borderColor: `${currentTheme.colors.accentPrimary}70`, borderTopColor: "transparent" }}
+            />
+          )}
+        </div>
+        <p className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+          {modelsLoading 
+            ? "Loading available models..." 
+            : models.length > 0 
+              ? "Select a different model to change the active LLM" 
+              : "No other models available"
+          }
+        </p>
+      </div>
+    </div>
+    ```
+
