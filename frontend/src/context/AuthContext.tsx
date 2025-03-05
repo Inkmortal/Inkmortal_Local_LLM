@@ -167,6 +167,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
+      // OAuth2 requires grant_type for standard compatibility
+      formData.append('grant_type', 'password');
       
       // Use our enhanced fetchApi with consistent response structure
       const response = await fetchApi<{
@@ -217,6 +219,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
+      // OAuth2 requires grant_type for standard compatibility
+      formData.append('grant_type', 'password');
       
       // Use our enhanced fetchApi with consistent response structure
       // Use the correct OAuth2 token endpoint

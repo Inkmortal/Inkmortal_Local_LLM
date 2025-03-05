@@ -64,6 +64,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onRegisterClick }) => 
     try {
       // Don't log sensitive information in production
       console.log(`Attempting login with username: ${username}`);
+      
+      // Show detailed debugging in console
+      console.log('About to call regularLogin - checking network tab for issues');
+      
       const success = await regularLogin(username, password);
       
       if (success) {
