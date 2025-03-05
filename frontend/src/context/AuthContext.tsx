@@ -21,7 +21,6 @@ interface AuthContextType {
   register: (username: string, email: string, password: string, token?: string) => Promise<boolean>;
   checkAuth: () => Promise<boolean>;
   logout: () => void;
-  isTokenExpired: () => boolean;
   clearErrors: () => void;
 }
 
@@ -39,7 +38,6 @@ const defaultAuthContext: AuthContextType = {
   register: async () => false,
   checkAuth: async () => false,
   logout: () => {},
-  isTokenExpired: () => true,
   clearErrors: () => {},
 };
 
@@ -56,6 +54,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [username, setUsername] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  
   // Define a proper user data interface instead of using 'any'
   interface UserData {
     username: string;
@@ -66,78 +65,80 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   const [userData, setUserData] = useState<UserData | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  
-  // Check JWT from localStorage on initial load
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      console.log('Found token on initial load, verifying with backend');
-      
-      // Set initially authenticated but will verify with backend
-      setIsAuthenticated(true);
-      
-      // Check if token is valid with backend
-      checkAuth().then((valid) => {
-        if (!valid) {
-          // Token invalid, clear state
-          console.log('Token validation failed with backend on initial load');
-          logout();
-        } else {
-          console.log('Token successfully validated on initial load');
-        }
-        setLoading(false);
-      }).catch(error => {
-        console.error('Error during initial auth check:', error);
-        // Don't logout here - could be a temporary network issue
-        // But do set loading to false
-        setLoading(false);
-      });
-    } else {
-      console.log('No auth token found on initial load');
-      setLoading(false);
-    }
-  }, [checkAuth, logout]);
-  
-  // Store token in localStorage - keep it simple to avoid breaking changes
-  const storeToken = (token: string) => {
+
+  // Store token in localStorage - keep it simple
+  const storeToken = useCallback((token: string) => {
     try {
-      // Just store the token string directly, no JSON wrapping
       localStorage.setItem('authToken', token);
       console.log("Token stored successfully");
     } catch (error) {
       console.error('Error storing token:', error);
     }
-  };
-  
-  // Simple function to check if token exists
-  const isTokenExpired = useCallback((): boolean => {
-    try {
-      // Just check if token exists
-      const token = localStorage.getItem('authToken');
-      return !token;
-    } catch (error) {
-      console.error('Error checking token existence:', error);
-      return true;
-    }
   }, []);
-  
-  // Get current token
-  const getToken = useCallback((): string | null => {
-    try {
-      return localStorage.getItem('authToken');
-    } catch (error) {
-      console.error('Error getting token:', error);
-      return null;
-    }
-  }, []);
-  
+
+  // Log out and clear token
+  const logout = useCallback(() => {
+    localStorage.removeItem('authToken');
+    setIsAuthenticated(false);
+    setIsAdmin(false);
+    setUsername(null);
+    setUserEmail(null);
+    setUserData(null);
+    
+    // Navigate to home page
+    navigate('/');
+  }, [navigate]);
+
   // Clear any error messages
   const clearErrors = useCallback(() => {
     setConnectionError(null);
   }, []);
-  
+
+  // Check if token is still valid
+  const checkAuth = useCallback(async (): Promise<boolean> => {
+    try {
+      // Use our enhanced fetchApi with consistent response structure
+      const response = await fetchApi<{
+        username: string;
+        email: string;
+        is_admin: boolean;
+      }>('/auth/me', {
+        method: 'GET',
+      });
+      
+      if (response.success && response.data) {
+        // Update user information
+        setUsername(response.data.username);
+        setUserEmail(response.data.email);
+        setIsAdmin(response.data.is_admin);
+        setUserData(response.data);
+        setConnectionError(null);
+        return true;
+      }
+      
+      // Handle specific authentication errors
+      if (response.status === 401) {
+        console.log('Token is invalid or expired according to server');
+        logout();
+      } else if (response.status === 0) {
+        // Network error
+        setConnectionError('Cannot connect to the server. Please check your internet connection.');
+      } else {
+        // Other errors
+        setConnectionError(`Authentication error: ${response.error || 'Unknown error'}`);
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking authentication:', error);
+      // Don't log out the user here - might be a temporary network issue
+      setConnectionError('Error verifying your authentication. Please try again later.');
+      return false;
+    }
+  }, [logout]);
+
   // Authenticate and store token
-  const login = (token: string, username: string, isAdmin: boolean) => {
+  const login = useCallback((token: string, username: string, isAdmin: boolean) => {
     storeToken(token);
     setIsAuthenticated(true);
     setIsAdmin(isAdmin);
@@ -145,10 +146,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(false);
     
     console.log(`Logged in as ${username}`, isAdmin ? '(Admin)' : '');
-  };
+  }, [storeToken]);
   
   // Admin login handler
-  const adminLogin = async (username: string, password: string): Promise<boolean> => {
+  const adminLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     setConnectionError(null);
     
@@ -197,10 +198,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
       return false;
     }
-  };
+  }, [login, navigate]);
   
   // Regular user login handler
-  const regularLogin = async (username: string, password: string): Promise<boolean> => {
+  const regularLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     setConnectionError(null);
     
@@ -249,10 +250,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
       return false;
     }
-  };
+  }, [login]);
   
   // Register new user
-  const register = async (
+  const register = useCallback(async (
     username: string,
     email: string,
     password: string,
@@ -300,63 +301,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
       return false;
     }
-  };
+  }, [login]);
   
-  // Check if token is still valid
-  const checkAuth = async (): Promise<boolean> => {
-    try {
-      // Use our enhanced fetchApi with consistent response structure
-      const response = await fetchApi<{
-        username: string;
-        email: string;
-        is_admin: boolean;
-      }>('/auth/me', {
-        method: 'GET',
+  // Check JWT from localStorage on initial load
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      console.log('Found token on initial load, verifying with backend');
+      
+      // Set initially authenticated but will verify with backend
+      setIsAuthenticated(true);
+      
+      // Check if token is valid with backend
+      checkAuth().then((valid) => {
+        if (!valid) {
+          // Token invalid, clear state
+          console.log('Token validation failed with backend on initial load');
+          logout();
+        } else {
+          console.log('Token successfully validated on initial load');
+        }
+        setLoading(false);
+      }).catch(error => {
+        console.error('Error during initial auth check:', error);
+        // Don't logout here - could be a temporary network issue
+        // But do set loading to false
+        setLoading(false);
       });
-      
-      if (response.success && response.data) {
-        // Update user information
-        setUsername(response.data.username);
-        setUserEmail(response.data.email);
-        setIsAdmin(response.data.is_admin);
-        setUserData(response.data);
-        setConnectionError(null);
-        return true;
-      }
-      
-      // Handle specific authentication errors
-      if (response.status === 401) {
-        console.log('Token is invalid or expired according to server');
-        logout();
-      } else if (response.status === 0) {
-        // Network error
-        setConnectionError('Cannot connect to the server. Please check your internet connection.');
-      } else {
-        // Other errors
-        setConnectionError(`Authentication error: ${response.error || 'Unknown error'}`);
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error checking authentication:', error);
-      // Don't log out the user here - might be a temporary network issue
-      setConnectionError('Error verifying your authentication. Please try again later.');
-      return false;
+    } else {
+      console.log('No auth token found on initial load');
+      setLoading(false);
     }
-  };
-  
-  // Log out and clear token
-  const logout = () => {
-    localStorage.removeItem('authToken');
-    setIsAuthenticated(false);
-    setIsAdmin(false);
-    setUsername(null);
-    setUserEmail(null);
-    setUserData(null);
-    
-    // Navigate to home page
-    navigate('/');
-  };
+  }, [checkAuth, logout]);
   
   // Context value
   const contextValue: AuthContextType = {
@@ -373,7 +349,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     checkAuth,
     logout,
-    isTokenExpired,
     clearErrors,
   };
   
