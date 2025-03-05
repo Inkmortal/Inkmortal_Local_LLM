@@ -78,7 +78,7 @@ const AdminDashboard: React.FC = () => {
             id: 'tokens',
             title: 'Registration Tokens',
             count: tokensResponse.length,
-            active: tokensResponse.filter(token => \!token.used).length,
+            active: tokensResponse.filter(token => !token.used).length,
             path: '/admin/tokens'
           },
           {
