@@ -69,15 +69,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   // Check JWT from localStorage on initial load
   useEffect(() => {
-    const tokenData = localStorage.getItem('authToken');
-    if (tokenData) {
-      // Check if token is expired according to our local tracking first
-      if (isTokenExpired()) {
-        console.log('Token expired on initial load, logging out');
-        logout();
-        setLoading(false);
-        return;
-      }
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      console.log('Found token on initial load, verifying with backend');
       
       // Set initially authenticated but will verify with backend
       setIsAuthenticated(true);
@@ -102,78 +96,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('No auth token found on initial load');
       setLoading(false);
     }
-  }, [isTokenExpired, checkAuth, logout]);
+  }, [checkAuth, logout]);
   
-  // Token management
-  interface TokenData {
-    token: string;
-    expiresAt: number; // timestamp in milliseconds
-  }
-  
-  // Store token in localStorage with expiration information
+  // Store token in localStorage - keep it simple to avoid breaking changes
   const storeToken = (token: string) => {
     try {
-      // Set default expiration to 24 hours from now if we can't parse it from the token
-      const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-      
-      const tokenData: TokenData = {
-        token,
-        expiresAt
-      };
-      
-      localStorage.setItem('authToken', JSON.stringify(tokenData));
+      // Just store the token string directly, no JSON wrapping
+      localStorage.setItem('authToken', token);
+      console.log("Token stored successfully");
     } catch (error) {
       console.error('Error storing token:', error);
-      // Fallback to storing just the token
-      localStorage.setItem('authToken', token);
     }
   };
   
-  // Check if the token is expired
+  // Simple function to check if token exists
   const isTokenExpired = useCallback((): boolean => {
     try {
-      const tokenDataStr = localStorage.getItem('authToken');
-      if (!tokenDataStr) return true;
-      
-      // Try to parse as TokenData
-      try {
-        const tokenData: TokenData = JSON.parse(tokenDataStr);
-        return Date.now() > tokenData.expiresAt;
-      } catch {
-        // If not JSON, it's an old format token without expiration
-        // Consider it not expired and let the server validate
-        return false;
-      }
+      // Just check if token exists
+      const token = localStorage.getItem('authToken');
+      return !token;
     } catch (error) {
-      console.error('Error checking token expiration:', error);
+      console.error('Error checking token existence:', error);
       return true;
     }
   }, []);
   
-  // Get the current token if it exists and isn't expired
+  // Get current token
   const getToken = useCallback((): string | null => {
     try {
-      if (isTokenExpired()) {
-        localStorage.removeItem('authToken');
-        return null;
-      }
-      
-      const tokenDataStr = localStorage.getItem('authToken');
-      if (!tokenDataStr) return null;
-      
-      try {
-        // Try parsing as JSON (new format)
-        const tokenData: TokenData = JSON.parse(tokenDataStr);
-        return tokenData.token;
-      } catch {
-        // If not JSON, it's the old format (just the token)
-        return tokenDataStr;
-      }
+      return localStorage.getItem('authToken');
     } catch (error) {
       console.error('Error getting token:', error);
       return null;
     }
-  }, [isTokenExpired]);
+  }, []);
   
   // Clear any error messages
   const clearErrors = useCallback(() => {
@@ -349,13 +305,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check if token is still valid
   const checkAuth = async (): Promise<boolean> => {
     try {
-      // First check if token is expired according to our local expiration tracking
-      if (isTokenExpired()) {
-        console.log('Token is expired according to local expiration time');
-        logout();
-        return false;
-      }
-      
       // Use our enhanced fetchApi with consistent response structure
       const response = await fetchApi<{
         username: string;

@@ -92,25 +92,10 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
   
   // Add authentication token for protected routes
   if (isProtectedRoute(endpoint)) {
-    const tokenData = localStorage.getItem('authToken');
-    if (tokenData) {
-      try {
-        // Check if it's in the new JSON format
-        try {
-          const parsed = JSON.parse(tokenData);
-          if (parsed.token) {
-            headers.set('Authorization', `Bearer ${parsed.token}`);
-            console.log('Added authentication token (JSON format) for protected route');
-          }
-        } catch {
-          // Old format - just the token string
-          headers.set('Authorization', `Bearer ${tokenData}`);
-          console.log('Added authentication token (legacy format) for protected route');
-        }
-      } catch (error) {
-        console.error('Error parsing auth token:', error);
-        console.warn('No valid auth token found for protected route:', endpoint);
-      }
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+      console.log('Added authentication token for protected route');
     } else {
       console.warn('No auth token found for protected route:', endpoint);
     }
