@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchApi, ApiResponse } from '../config/api';
+
+interface UserData {
+  username: string;
+  email: string;
+  is_admin: boolean;
+  [key: string]: any; // For additional fields we might not know about
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -8,12 +15,7 @@ interface AuthContextType {
   loading: boolean;
   username: string | null;
   userEmail: string | null;
-  userData: {
-    username: string;
-    email: string;
-    is_admin: boolean;
-    [key: string]: any;
-  } | null;
+  userData: UserData | null;
   connectionError: string | null;
   login: (token: string, username: string, isAdmin: boolean) => void;
   adminLogin: (username: string, password: string) => Promise<boolean>;
@@ -54,30 +56,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [username, setUsername] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  
-  // Define a proper user data interface instead of using 'any'
-  interface UserData {
-    username: string;
-    email: string;
-    is_admin: boolean;
-    [key: string]: any; // For additional fields we might not know about
-  }
-  
   const [userData, setUserData] = useState<UserData | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  // Store token in localStorage - keep it simple
-  const storeToken = useCallback((token: string) => {
-    try {
-      localStorage.setItem('authToken', token);
-      console.log("Token stored successfully");
-    } catch (error) {
-      console.error('Error storing token:', error);
-    }
-  }, []);
+  // Simple token storage - no fancy format
+  const storeToken = (token: string) => {
+    localStorage.setItem('authToken', token);
+    console.log("Token stored successfully");
+  };
 
   // Log out and clear token
-  const logout = useCallback(() => {
+  const logout = () => {
     localStorage.removeItem('authToken');
     setIsAuthenticated(false);
     setIsAdmin(false);
@@ -87,17 +76,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // Navigate to home page
     navigate('/');
-  }, [navigate]);
+  };
 
   // Clear any error messages
-  const clearErrors = useCallback(() => {
+  const clearErrors = () => {
     setConnectionError(null);
-  }, []);
+  };
+
+  // Authenticate and store token
+  const login = (token: string, username: string, isAdmin: boolean) => {
+    storeToken(token);
+    setIsAuthenticated(true);
+    setIsAdmin(isAdmin);
+    setUsername(username);
+    setLoading(false);
+    
+    console.log(`Logged in as ${username}`, isAdmin ? '(Admin)' : '');
+  };
 
   // Check if token is still valid
-  const checkAuth = useCallback(async (): Promise<boolean> => {
+  const checkAuth = async (): Promise<boolean> => {
     try {
-      // Use our enhanced fetchApi with consistent response structure
       const response = await fetchApi<{
         username: string;
         email: string;
@@ -135,21 +134,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setConnectionError('Error verifying your authentication. Please try again later.');
       return false;
     }
-  }, [logout]);
-
-  // Authenticate and store token
-  const login = useCallback((token: string, username: string, isAdmin: boolean) => {
-    storeToken(token);
-    setIsAuthenticated(true);
-    setIsAdmin(isAdmin);
-    setUsername(username);
-    setLoading(false);
-    
-    console.log(`Logged in as ${username}`, isAdmin ? '(Admin)' : '');
-  }, [storeToken]);
+  };
   
   // Admin login handler
-  const adminLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
+  const adminLogin = async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     setConnectionError(null);
     
@@ -198,10 +186,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
       return false;
     }
-  }, [login, navigate]);
+  };
   
   // Regular user login handler
-  const regularLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
+  const regularLogin = async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     setConnectionError(null);
     
@@ -250,10 +238,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
       return false;
     }
-  }, [login]);
+  };
   
   // Register new user
-  const register = useCallback(async (
+  const register = async (
     username: string,
     email: string,
     password: string,
@@ -301,38 +289,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
       return false;
     }
-  }, [login]);
+  };
   
   // Check JWT from localStorage on initial load
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      console.log('Found token on initial load, verifying with backend');
-      
-      // Set initially authenticated but will verify with backend
-      setIsAuthenticated(true);
-      
-      // Check if token is valid with backend
-      checkAuth().then((valid) => {
-        if (!valid) {
-          // Token invalid, clear state
-          console.log('Token validation failed with backend on initial load');
-          logout();
-        } else {
-          console.log('Token successfully validated on initial load');
+    const initialAuthCheck = async () => {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        console.log('Found token on initial load, verifying with backend');
+        
+        // Set initially authenticated but will verify with backend
+        setIsAuthenticated(true);
+        
+        // Check if token is valid with backend
+        try {
+          const valid = await checkAuth();
+          if (!valid) {
+            // Token invalid, clear state
+            console.log('Token validation failed with backend on initial load');
+            logout();
+          } else {
+            console.log('Token successfully validated on initial load');
+          }
+        } catch (error) {
+          console.error('Error during initial auth check:', error);
+          // Don't logout here - could be a temporary network issue
+        } finally {
+          setLoading(false);
         }
+      } else {
+        console.log('No auth token found on initial load');
         setLoading(false);
-      }).catch(error => {
-        console.error('Error during initial auth check:', error);
-        // Don't logout here - could be a temporary network issue
-        // But do set loading to false
-        setLoading(false);
-      });
-    } else {
-      console.log('No auth token found on initial load');
-      setLoading(false);
-    }
-  }, [checkAuth, logout]);
+      }
+    };
+    
+    initialAuthCheck();
+  }, []);
   
   // Context value
   const contextValue: AuthContextType = {
@@ -362,7 +354,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 export const useAuth = () => useContext(AuthContext);
 
 // HOC to protect routes
-// Type for any component props to avoid using 'any'
 interface ComponentProps {
   [key: string]: unknown;
 }
