@@ -98,6 +98,20 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
       console.log('Added authentication token for protected route');
     } else {
       console.warn('No auth token found for protected route:', endpoint);
+      
+      // For protected routes that aren't login/registration, return early with error
+      // But allow the request to proceed for auth-related endpoints that might not need a token
+      if (!endpoint.includes('/auth/token') && 
+          !endpoint.includes('/auth/register') && 
+          !endpoint.includes('/auth/login')) {
+        console.error('Authentication required for protected route:', endpoint);
+        return {
+          success: false,
+          status: 401,
+          data: null,
+          error: 'Authentication required. Please log in.'
+        };
+      }
     }
   }
   

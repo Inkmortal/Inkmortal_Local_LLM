@@ -200,12 +200,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('password', password);
       
       // Use our enhanced fetchApi with consistent response structure
+      // Use the correct OAuth2 token endpoint
       const response = await fetchApi<{
         access_token: string;
         token_type: string;
         username: string;
         is_admin: boolean;
-      }>('/auth/login', {
+      }>('/auth/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -228,7 +229,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Login failed
         const errorMessage = response.error || 'Invalid credentials. Please try again.';
         console.error('Login failed:', errorMessage);
-        setConnectionError(errorMessage);
+        
+        // Add specific handling for network errors
+        if (response.status === 0) {
+          setConnectionError('Cannot connect to server. Please check your internet connection.');
+        } else {
+          setConnectionError(errorMessage);
+        }
+        
         setLoading(false);
         return false;
       }
@@ -251,13 +259,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setConnectionError(null);
     
     try {
-      // Create request body
-      const body = JSON.stringify({
-        username,
-        email,
-        password,
-        token
-      });
+      // Create form data for OAuth2 compatibility - use URLSearchParams like the login endpoint
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('email', email);
+      formData.append('password', password);
+      if (token) formData.append('token', token);
       
       // Use our enhanced fetchApi with consistent response structure
       const response = await fetchApi<{
@@ -267,19 +274,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }>('/auth/register', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body,
+        body: formData,
       });
       
       if (response.success && response.data) {
-        // Store token and update auth state
+        // Store token, update auth state, and save email
         login(response.data.access_token, response.data.username, false);
+        setUserEmail(email); // Save the email to maintain consistency
         return true;
       } else {
         // Registration failed
         const errorMessage = response.error || 'Registration failed. Please try again.';
-        setConnectionError(errorMessage);
+        
+        // Add specific handling for network errors
+        if (response.status === 0) {
+          setConnectionError('Cannot connect to server. Please check your internet connection.');
+        } else {
+          setConnectionError(errorMessage);
+        }
+        
         setLoading(false);
         return false;
       }
@@ -298,8 +313,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (token) {
         console.log('Found token on initial load, verifying with backend');
         
-        // Set initially authenticated but will verify with backend
-        setIsAuthenticated(true);
+        // Do NOT set authenticated until verified with backend
+        // setIsAuthenticated(true); <- Removed this premature authentication
         
         // Check if token is valid with backend
         try {
@@ -310,6 +325,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             logout();
           } else {
             console.log('Token successfully validated on initial load');
+            // Only set authenticated after validation
+            setIsAuthenticated(true); 
           }
         } catch (error) {
           console.error('Error during initial auth check:', error);
@@ -424,10 +441,15 @@ export const withAuth = <P extends ComponentProps>(
     
     // Redirect to login if not authenticated or admin access required but not admin
     if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
-      // Redirect to appropriate login page
+      // Align redirection logic with RequireAuth component for consistency
       if (requireAdmin) {
+        // Admin routes go to admin login
         navigate('/admin/login', { state: { from: location.pathname } });
+      } else if (location.pathname.includes('/chat')) {
+        // Chat routes go to regular login
+        navigate('/login', { state: { from: location.pathname } });
       } else {
+        // Other routes go to unauthorized page
         navigate('/unauthorized', { state: { from: location.pathname } });
       }
       return null;

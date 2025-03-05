@@ -9,7 +9,8 @@ import {
   fetchSystemStats,
   fetchRegistrationTokens,
   fetchApiKeys,
-  fetchIPWhitelist
+  fetchIPWhitelist,
+  fetchQueueStats
 } from './AdminDashboardData';
 
 // Define types locally since they aren't exported
@@ -75,6 +76,7 @@ const AdminDashboard: React.FC = () => {
         setLoading(true);
         
         // Fetch all required data for dashboard
+        const queueStatsResponse = await fetchQueueStats();
         const statsResponse = await fetchSystemStats();
         const tokensResponse = await fetchRegistrationTokens();
         const apiKeysResponse = await fetchApiKeys();
@@ -106,8 +108,8 @@ const AdminDashboard: React.FC = () => {
           {
             id: 'queue',
             title: 'Queue Status',
-            count: 3,  // Mocked for now
-            processing: 1, // Mocked for now
+            count: queueStatsResponse ? (queueStatsResponse.total_waiting + queueStatsResponse.total_processing) : 0,
+            processing: queueStatsResponse ? queueStatsResponse.total_processing : 0,
             path: '/admin/queue'
           }
         ];
