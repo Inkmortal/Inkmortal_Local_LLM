@@ -107,13 +107,12 @@ export interface QueueStats {
   total_completed: number;
   total_error: number;
   requests_per_hour: number;
+  // Consistent naming for wait/process times
   average_wait_time?: number;
   average_processing_time?: number;
   queue_by_priority?: Record<string, number>;
   queue_connected?: boolean;
   worker_count?: number;
-  avg_wait_time?: number;
-  avg_process_time?: number;
 }
 
 // User management

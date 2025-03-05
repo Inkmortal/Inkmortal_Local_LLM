@@ -378,11 +378,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 export const useAuth = () => useContext(AuthContext);
 
-// HOC to protect routes
-interface ComponentProps {
-  [key: string]: unknown;
-}
-
 // Modern auth protection using React Router
 export const RequireAuth = ({
   children,
@@ -439,40 +434,4 @@ export const RequireAuth = ({
   return <>{children}</>;
 };
 
-// Legacy HOC for backward compatibility
-export const withAuth = <P extends ComponentProps>(
-  Component: React.ComponentType<P>, 
-  requireAdmin: boolean = false
-) => {
-  return (props: P) => {
-    const { isAuthenticated, isAdmin, loading } = useAuth();
-    const navigate = useNavigate();
-    const location = useLocation();
-    
-    // Redirect to login if not authenticated or admin access required but not admin
-    if (!loading && (!isAuthenticated || (requireAdmin && !isAdmin))) {
-      // Align redirection logic with RequireAuth component for consistency
-      if (requireAdmin) {
-        // Admin routes go to admin login
-        navigate('/admin/login', { state: { from: location.pathname } });
-      } else if (location.pathname.includes('/chat') || location.pathname.startsWith('/api/chat')) {
-        // Chat routes go to regular login
-        navigate('/login', { state: { from: location.pathname } });
-        // Add a console message to help debugging
-        console.log(`Legacy HOC redirecting from ${location.pathname} to /login - user not authenticated`);
-      } else {
-        // Other routes go to unauthorized page
-        navigate('/unauthorized', { state: { from: location.pathname } });
-      }
-      return null;
-    }
-    
-    // Show loading indicator while checking auth status
-    if (loading) {
-      return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-    }
-    
-    // Render the protected component
-    return <Component {...props} />;
-  };
-};
+// Legacy withAuth HOC removed - use RequireAuth component instead

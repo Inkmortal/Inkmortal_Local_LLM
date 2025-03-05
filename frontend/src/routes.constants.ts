@@ -23,7 +23,8 @@ export const ROUTES = {
     API_KEYS: '/admin/api-keys',
     QUEUE: '/admin/queue',
     USERS: '/admin/users',
-    STATS: '/admin/stats',
+    STATS: "/admin/stats",
+    MODELS: "/admin/models",
   },
   
   // User routes

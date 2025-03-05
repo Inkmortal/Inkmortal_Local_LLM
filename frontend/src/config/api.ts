@@ -220,10 +220,6 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
 };
 
 /**
- * Helper function to check if the backend is available
- * Returns true if the backend is reachable, false otherwise
- */
-/**
  * Specialized fetch function for admin setup endpoints that should never require authentication
  * This function bypasses all authentication checks
  */

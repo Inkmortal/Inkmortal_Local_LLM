@@ -10,8 +10,7 @@ export { API_PATHS } from './ApiPaths';
 export { 
   fetchQueueStats, 
   fetchQueueItems, 
-  fetchQueueHistory,
-  fetchHistoryItems
+  fetchQueueHistory
 } from './QueueService';
 
 // User services
@@ -45,7 +44,16 @@ export {
 export { 
   fetchRegistrationTokens, 
   createRegistrationToken, 
-  deleteRegistrationToken,
-  generateRegistrationToken,
-  revokeRegistrationToken
+  deleteRegistrationToken
 } from './TokenService';
+
+// Activity services
+export {
+  fetchActivities
+} from './ActivityService';
+
+// Model services
+export {
+  fetchModels,
+  setActiveModel
+} from './ModelService';

@@ -15,13 +15,9 @@ export const API_PATHS = {
     QUEUE_ITEMS: '/admin/queue/items',
     QUEUE_HISTORY: '/admin/queue/history',
     USAGE_STATS: '/admin/usage/stats',
-    USERS: '/auth/users'
-  },
-  // Legacy paths for compatibility
-  ADMIN_AUTH: {
-    TOKENS: '/auth/admin/tokens',
-    API_KEYS: '/auth/admin/api-keys',
-    IP_WHITELIST: '/auth/admin/ip-whitelist',
-    USERS: '/auth/users'
+    USERS: '/auth/users',
+    ACTIVITIES: '/auth/activities',
+    MODELS: '/admin/system/models',
+    SET_MODEL: '/admin/system/model'
   }
 };

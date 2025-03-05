@@ -1,10 +1,11 @@
 """
 System statistics endpoints for admin panel
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from typing import Dict, Any, Optional, List
 import logging
 import time
+import requests
 from datetime import datetime
 
 try:
@@ -250,3 +251,100 @@ async def get_ollama_info(queue_manager: QueueManagerInterface) -> Dict[str, Any
             "requests": 0,
             "avgResponseTime": 0
         }
+async def get_available_models() -> List[Dict[str, Any]]:
+    """Get list of available models from Ollama"""
+    try:
+        # Call Ollama API to get available models
+        response = requests.get(f"{settings.ollama_api_url}/api/tags")
+        if response.status_code \!= 200:
+            logger.error(f"Failed to get models from Ollama: Status {response.status_code}")
+            return []
+        
+        models_data = response.json()
+        models = []
+        
+        # Process model data from Ollama response
+        for model in models_data.get("models", []):
+            model_name = model.get("name")
+            # Add only if model name exists
+            if model_name:
+                model_info = {
+                    "name": model_name,
+                    "size": model.get("size", 0),
+                    "modified_at": model.get("modified_at", ""),
+                    "is_active": model_name == settings.default_model
+                }
+                models.append(model_info)
+        
+        # Sort models by name
+        models.sort(key=lambda x: x["name"])
+        return models
+    except Exception as e:
+        logger.error(f"Error fetching available models: {e}")
+        return []
+        
+@router.get("/models")
+async def list_models(
+    current_user: User = Depends(get_current_admin_user)
+) -> Dict[str, Any]:
+    """List available models from Ollama (admin only)"""
+    try:
+        models = await get_available_models()
+        return {
+            "models": models,
+            "active_model": settings.default_model
+        }
+    except Exception as e:
+        logger.error(f"Error listing models: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list models: {str(e)}"
+        )
+
+@router.put("/model")
+async def set_active_model(
+    model_data: Dict[str, str] = Body(...),
+    current_user: User = Depends(get_current_admin_user)
+) -> Dict[str, Any]:
+    """Set the active model (admin only)"""
+    model_name = model_data.get("model")
+    if not model_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Model name is required"
+        )
+    
+    try:
+        # Verify model exists in Ollama
+        models = await get_available_models()
+        model_exists = any(model["name"] == model_name for model in models)
+        
+        if not model_exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model '{model_name}' not found in Ollama"
+            )
+        
+        # Update the settings
+        settings.default_model = model_name
+        
+        # Note: In a production system, this would also update a persistent
+        # configuration store, not just the in-memory settings.
+        # We'll log a warning about this limitation
+        logger.warning(
+            f"Model changed to {model_name} in memory only. Changes won't persist through restart."
+        )
+        
+        return {
+            "success": True,
+            "model": model_name,
+            "message": "Model updated successfully (changes won't persist through server restart)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting active model: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to set active model: {str(e)}"
+        )

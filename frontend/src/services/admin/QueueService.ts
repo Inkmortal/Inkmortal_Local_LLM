@@ -40,10 +40,7 @@ export const fetchQueueStats = async (): Promise<QueueStats | null> => {
       average_processing_time: stats.average_processing_time || 0,
       queue_by_priority: stats.queue_by_priority || {},
       queue_connected: true, // Default to connected
-      worker_count: stats.worker_count || 0,
-      // Map backend names to frontend properties
-      avg_wait_time: stats.average_wait_time || 0,
-      avg_process_time: stats.average_processing_time || 0
+      worker_count: stats.worker_count || 0
     };
   } catch (error) {
     console.error('Error fetching queue stats:', error);
@@ -57,9 +54,7 @@ export const fetchQueueStats = async (): Promise<QueueStats | null> => {
       average_processing_time: 0,
       queue_by_priority: {},
       queue_connected: true,
-      worker_count: 0,
-      avg_wait_time: 0,
-      avg_process_time: 0
+      worker_count: 0
     };
   }
 };
@@ -102,5 +97,4 @@ export const fetchQueueHistory = async (priority?: number): Promise<HistoryItem[
   }
 };
 
-// Alias for backward compatibility
-export const fetchHistoryItems = fetchQueueHistory;
+// Removed alias - use fetchQueueHistory directly

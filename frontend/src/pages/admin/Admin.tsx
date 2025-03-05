@@ -11,7 +11,8 @@ import {
   fetchRegistrationTokens,
   fetchApiKeys,
   fetchIPWhitelist,
-  fetchQueueStats
+  fetchQueueStats,
+  fetchActivities
 } from '../../services/admin';
 
 // Import components
@@ -49,6 +50,11 @@ const AdminDashboard: React.FC = () => {
       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
       </svg>
+    ),
+    'models': (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
     )
   };
 
@@ -64,6 +70,7 @@ const AdminDashboard: React.FC = () => {
         const tokensResponse = await fetchRegistrationTokens();
         const apiKeysResponse = await fetchApiKeys();
         const ipWhitelistResponse = await fetchIPWhitelist();
+        const activitiesResponse = await fetchActivities(5); // Get the 5 most recent activities
         
         // Create dashboard cards
         const cards: DashboardCard[] = [
@@ -94,51 +101,13 @@ const AdminDashboard: React.FC = () => {
             count: queueStatsResponse ? (queueStatsResponse.total_waiting + queueStatsResponse.total_processing) : 0,
             processing: queueStatsResponse ? queueStatsResponse.total_processing : 0,
             path: '/admin/queue'
-          }
-        ];
-        
-        // Create sample activity data
-        // In a real app, this would come from an API call
-        const activities: Activity[] = [
-          {
-            id: '1',
-            user: 'admin',
-            action: 'created',
-            target: 'API Key',
-            time: '5 minutes ago',
-            type: 'api-key'
           },
           {
-            id: '2',
-            user: 'system',
-            action: 'added',
-            target: 'IP Address 192.168.1.100',
-            time: '10 minutes ago',
-            type: 'ip'
-          },
-          {
-            id: '3',
-            user: 'admin',
-            action: 'generated',
-            target: 'Registration Token',
-            time: '1 hour ago',
-            type: 'token'
-          },
-          {
-            id: '4',
-            user: 'system',
-            action: 'processed',
-            target: 'Queue Item',
-            time: '2 hours ago',
-            type: 'queue'
-          },
-          {
-            id: '5',
-            user: 'admin',
-            action: 'revoked',
-            target: 'API Key',
-            time: '3 hours ago',
-            type: 'api-key'
+            id: 'models',
+            title: 'Model Management',
+            count: 1,
+            active: 1,
+            path: '/admin/models'
           }
         ];
         
@@ -156,7 +125,7 @@ const AdminDashboard: React.FC = () => {
           },
           queue_connected: true
         });
-        setActivities(activities);
+        setActivities(activitiesResponse);
         setError(null);
       } catch (err) {
         console.error('Error loading dashboard data:', err);

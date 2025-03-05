@@ -12,7 +12,8 @@ import RegistrationTokens from './pages/admin/RegistrationTokens';
 import APIKeys from './pages/admin/APIKeys';
 import QueueMonitor from './pages/admin/QueueMonitor';
 import UserManagement from './pages/admin/UserManagement';
-import SystemStats from './pages/admin/SystemStats';
+import SystemStats from './pages/admin/SystemStats' ;
+import ModelManagement from "./pages/admin/ModelManagement";
 import AdminLogin from './pages/admin/Login';
 
 // Auth Pages

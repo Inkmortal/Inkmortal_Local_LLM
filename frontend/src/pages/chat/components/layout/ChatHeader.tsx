@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAuth } from '../../../../context/AuthContext';
 import Button from '../../../../components/ui/Button';
 import ThemeSelector from '../../../../components/ui/ThemeSelector';
 import ROUTES from '../../../../routes.constants';
+import { fetchSystemStats } from '../../../../services/admin';
 
 interface ChatHeaderProps {
   showHistorySidebar: boolean;
@@ -22,6 +23,29 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const { currentTheme } = useTheme();
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
+  const [modelName, setModelName] = useState<string>('Loading...');
+  
+  // Fetch current model name from system stats
+  useEffect(() => {
+    const getModelInfo = async () => {
+      try {
+        const stats = await fetchSystemStats();
+        if (stats && stats.ollama && stats.ollama.model) {
+          setModelName(stats.ollama.model);
+        }
+      } catch (error) {
+        console.error('Error fetching model info:', error);
+        setModelName('Unknown');
+      }
+    };
+    
+    getModelInfo();
+    
+    // Refresh every 5 minutes
+    const intervalId = setInterval(getModelInfo, 5 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
 
   return (
     <header 
@@ -85,7 +109,15 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             </span>
           </div>
           <div className="text-xs font-light" style={{ color: currentTheme.colors.textMuted }}>
-            Ancient Cultivation Wisdom
+            <span>Ancient Cultivation Wisdom</span>
+            <span className="ml-2 px-1.5 py-0.5 rounded-sm font-medium" 
+                  style={{ 
+                    backgroundColor: `${currentTheme.colors.accentPrimary}20`,
+                    color: currentTheme.colors.accentPrimary
+                  }}
+            >
+              {modelName}
+            </span>
           </div>
         </div>
       </div>

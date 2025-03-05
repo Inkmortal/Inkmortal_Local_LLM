@@ -73,6 +73,4 @@ export const deleteRegistrationToken = async (tokenId: string): Promise<boolean>
   }
 };
 
-// Export aliases for backward compatibility
-export const generateRegistrationToken = createRegistrationToken;
-export const revokeRegistrationToken = deleteRegistrationToken;
+// Removed legacy aliases - use createRegistrationToken and deleteRegistrationToken directly
