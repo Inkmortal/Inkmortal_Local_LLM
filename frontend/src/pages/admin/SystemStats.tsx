@@ -99,25 +99,78 @@ const SystemStats: React.FC = () => {
   
   // Convert basic stats to detailed format
   const convertToDetailedStats = (basicStats: SystemStatsType): SystemStatsData => {
-    const uptimeParts = basicStats.uptime.split(/[, ]+/);
-    const days = parseInt(uptimeParts.find(p => p.includes('day')) || '0');
-    const hours = parseInt(uptimeParts.find(p => p.includes('hour')) || '0');
+    // Handle case where basicStats might be null or undefined
+    if (!basicStats) {
+      return {
+        cpu: {
+          usage: 0,
+          cores: 0,
+          model: 'Unknown CPU'
+        },
+        memory: {
+          total: 0,
+          used: 0,
+          percentage: 0
+        },
+        storage: {
+          total: 0,
+          used: 0,
+          percentage: 0
+        },
+        network: {
+          incoming: 0,
+          outgoing: 0,
+          connections: 0
+        },
+        uptime: {
+          days: 0,
+          hours: 0,
+          minutes: 0
+        },
+        ollama: {
+          status: 'Unknown',
+          model: 'Unknown',
+          version: 'Unknown',
+          requests: 0,
+          avgResponseTime: 0
+        }
+      };
+    }
+    
+    // Handle different object structures
+    const cpuValue = typeof basicStats.cpu === 'object' ? basicStats.cpu?.usage || 0 : basicStats.cpu || 0;
+    const memoryValue = typeof basicStats.memory === 'object' ? basicStats.memory?.percentage || 0 : basicStats.memory || 0;
+    const storageValue = typeof basicStats.storage === 'object' ? basicStats.storage?.percentage || 0 : basicStats.storage || 0;
+    
+    // Parse uptime string if it exists
+    let days = 0;
+    let hours = 0;
+    if (typeof basicStats.uptime === 'string') {
+      const uptimeParts = basicStats.uptime.split(/[, ]+/);
+      days = parseInt(uptimeParts.find(p => p.includes('day')) || '0');
+      hours = parseInt(uptimeParts.find(p => p.includes('hour')) || '0');
+    }
+    
+    // Handle potential missing ollama object
+    const ollamaStatus = basicStats.ollama?.status || 'Unknown';
+    const ollamaModel = basicStats.ollama?.model || 'Unknown';
+    const ollamaVersion = basicStats.ollama?.version || 'Unknown';
     
     return {
       cpu: {
-        usage: basicStats.cpu,
+        usage: cpuValue,
         cores: 0, // Default value
         model: 'Unknown CPU'
       },
       memory: {
         total: 0, // Default value
         used: 0, // Default value
-        percentage: basicStats.memory
+        percentage: memoryValue
       },
       storage: {
         total: 0, // Default value
         used: 0, // Default value
-        percentage: basicStats.storage
+        percentage: storageValue
       },
       network: {
         incoming: 0, // Default value
@@ -130,9 +183,9 @@ const SystemStats: React.FC = () => {
         minutes: 0 // Default value
       },
       ollama: {
-        status: basicStats.ollama.status,
-        model: basicStats.ollama.model,
-        version: basicStats.ollama.version,
+        status: ollamaStatus,
+        model: ollamaModel,
+        version: ollamaVersion,
         requests: 0, // Default value
         avgResponseTime: 0 // Default value
       }

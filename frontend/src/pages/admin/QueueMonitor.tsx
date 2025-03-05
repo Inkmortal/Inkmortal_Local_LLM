@@ -12,6 +12,7 @@ import {
 
 const QueueMonitor: React.FC = () => {
   const { currentTheme } = useTheme();
+  // Initialize with default values and handle potential undefined values
   const [queueStats, setQueueStats] = useState<QueueStats>({
     total_waiting: 0,
     total_processing: 0,
@@ -40,16 +41,27 @@ const QueueMonitor: React.FC = () => {
       // Fetch queue stats
       const stats = await fetchQueueStats();
       if (stats) {
-        setQueueStats(stats);
+        // Handle potential undefined values in the stats object
+        const safeStats = {
+          total_waiting: stats.total_waiting || 0,
+          total_processing: stats.total_processing || 0,
+          total_completed: stats.total_completed || 0,
+          total_error: stats.total_error || 0,
+          requests_per_hour: stats.requests_per_hour || 0,
+          average_wait_time: stats.average_wait_time || 0,
+          average_processing_time: stats.average_processing_time || 0,
+          queue_by_priority: stats.queue_by_priority || {}
+        };
+        setQueueStats(safeStats);
       }
       
       // Fetch queue items
       const items = await fetchQueueItems(selectedPriority || undefined);
-      setQueueItems(items);
+      setQueueItems(items || []);
       
       // Fetch history items
       const history = await fetchHistoryItems(selectedPriority || undefined);
-      setHistoryItems(history);
+      setHistoryItems(history || []);
       
       setLastUpdated(new Date());
       setError(null);
@@ -114,8 +126,12 @@ const QueueMonitor: React.FC = () => {
     setSelectedPriority(priority);
   };
   
-  // Format time duration
-  const formatDuration = (seconds: number): string => {
+  // Format time duration - handle undefined with fallback
+  const formatDuration = (seconds: number | undefined): string => {
+    if (seconds === undefined || seconds === null) {
+      return '0s';
+    }
+    
     if (seconds < 60) {
       return `${seconds.toFixed(1)}s`;
     } else {
@@ -125,10 +141,17 @@ const QueueMonitor: React.FC = () => {
     }
   };
   
-  // Format date
-  const formatDateTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+  // Format date - handle undefined with fallback
+  const formatDateTime = (dateString: string | undefined): string => {
+    if (!dateString) {
+      return 'Unknown';
+    }
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch (e) {
+      return 'Invalid Date';
+    }
   };
   
   return (
@@ -286,7 +309,7 @@ const QueueMonitor: React.FC = () => {
         <Card>
           <div className="text-center">
             <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
-              {queueStats.requests_per_hour.toFixed(1)}
+              {queueStats.requests_per_hour !== undefined ? queueStats.requests_per_hour.toFixed(1) : "0.0"}
             </div>
             <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
               Requests/Hour
@@ -352,7 +375,7 @@ const QueueMonitor: React.FC = () => {
                       backgroundColor: item.status === 'processing' ? `${currentTheme.colors.warning}10` : 'transparent'
                     }}
                   >
-                    <td className="p-3 font-mono">{item.id.substring(0, 8)}...</td>
+                    <td className="p-3 font-mono">{item.id?.substring(0, 8) || 'Unknown'}...</td>
                     <td className="p-3">
                       <span 
                         className="px-2 py-1 rounded-full text-xs font-medium"
@@ -365,13 +388,13 @@ const QueueMonitor: React.FC = () => {
                             : currentTheme.colors.warning
                         }}
                       >
-                        {item.status}
+                        {item.status || 'Unknown'}
                       </span>
                     </td>
                     <td className="p-3">
                       {item.priority === 1 ? 'High' : item.priority === 2 ? 'Medium' : 'Low'}
                     </td>
-                    <td className="p-3">{item.username}</td>
+                    <td className="p-3">{item.username || 'Unknown'}</td>
                     <td className="p-3">{formatDateTime(item.created_at)}</td>
                     <td className="p-3">
                       {item.queue_wait_time ? formatDuration(item.queue_wait_time) : 'N/A'}
@@ -416,8 +439,8 @@ const QueueMonitor: React.FC = () => {
                     key={item.id}
                     style={{ borderBottom: `1px solid ${currentTheme.colors.borderColor}30` }}
                   >
-                    <td className="p-3 font-mono">{item.id.substring(0, 8)}...</td>
-                    <td className="p-3">{item.username}</td>
+                    <td className="p-3 font-mono">{item.id?.substring(0, 8) || 'Unknown'}...</td>
+                    <td className="p-3">{item.username || 'Unknown'}</td>
                     <td className="p-3">
                       {item.priority === 1 ? 'High' : item.priority === 2 ? 'Medium' : 'Low'}
                     </td>
