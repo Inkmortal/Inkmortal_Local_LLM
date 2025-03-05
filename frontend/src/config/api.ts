@@ -116,8 +116,11 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
     } else {
       console.warn('No auth token found for protected route:', endpoint);
       
-      // For protected routes that aren't login/registration, return early with error
-      // But allow the request to proceed for auth-related endpoints that might not need a token
+      // Return early with auth error for protected routes, EXCEPT:
+      // 1. Auth token endpoint - needed for login
+      // 2. Register endpoint - needed for registration 
+      // 3. Login endpoint - obviously needed for login
+      // For all other protected routes, we should fail early rather than make the API call
       if (!endpoint.includes('/auth/token') && 
           !endpoint.includes('/auth/register') && 
           !endpoint.includes('/auth/login')) {

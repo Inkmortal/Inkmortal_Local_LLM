@@ -20,14 +20,22 @@ const Login: React.FC = () => {
   const from = location.state?.from || ROUTES.CHAT;
 
   useEffect(() => {
-    // Check if user is already authenticated
-    checkAuth().then(() => {
+    // Only check authentication if there's a token in localStorage
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      // Check if token is valid
+      checkAuth().then(() => {
+        setLoading(false);
+      }).catch(error => {
+        console.error('Auth check error:', error);
+        setConnectionError('Failed to connect to the server. Please try again later.');
+        setLoading(false);
+      });
+    } else {
+      // No token, so user isn't authenticated
+      console.log('No auth token found, skipping auth check');
       setLoading(false);
-    }).catch(error => {
-      console.error('Auth check error:', error);
-      setConnectionError('Failed to connect to the server. Please try again later.');
-      setLoading(false);
-    });
+    }
   }, [checkAuth]);
 
   // If user is authenticated, redirect to intended destination
@@ -48,6 +56,12 @@ const Login: React.FC = () => {
   };
 
   if (loading) {
+    // Show a more descriptive loading message
+    const token = localStorage.getItem('authToken');
+    const loadingMessage = token 
+      ? "Verifying your authentication..." 
+      : "Preparing login screen...";
+      
     return (
       <div 
         className="min-h-screen flex items-center justify-center"
@@ -57,7 +71,7 @@ const Login: React.FC = () => {
           <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
             style={{ borderColor: `${currentTheme.colors.accentPrimary}40`, borderTopColor: 'transparent' }}
           ></div>
-          <p style={{ color: currentTheme.colors.textPrimary }}>Checking authentication...</p>
+          <p style={{ color: currentTheme.colors.textPrimary }}>{loadingMessage}</p>
         </div>
       </div>
     );

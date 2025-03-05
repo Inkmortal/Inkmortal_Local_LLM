@@ -96,7 +96,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Check if token is still valid
   const checkAuth = async (): Promise<boolean> => {
+    // Check if token exists first before making the API call
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      console.log('No auth token found in checkAuth, returning false without API call');
+      return false;
+    }
+    
     try {
+      console.log('Token found, verifying with backend...');
       const response = await fetchApi<{
         username: string;
         email: string;

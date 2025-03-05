@@ -127,8 +127,10 @@ const HomePage: React.FC = () => {
               // Check auth state before navigating
               const token = localStorage.getItem('authToken');
               if (token) {
+                console.log('Token found, navigating to chat page directly');
                 navigate(ROUTES.CHAT);
               } else {
+                console.log('No auth token found, redirecting to login with chat as destination');
                 // Redirect to login with chat as destination
                 navigate(ROUTES.LOGIN, { state: { from: ROUTES.CHAT } });
               }
@@ -185,8 +187,10 @@ const HomePage: React.FC = () => {
                   // Check auth state before navigating
                   const token = localStorage.getItem('authToken');
                   if (token) {
+                    console.log('[StartLearning] Token found, navigating to chat page directly');
                     navigate(ROUTES.CHAT);
                   } else {
+                    console.log('[StartLearning] No auth token found, redirecting to login with chat as destination');
                     // Redirect to login with chat as destination
                     navigate(ROUTES.LOGIN, { state: { from: ROUTES.CHAT } });
                   }
@@ -438,8 +442,10 @@ const HomePage: React.FC = () => {
                   // Check auth state before navigating
                   const token = localStorage.getItem('authToken');
                   if (token) {
+                    console.log('[ExperienceItNow] Token found, navigating to chat page directly');
                     navigate(ROUTES.CHAT);
                   } else {
+                    console.log('[ExperienceItNow] No auth token found, redirecting to login with chat as destination');
                     // Redirect to login with chat as destination
                     navigate(ROUTES.LOGIN, { state: { from: ROUTES.CHAT } });
                   }
