@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
-import { fetchSystemStats } from './AdminDashboardData';
+import { fetchSystemStats } from '../../services/admin';
 
 // Import components
 import RefreshControls from '../../components/admin/RefreshControls';

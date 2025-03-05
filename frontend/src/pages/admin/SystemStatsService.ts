@@ -1,4 +1,4 @@
-import { SystemStats } from './AdminDashboardData';
+import { SystemStats } from '../../types/AdminTypes';
 
 // Extended interface for detailed system stats display
 export interface SystemStatsData {

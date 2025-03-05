@@ -1,0 +1,699 @@
+/**
+ * Utility functions and data sources for the Admin Dashboard
+ * 
+ * This file defines the data structure and API interactions for the admin dashboard
+ * components, keeping them separate from the UI components themselves.
+ */
+
+import { fetchApi } from '../../config/api';
+
+// API Path Configuration 
+// These match the actual backend implementation
+const API_PATHS = {
+  ADMIN: {
+    TOKENS: '/admin/tokens', // Registration tokens
+    API_KEYS: '/admin/api-keys',
+    IP_WHITELIST: '/admin/ip-whitelist',
+    CLIENT_IP: '/admin/client-ip',
+    SYSTEM_STATS: '/admin/system/stats',
+    QUEUE_STATS: '/admin/queue/stats',
+    QUEUE_ITEMS: '/admin/queue/items',
+    QUEUE_HISTORY: '/admin/queue/history',
+    USAGE_STATS: '/admin/usage/stats',
+    USERS: '/auth/users' // User management
+  },
+  // Legacy paths for compatibility
+  ADMIN_AUTH: {
+    TOKENS: '/auth/admin/tokens',
+    API_KEYS: '/auth/admin/api-keys',
+    IP_WHITELIST: '/auth/admin/ip-whitelist',
+    USERS: '/auth/users'
+  }
+};
+
+// Types for Admin Dashboard
+export interface DashboardCard {
+  id: string;
+  title: string;
+  count: number;
+  active?: number;
+  processing?: number;
+  path: string;
+}
+
+export interface SystemStats {
+  cpu: number;
+  memory: number;
+  storage: number;
+  uptime: string;
+  ollama: {
+    status: string;
+    model: string;
+    version: string;
+  };
+  queue_connected: boolean;
+}
+
+export interface Activity {
+  id: string;
+  user: string;
+  action: string;
+  target: string;
+  time: string;
+  type: 'api-key' | 'ip' | 'token' | 'queue';
+}
+
+export interface DashboardData {
+  dashboard_cards: DashboardCard[];
+  system_stats: SystemStats;
+  recent_activities: Activity[];
+}
+
+// Registration Token Types - Updated based on backend
+export interface RegistrationToken {
+  id: string; // Backend uses string IDs 
+  token: string;
+  created: string; // Backend uses 'created' not 'created_at'
+  expires: string | null; // Backend uses 'expires' not 'expires_at'
+  used: boolean; // Backend uses 'used' not 'is_used'
+  usedBy: string | null; // Backend uses 'usedBy' not 'used_by'
+  usedOn: string | null; // Backend uses 'usedOn' not 'used_at'
+}
+
+// API Key Types - Updated based on backend
+export interface ApiKey {
+  id: string; // Backend uses string IDs
+  key: string;
+  description: string;
+  priority: number;
+  is_active: boolean;
+  created_at: string;
+  last_used: string | null;
+  usage_count: number;
+}
+
+// IP Whitelist Types - Updated based on backend
+export interface IPWhitelistEntry {
+  id: string;
+  ip: string; // Backend uses 'ip' not 'ip_address'
+  added: string; // Backend uses 'added' not 'created_at'
+  lastUsed: string | null; // Backend uses 'lastUsed'
+  is_active: boolean; // Added based on backend schema
+}
+
+// Queue Types - Added based on backend
+export interface QueueItem {
+  id: string;
+  priority: number;
+  status: string;
+  created_at: string;
+  user_id: string;
+  username: string;
+  prompt_tokens?: number;
+  max_tokens?: number;
+  model?: string;
+  queue_wait_time?: number;
+  service?: string;
+  content?: string;
+  estimatedCompletion?: string;
+}
+
+export interface HistoryItem extends QueueItem {
+  completed_at: string;
+  processing_time: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
+export interface QueueStats {
+  total_waiting: number;
+  total_processing: number;
+  total_completed: number;
+  total_error: number;
+  requests_per_hour: number;
+  average_wait_time?: number; // Backend name
+  average_processing_time?: number; // Backend name
+  queue_by_priority?: Record<string, number>;
+  queue_connected?: boolean;
+  worker_count?: number;
+  avg_wait_time?: number;
+  avg_process_time?: number;
+}
+
+// User Management Types
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const fetchDashboardData = async (): Promise<DashboardData> => {
+  try {
+    const statsResponse = await fetchSystemStats();
+    
+    // Fetch cards data from API (fallback to mock data for now)
+    const cards: DashboardCard[] = [
+      {
+        id: 'ip-whitelist',
+        title: 'IP Whitelist',
+        count: 12,
+        active: 8,
+        path: '/admin/ip-whitelist'
+      },
+      {
+        id: 'tokens',
+        title: 'Registration Tokens',
+        count: 5,
+        active: 2,
+        path: '/admin/tokens'
+      },
+      {
+        id: 'api-keys',
+        title: 'API Keys',
+        count: 18,
+        active: 15,
+        path: '/admin/api-keys'
+      },
+      {
+        id: 'queue',
+        title: 'Queue Status',
+        count: 3,
+        processing: 1,
+        path: '/admin/queue'
+      }
+    ];
+    
+    // Fetch activity data (fallback to mock data for now)
+    const activities: Activity[] = [
+      {
+        id: '1',
+        user: 'admin',
+        action: 'created',
+        target: 'API Key',
+        time: '5 minutes ago',
+        type: 'api-key'
+      },
+      {
+        id: '2',
+        user: 'system',
+        action: 'added',
+        target: 'IP Address 192.168.1.100',
+        time: '10 minutes ago',
+        type: 'ip'
+      },
+      {
+        id: '3',
+        user: 'admin',
+        action: 'generated',
+        target: 'Registration Token',
+        time: '1 hour ago',
+        type: 'token'
+      },
+      {
+        id: '4',
+        user: 'system',
+        action: 'processed',
+        target: 'Queue Item',
+        time: '2 hours ago',
+        type: 'queue'
+      },
+      {
+        id: '5',
+        user: 'admin',
+        action: 'revoked',
+        target: 'API Key',
+        time: '3 hours ago',
+        type: 'api-key'
+      }
+    ];
+    
+    return {
+      dashboard_cards: cards,
+      system_stats: statsResponse || {
+        cpu: 35,
+        memory: 60,
+        storage: 45,
+        uptime: '5 days, 6 hours',
+        ollama: {
+          status: 'Running',
+          model: 'llama3.1-70b',
+          version: '0.1.18'
+        },
+        queue_connected: true
+      },
+      recent_activities: activities
+    };
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    // Return fallback data
+    return {
+      dashboard_cards: [],
+      system_stats: {
+        cpu: 0,
+        memory: 0,
+        storage: 0,
+        uptime: 'Unknown',
+        ollama: {
+          status: 'Unknown',
+          model: 'Unknown',
+          version: 'Unknown'
+        },
+        queue_connected: false
+      },
+      recent_activities: []
+    };
+  }
+};
+
+// API functions for Admin Dashboard
+// =======================================================
+
+/**
+ * Fetch registration tokens
+ */
+export const fetchRegistrationTokens = async (): Promise<RegistrationToken[]> => {
+  try {
+    // Try the new endpoint first
+    const response = await fetchApi<RegistrationToken[]>(API_PATHS.ADMIN.TOKENS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch registration tokens: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching registration tokens:', error);
+    return [];
+  }
+};
+
+/**
+ * Create a new registration token
+ */
+export const createRegistrationToken = async (description: string, expiryDays: number | null = null): Promise<RegistrationToken | null> => {
+  try {
+    const payload = {
+      expires_days: expiryDays, // Backend expects days, not hours
+    };
+    
+    const response = await fetchApi<RegistrationToken>(API_PATHS.ADMIN.TOKENS, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to create registration token: ${response.error || response.status}`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error creating registration token:', error);
+    return null;
+  }
+};
+
+/**
+ * Delete a registration token
+ */
+export const deleteRegistrationToken = async (tokenId: string): Promise<boolean> => {
+  try {
+    const response = await fetchApi(`${API_PATHS.ADMIN.TOKENS}/${tokenId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete registration token: ${response.error || response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting registration token:', error);
+    return false;
+  }
+};
+
+/**
+ * Fetch system stats
+ */
+export const fetchSystemStats = async (): Promise<SystemStats | null> => {
+  try {
+    const response = await fetchApi<SystemStats>(API_PATHS.ADMIN.SYSTEM_STATS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch system stats: ${response.error || response.status}`);
+    }
+    
+    // If queue_connected is undefined, assume it's connected
+    if (response.data && response.data.queue_connected === undefined) {
+      response.data.queue_connected = true;
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching system stats:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetch usage stats
+ */
+export const fetchUsageStats = async (): Promise<any | null> => {
+  try {
+    const response = await fetchApi(API_PATHS.ADMIN.USAGE_STATS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch usage stats: ${response.error || response.status}`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching usage stats:', error);
+    return null;
+  }
+};
+
+/**
+ * Fetch IP whitelist entries
+ */
+export const fetchIPWhitelist = async (): Promise<IPWhitelistEntry[]> => {
+  try {
+    const response = await fetchApi<IPWhitelistEntry[]>(API_PATHS.ADMIN.IP_WHITELIST);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch IP whitelist: ${response.error || response.status}`);
+    }
+    
+    // If is_active field doesn't exist, default to true
+    const entries = (response.data || []).map(entry => {
+      if (entry.is_active === undefined) {
+        return {...entry, is_active: true};
+      }
+      return entry;
+    });
+    
+    return entries;
+  } catch (error) {
+    console.error('Error fetching IP whitelist:', error);
+    return [];
+  }
+};
+
+/**
+ * Get client IP address
+ */
+export const getClientIP = async (): Promise<string | null> => {
+  try {
+    const response = await fetchApi<{ ip: string }>(API_PATHS.ADMIN.CLIENT_IP);
+    
+    if (!response.success) {
+      throw new Error(`Failed to get client IP: ${response.error || response.status}`);
+    }
+    
+    return response.data?.ip || null;
+  } catch (error) {
+    console.error('Error getting client IP:', error);
+    return null;
+  }
+};
+
+/**
+ * Add a new IP whitelist entry
+ */
+export const addIPWhitelistEntry = async (ipAddress: string): Promise<IPWhitelistEntry | null> => {
+  try {
+    const payload = {
+      ip_address: ipAddress
+    };
+    
+    const response = await fetchApi<IPWhitelistEntry>(API_PATHS.ADMIN.IP_WHITELIST, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to add IP whitelist entry: ${response.error || response.status}`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error adding IP whitelist entry:', error);
+    return null;
+  }
+};
+
+/**
+ * Delete an IP whitelist entry
+ */
+export const deleteIPWhitelistEntry = async (entryId: string): Promise<boolean> => {
+  try {
+    const response = await fetchApi(`${API_PATHS.ADMIN.IP_WHITELIST}/${entryId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete IP whitelist entry: ${response.error || response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting IP whitelist entry:', error);
+    return false;
+  }
+};
+
+/**
+ * Fetch API keys
+ */
+export const fetchApiKeys = async (): Promise<ApiKey[]> => {
+  try {
+    const response = await fetchApi<ApiKey[]>(API_PATHS.ADMIN.API_KEYS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch API keys: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching API keys:', error);
+    return [];
+  }
+};
+
+/**
+ * Create a new API key
+ */
+export const createApiKey = async (description: string, priority: number): Promise<ApiKey | null> => {
+  try {
+    const payload = {
+      description,
+      priority,
+    };
+    
+    const response = await fetchApi<ApiKey>(API_PATHS.ADMIN.API_KEYS, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to create API key: ${response.error || response.status}`);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error creating API key:', error);
+    return null;
+  }
+};
+
+/**
+ * Delete an API key
+ */
+export const deleteApiKey = async (keyId: string): Promise<boolean> => {
+  try {
+    const response = await fetchApi(`${API_PATHS.ADMIN.API_KEYS}/${keyId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete API key: ${response.error || response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting API key:', error);
+    return false;
+  }
+};
+
+/**
+ * Fetch queue statistics
+ */
+export const fetchQueueStats = async (): Promise<QueueStats | null> => {
+  try {
+    const response = await fetchApi<QueueStats>(API_PATHS.ADMIN.QUEUE_STATS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch queue stats: ${response.error || response.status}`);
+    }
+    
+    // Ensure consistent default values
+    const stats = response.data || {
+      total_waiting: 0,
+      total_processing: 0,
+      total_completed: 0,
+      total_error: 0,
+      requests_per_hour: 0,
+      average_wait_time: 0,
+      average_processing_time: 0,
+      queue_by_priority: {}
+    };
+    
+    // Handle missing fields with defaults
+    return {
+      total_waiting: stats.total_waiting || 0,
+      total_processing: stats.total_processing || 0,
+      total_completed: stats.total_completed || 0,
+      total_error: stats.total_error || 0,
+      requests_per_hour: stats.requests_per_hour || 0,
+      average_wait_time: stats.average_wait_time || 0,
+      average_processing_time: stats.average_processing_time || 0,
+      queue_by_priority: stats.queue_by_priority || {},
+      queue_connected: true, // Default to connected
+      worker_count: stats.worker_count || 0,
+      // Map backend names to frontend properties
+      avg_wait_time: stats.average_wait_time || 0,
+      avg_process_time: stats.average_processing_time || 0
+    };
+  } catch (error) {
+    console.error('Error fetching queue stats:', error);
+    return {
+      total_waiting: 0,
+      total_processing: 0,
+      total_completed: 0,
+      total_error: 0,
+      requests_per_hour: 0,
+      average_wait_time: 0,
+      average_processing_time: 0,
+      queue_by_priority: {},
+      queue_connected: true,
+      worker_count: 0,
+      avg_wait_time: 0,
+      avg_process_time: 0
+    };
+  }
+};
+
+/**
+ * Fetch queue items
+ */
+export const fetchQueueItems = async (priority?: number): Promise<QueueItem[]> => {
+  try {
+    const priorityParam = priority ? `?priority=${priority}` : '';
+    const response = await fetchApi<QueueItem[]>(`${API_PATHS.ADMIN.QUEUE_ITEMS}${priorityParam}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch queue items: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching queue items:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch queue history
+ */
+export const fetchQueueHistory = async (priority?: number): Promise<HistoryItem[]> => {
+  try {
+    const priorityParam = priority ? `?priority=${priority}` : '';
+    const response = await fetchApi<HistoryItem[]>(`${API_PATHS.ADMIN.QUEUE_HISTORY}${priorityParam}`);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch queue history: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching queue history:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch users
+ */
+export const fetchUsers = async (): Promise<User[]> => {
+  try {
+    // Try the new endpoint first
+    const response = await fetchApi<User[]>(API_PATHS.ADMIN.USERS);
+    
+    if (!response.success) {
+      console.warn(`Failed to fetch users from primary endpoint: ${response.error || response.status}`);
+      
+      // Try the legacy endpoint as fallback
+      const legacyResponse = await fetchApi<User[]>(API_PATHS.ADMIN_AUTH.USERS);
+      
+      if (!legacyResponse.success) {
+        throw new Error(`Failed to fetch users: ${legacyResponse.error || legacyResponse.status}`);
+      }
+      
+      return legacyResponse.data || [];
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return [];
+  }
+};
+
+/**
+ * Delete a user
+ */
+export const deleteUser = async (userId: string): Promise<boolean> => {
+  try {
+    // Try the new endpoint first
+    let response = await fetchApi(`${API_PATHS.ADMIN.USERS}/${userId}`, {
+      method: 'DELETE',
+    });
+    
+    // If it doesn't work, try the legacy endpoint
+    if (!response.success) {
+      console.warn(`Failed to delete user with primary endpoint: ${response.error || response.status}`);
+      
+      response = await fetchApi(`${API_PATHS.ADMIN_AUTH.USERS}/${userId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.success) {
+        throw new Error(`Failed to delete user: ${response.error || response.status}`);
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return false;
+  }
+};
+
+// Export functions to be used by components
+export const generateRegistrationToken = createRegistrationToken;
+export const revokeRegistrationToken = deleteRegistrationToken;
+export const fetchHistoryItems = fetchQueueHistory;

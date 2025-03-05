@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import { fetchUsers, deleteUser, User } from './AdminDashboardData';
+import { fetchUsers, deleteUser } from '../../services/admin';
+import { User } from '../../types/AdminTypes';
 
 interface UserManagementProps {
   currentRoute?: string;

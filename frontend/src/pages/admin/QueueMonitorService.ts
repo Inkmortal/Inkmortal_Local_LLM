@@ -1,4 +1,4 @@
-import { QueueItem, HistoryItem, QueueStats } from './AdminDashboardData';
+import { QueueItem, HistoryItem, QueueStats } from '../../types/AdminTypes';
 
 // Format date/time consistently for queue items
 export const formatDateTime = (dateString: string | null | undefined): string => {
