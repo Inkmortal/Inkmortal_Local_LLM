@@ -2,252 +2,217 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import { fetchUsers, deleteUser } from './AdminDashboardData';
-
-// Interface for User data
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  is_admin: boolean;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import { fetchUsers, deleteUser, User } from './AdminDashboardData';
 
 interface UserManagementProps {
   currentRoute?: string;
 }
 
-const UserManagement: React.FC<UserManagementProps> = () => {
+const UserManagement: React.FC<UserManagementProps> = ({ currentRoute }) => {
   const { currentTheme } = useTheme();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Load users on component mount
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  
+  // Fetch users on component mount
   useEffect(() => {
-    const loadUsers = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const usersData = await fetchUsers();
-        setUsers(usersData);
-      } catch (err) {
-        setError('Failed to load users. Please try again later.');
-        console.error('Error loading users:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     loadUsers();
   }, []);
-
-  // Format date string to readable format
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
-
-  // Handle user deletion
-  const handleDeleteUser = async (userId: number) => {
-    if (confirmDelete !== userId) {
-      setConfirmDelete(userId);
-      return;
+  
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchUsers();
+      setUsers(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading users:', err);
+      setError('Failed to load users. Please try again later.');
+    } finally {
+      setLoading(false);
     }
-    
-    setDeletingUserId(userId);
-    setError(null);
-    setSuccessMessage(null);
+  };
+  
+  // Format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+  
+  // Handle user delete
+  const handleDeleteUser = (user: User) => {
+    setUserToDelete(user);
+    setShowConfirmDelete(true);
+  };
+  
+  // Confirm user delete
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
     
     try {
-      await deleteUser(userId);
+      setLoading(true);
+      const success = await deleteUser(userToDelete.id);
       
-      // Update users list
-      setUsers(users.filter(user => user.id !== userId));
-      setSuccessMessage('User deleted successfully');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccessMessage(null);
-      }, 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete user');
+      if (success) {
+        // Update users list
+        setUsers(users.filter(u => u.id !== userToDelete.id));
+        setError(null);
+      } else {
+        setError('Failed to delete user');
+      }
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      setError('An error occurred while deleting the user');
     } finally {
-      setDeletingUserId(null);
-      setConfirmDelete(null);
+      setLoading(false);
+      setShowConfirmDelete(false);
+      setUserToDelete(null);
     }
   };
-
-  // Cancel delete confirmation
+  
+  // Cancel delete
   const cancelDelete = () => {
-    setConfirmDelete(null);
+    setShowConfirmDelete(false);
+    setUserToDelete(null);
   };
-
+  
+  // Check if a user is the last admin
+  const isLastAdmin = (user: User) => {
+    if (!user.is_admin) return false;
+    
+    const adminCount = users.filter(u => u.is_admin).length;
+    return adminCount <= 1;
+  };
+  
   return (
-    <div 
-      className="p-6"
-      style={{ color: currentTheme.colors.textPrimary }}
-    >
-      <div className="mb-6">
-        <h1 
-          className="text-2xl font-bold mb-2"
-          style={{ color: currentTheme.colors.accentPrimary }}
-        >
+    <div className="mb-8 pb-8">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>
           User Management
         </h1>
-        <p style={{ color: currentTheme.colors.textSecondary }}>
-          Manage user accounts and access permissions
-        </p>
       </div>
       
-      {/* Messages */}
       {error && (
         <div 
-          className="mb-4 p-3 rounded-md"
+          className="mb-6 p-3 rounded-md"
           style={{
             backgroundColor: `${currentTheme.colors.error}20`,
             color: currentTheme.colors.error,
-            border: `1px solid ${currentTheme.colors.error}40`
           }}
         >
           {error}
         </div>
       )}
       
-      {successMessage && (
-        <div 
-          className="mb-4 p-3 rounded-md"
-          style={{
-            backgroundColor: `${currentTheme.colors.success}20`,
-            color: currentTheme.colors.success,
-            border: `1px solid ${currentTheme.colors.success}40`
-          }}
-        >
-          {successMessage}
+      {/* Confirm Delete Modal */}
+      {showConfirmDelete && userToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="max-w-md mx-auto">
+            <h2 className="text-xl font-bold mb-4" style={{ color: currentTheme.colors.error }}>
+              Confirm Delete
+            </h2>
+            <p className="mb-4" style={{ color: currentTheme.colors.textPrimary }}>
+              Are you sure you want to delete user <strong>{userToDelete.username}</strong>?
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="secondary"
+                onClick={cancelDelete}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={confirmDeleteUser}
+              >
+                Delete User
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
       
       {/* Users List */}
-      <Card className="w-full overflow-hidden">
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div 
-                className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-                style={{ borderColor: `${currentTheme.colors.accentPrimary}40`, borderTopColor: 'transparent' }}
-              ></div>
-              <p>Loading users...</p>
-            </div>
-          ) : users.length === 0 ? (
-            <div className="p-8 text-center" style={{ color: currentTheme.colors.textMuted }}>
-              <p>No users found</p>
-            </div>
-          ) : (
-            <table className="min-w-full">
+      <Card title="Users">
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-2"
+              style={{ borderColor: `${currentTheme.colors.accentPrimary}40`, borderTopColor: 'transparent' }}
+            />
+            <p style={{ color: currentTheme.colors.textSecondary }}>Loading users...</p>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-8" style={{ color: currentTheme.colors.textSecondary }}>
+            No users found
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full" style={{ color: currentTheme.colors.textPrimary }}>
               <thead>
-                <tr style={{ backgroundColor: currentTheme.colors.bgSecondary }}>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>ID</th>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>Username</th>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>Email</th>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>Role</th>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>Status</th>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>Created</th>
-                  <th className="py-3 px-4 text-left font-medium text-sm" style={{ color: currentTheme.colors.textSecondary }}>Actions</th>
+                <tr style={{ borderBottom: `1px solid ${currentTheme.colors.borderColor}` }}>
+                  <th className="p-3 text-left font-medium">Username</th>
+                  <th className="p-3 text-left font-medium">Email</th>
+                  <th className="p-3 text-left font-medium">Created</th>
+                  <th className="p-3 text-left font-medium">Status</th>
+                  <th className="p-3 text-left font-medium">Role</th>
+                  <th className="p-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr 
-                    key={user.id} 
-                    className="border-t"
-                    style={{ borderColor: `${currentTheme.colors.borderColor}40` }}
+                    key={user.id}
+                    style={{ borderBottom: `1px solid ${currentTheme.colors.borderColor}30` }}
                   >
-                    <td className="py-3 px-4">{user.id}</td>
-                    <td className="py-3 px-4 font-medium">{user.username}</td>
-                    <td className="py-3 px-4">{user.email}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className="inline-block px-2 py-1 rounded text-xs font-medium"
-                        style={{
-                          backgroundColor: user.is_admin 
-                            ? `${currentTheme.colors.warning}20` 
-                            : `${currentTheme.colors.success}20`,
-                          color: user.is_admin 
-                            ? currentTheme.colors.warning 
-                            : currentTheme.colors.success
-                        }}
-                      >
-                        {user.is_admin ? 'Admin' : 'User'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className="inline-block px-2 py-1 rounded text-xs font-medium"
-                        style={{
-                          backgroundColor: user.is_active 
-                            ? `${currentTheme.colors.success}20` 
-                            : `${currentTheme.colors.error}20`,
-                          color: user.is_active 
-                            ? currentTheme.colors.success 
-                            : currentTheme.colors.error
+                    <td className="p-3">{user.username}</td>
+                    <td className="p-3">{user.email}</td>
+                    <td className="p-3">{formatDate(user.created_at)}</td>
+                    <td className="p-3">
+                      <span 
+                        className="px-2 py-1 rounded-full text-xs font-medium"
+                        style={{ 
+                          backgroundColor: user.is_active ? 
+                            `${currentTheme.colors.success}20` : `${currentTheme.colors.error}20`,
+                          color: user.is_active ? 
+                            currentTheme.colors.success : currentTheme.colors.error
                         }}
                       >
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-sm" style={{ color: currentTheme.colors.textMuted }}>
-                      {formatDate(user.created_at)}
+                    <td className="p-3">
+                      <span 
+                        className="px-2 py-1 rounded-full text-xs font-medium"
+                        style={{ 
+                          backgroundColor: user.is_admin ? 
+                            `${currentTheme.colors.warning}20` : `${currentTheme.colors.info}20`,
+                          color: user.is_admin ? 
+                            currentTheme.colors.warning : currentTheme.colors.info
+                        }}
+                      >
+                        {user.is_admin ? 'Admin' : 'User'}
+                      </span>
                     </td>
-                    <td className="py-3 px-4">
-                      {confirmDelete === user.id ? (
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleDeleteUser(user.id)}
-                            disabled={deletingUserId === user.id}
-                          >
-                            {deletingUserId === user.id ? 'Deleting...' : 'Confirm'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={cancelDelete}
-                            disabled={deletingUserId === user.id}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteUser(user.id)}
-                          style={{ color: currentTheme.colors.error }}
-                          disabled={deletingUserId !== null || user.is_admin}
-                          title={user.is_admin ? "Can't delete admin users" : "Delete user"}
-                        >
-                          Delete
-                        </Button>
-                      )}
+                    <td className="p-3 text-right">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDeleteUser(user)}
+                        disabled={isLastAdmin(user)}
+                        title={isLastAdmin(user) ? "Cannot delete the last admin user" : ""}
+                      >
+                        Delete
+                      </Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </Card>
-      
-      <div className="mt-6 text-sm" style={{ color: currentTheme.colors.textMuted }}>
-        <p>Note: Admin users cannot be deleted through this interface. The last admin account cannot be deleted.</p>
-      </div>
     </div>
   );
 };

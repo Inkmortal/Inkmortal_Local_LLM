@@ -19,7 +19,8 @@ const API_PATHS = {
     QUEUE_STATS: '/admin/queue/stats',
     QUEUE_ITEMS: '/admin/queue/items',
     QUEUE_HISTORY: '/admin/queue/history',
-    USAGE_STATS: '/admin/usage/stats'
+    USAGE_STATS: '/admin/usage/stats',
+    USERS: '/admin/users' // User management
   }
 };
 
@@ -122,6 +123,17 @@ export interface QueueStats {
   average_wait_time: number;
   average_processing_time: number;
   queue_by_priority?: Record<string, number>;
+}
+
+// User Management Types
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export const fetchDashboardData = async (): Promise<DashboardData> => {
@@ -551,6 +563,44 @@ export const fetchQueueHistory = async (priority?: number): Promise<HistoryItem[
   } catch (error) {
     console.error('Error fetching queue history:', error);
     return [];
+  }
+};
+
+/**
+ * Fetch users
+ */
+export const fetchUsers = async (): Promise<User[]> => {
+  try {
+    const response = await fetchApi<User[]>(API_PATHS.ADMIN.USERS);
+    
+    if (!response.success) {
+      throw new Error(`Failed to fetch users: ${response.error || response.status}`);
+    }
+    
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return [];
+  }
+};
+
+/**
+ * Delete a user
+ */
+export const deleteUser = async (userId: string): Promise<boolean> => {
+  try {
+    const response = await fetchApi(`${API_PATHS.ADMIN.USERS}/${userId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.success) {
+      throw new Error(`Failed to delete user: ${response.error || response.status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return false;
   }
 };
 
