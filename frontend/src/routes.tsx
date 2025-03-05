@@ -90,6 +90,7 @@ export const routes: AppRoutes = {
             { path: 'queue', element: <QueueMonitor /> },
             { path: 'users', element: <UserManagement /> },
             { path: 'stats', element: <SystemStats /> },
+            { path: "models", element: <Navigate to={ROUTES.ADMIN.STATS} replace /> },
           ],
         },
         

@@ -101,13 +101,6 @@ const AdminDashboard: React.FC = () => {
             count: queueStatsResponse ? (queueStatsResponse.total_waiting + queueStatsResponse.total_processing) : 0,
             processing: queueStatsResponse ? queueStatsResponse.total_processing : 0,
             path: '/admin/queue'
-          },
-          {
-            id: 'models',
-            title: 'Model Management',
-            count: 1,
-            active: 1,
-            path: '/admin/models'
           }
         ];
         
