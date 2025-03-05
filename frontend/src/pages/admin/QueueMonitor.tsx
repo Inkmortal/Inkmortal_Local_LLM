@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
 import { 
@@ -10,104 +10,267 @@ import {
   QueueStats 
 } from './AdminDashboardData';
 
+// Import components
+import StatusCounter from '../../components/admin/StatusCounter';
+import DataTable from '../../components/admin/DataTable';
+import TabView from '../../components/admin/TabView';
+import QueueStatusBadge from '../../components/admin/QueueStatusBadge';
+import PriorityBadge from '../../components/admin/PriorityBadge';
+import QueueServiceBadge from '../../components/admin/QueueServiceBadge';
+import TimeAgo from '../../components/admin/TimeAgo';
+import RefreshControls from '../../components/admin/RefreshControls';
+
+// Import utility functions
+import { 
+  formatDateTime, 
+  truncateText, 
+  getDefaultQueueStats,
+  processQueueItem
+} from './QueueMonitorService';
+
 const QueueMonitor: React.FC = () => {
   const { currentTheme } = useTheme();
-  // Initialize with default values and handle potential undefined values
-  const [queueStats, setQueueStats] = useState<QueueStats>({
-    total_waiting: 0,
-    total_processing: 0,
-    total_completed: 0,
-    total_error: 0,
-    requests_per_hour: 0,
-    average_wait_time: 0,
-    average_processing_time: 0,
-    queue_by_priority: {}
-  });
+  
+  // State
+  const [queueStats, setQueueStats] = useState<QueueStats>(getDefaultQueueStats());
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoadingStats, setIsLoadingStats] = useState<boolean>(false);
+  const [isLoadingQueue, setIsLoadingQueue] = useState<boolean>(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPriority, setSelectedPriority] = useState<number | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<number>(10000); // 10 seconds default
-  const refreshTimerRef = useRef<number | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [activeTab, setActiveTab] = useState<string>('active');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshInterval, setRefreshInterval] = useState<number>(30000); // 30 seconds
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   
-  // Function to load all queue data
-  const loadQueueData = async () => {
+  // Define connection status with safe check
+  const isConnected = queueStats.queue_connected !== undefined 
+    ? queueStats.queue_connected 
+    : true; // Default to true if undefined
+  
+  // Tab definitions
+  const tabs = [
+    { 
+      id: 'active', 
+      label: 'Active Queue',
+      count: queueStats.total_waiting + queueStats.total_processing
+    },
+    { 
+      id: 'history', 
+      label: 'History',
+      count: historyItems.length
+    }
+  ];
+  
+  // Queue data columns
+  const queueColumns = [
+    {
+      key: 'id',
+      header: 'ID',
+      width: '80px',
+      render: (item: QueueItem) => (
+        <span className="text-xs font-mono">
+          {item.id ? item.id.substring(0, 8) : 'N/A'}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '120px',
+      render: (item: QueueItem) => (
+        <QueueStatusBadge status={item.status || 'unknown'} />
+      )
+    },
+    {
+      key: 'priority',
+      header: 'Priority',
+      width: '100px',
+      render: (item: QueueItem) => (
+        <PriorityBadge priority={item.priority || 0} />
+      )
+    },
+    {
+      key: 'service',
+      header: 'Service',
+      width: '120px',
+      render: (item: QueueItem) => (
+        <QueueServiceBadge service={item.service || 'unknown'} />
+      )
+    },
+    {
+      key: 'content',
+      header: 'Content',
+      render: (item: QueueItem) => (
+        <div className="max-w-sm overflow-hidden">
+          <span className="text-xs" style={{ color: currentTheme.colors.textSecondary }}>
+            {truncateText(item.content, 80) || 'No content'}
+          </span>
+        </div>
+      )
+    },
+    {
+      key: 'created_at',
+      header: 'Created',
+      width: '150px',
+      render: (item: QueueItem) => (
+        <TimeAgo 
+          date={item.created_at || new Date()} 
+          textSize="xs"
+          color={currentTheme.colors.textMuted}
+          showPrefix={false}
+        />
+      )
+    },
+    {
+      key: 'estimatedCompletion',
+      header: 'Est. Completion',
+      width: '150px',
+      render: (item: QueueItem) => {
+        if (item.status !== 'waiting') return <span>-</span>;
+        return (
+          <span style={{ color: currentTheme.colors.accentPrimary }}>
+            {item.estimatedCompletion || 'Unknown'}
+          </span>
+        );
+      }
+    }
+  ];
+  
+  // History data columns
+  const historyColumns = [
+    {
+      key: 'id',
+      header: 'ID',
+      width: '80px',
+      render: (item: HistoryItem) => (
+        <span className="text-xs font-mono">
+          {item.id ? item.id.substring(0, 8) : 'N/A'}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '120px',
+      render: (item: HistoryItem) => (
+        <QueueStatusBadge status={item.status || 'unknown'} />
+      )
+    },
+    {
+      key: 'service',
+      header: 'Service',
+      width: '120px',
+      render: (item: HistoryItem) => (
+        <QueueServiceBadge service={item.service || 'unknown'} />
+      )
+    },
+    {
+      key: 'content',
+      header: 'Content',
+      render: (item: HistoryItem) => (
+        <div className="max-w-sm overflow-hidden">
+          <span className="text-xs" style={{ color: currentTheme.colors.textSecondary }}>
+            {truncateText(item.content, 80) || 'No content'}
+          </span>
+        </div>
+      )
+    },
+    {
+      key: 'created_at',
+      header: 'Created',
+      width: '180px',
+      render: (item: HistoryItem) => (
+        <span className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+          {formatDateTime(item.created_at)}
+        </span>
+      )
+    },
+    {
+      key: 'completed_at',
+      header: 'Completed',
+      width: '180px',
+      render: (item: HistoryItem) => (
+        <span className="text-xs" style={{ color: currentTheme.colors.textMuted }}>
+          {formatDateTime(item.completed_at)}
+        </span>
+      )
+    }
+  ];
+  
+  // Fetch all data
+  const fetchAllData = useCallback(async () => {
+    setError(null);
+    
     try {
-      setLoading(true);
+      // Fetch stats
+      setIsLoadingStats(true);
+      const statsData = await fetchQueueStats();
+      if (statsData) {
+        setQueueStats(statsData);
+      }
+      setIsLoadingStats(false);
       
-      // Fetch queue stats
-      const stats = await fetchQueueStats();
-      if (stats) {
-        // Handle potential undefined values in the stats object
-        const safeStats = {
-          total_waiting: stats.total_waiting || 0,
-          total_processing: stats.total_processing || 0,
-          total_completed: stats.total_completed || 0,
-          total_error: stats.total_error || 0,
-          requests_per_hour: stats.requests_per_hour || 0,
-          average_wait_time: stats.average_wait_time || 0,
-          average_processing_time: stats.average_processing_time || 0,
-          queue_by_priority: stats.queue_by_priority || {}
-        };
-        setQueueStats(safeStats);
+      // Fetch queue items (active tab selected)
+      if (activeTab === 'active') {
+        setIsLoadingQueue(true);
+        const queueData = await fetchQueueItems();
+        if (queueData) {
+          // Process queue items to add estimated completion time
+          const processedItems = queueData.map((item, index) => 
+            processQueueItem(item, index, statsData || getDefaultQueueStats())
+          );
+          setQueueItems(processedItems);
+        }
+        setIsLoadingQueue(false);
       }
       
-      // Fetch queue items
-      const items = await fetchQueueItems(selectedPriority || undefined);
-      setQueueItems(items || []);
+      // Fetch history items (history tab selected)
+      if (activeTab === 'history') {
+        setIsLoadingHistory(true);
+        const historyData = await fetchHistoryItems();
+        if (historyData) {
+          setHistoryItems(historyData);
+        }
+        setIsLoadingHistory(false);
+      }
       
-      // Fetch history items
-      const history = await fetchHistoryItems(selectedPriority || undefined);
-      setHistoryItems(history || []);
-      
+      // Update last updated timestamp
       setLastUpdated(new Date());
-      setError(null);
     } catch (err) {
-      console.error('Error loading queue data:', err);
-      setError('Failed to load queue data. Please try again later.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching queue data:', err);
+      setError('Failed to fetch queue data. Please try again.');
+      setIsLoadingStats(false);
+      setIsLoadingQueue(false);
+      setIsLoadingHistory(false);
     }
+  }, [activeTab]);
+  
+  // Initial data loading
+  useEffect(() => {
+    fetchAllData();
+    
+    // Set up auto-refresh interval
+    if (autoRefresh) {
+      const intervalId = window.setInterval(() => {
+        fetchAllData();
+      }, refreshInterval);
+      
+      return () => {
+        window.clearInterval(intervalId);
+      };
+    }
+  }, [fetchAllData, refreshInterval, autoRefresh]);
+  
+  // Handle tab change
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
   };
   
-  // Set up auto-refresh
-  useEffect(() => {
-    if (autoRefresh) {
-      // Clear any existing interval
-      if (refreshTimerRef.current) {
-        window.clearInterval(refreshTimerRef.current);
-      }
-      
-      // Set up new interval
-      refreshTimerRef.current = window.setInterval(() => {
-        loadQueueData();
-      }, refreshInterval);
-    } else if (refreshTimerRef.current) {
-      // Clear interval if auto-refresh is disabled
-      window.clearInterval(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-    
-    // Clean up interval on component unmount
-    return () => {
-      if (refreshTimerRef.current) {
-        window.clearInterval(refreshTimerRef.current);
-      }
-    };
-  }, [autoRefresh, refreshInterval, selectedPriority]);
-  
-  // Initial data load
-  useEffect(() => {
-    loadQueueData();
-  }, [selectedPriority]);
-  
-  // Update refresh interval
-  const handleRefreshIntervalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const interval = parseInt(e.target.value);
-    setRefreshInterval(interval);
+  // Handle refresh now button
+  const handleRefresh = () => {
+    fetchAllData();
   };
   
   // Toggle auto-refresh
@@ -115,73 +278,176 @@ const QueueMonitor: React.FC = () => {
     setAutoRefresh(!autoRefresh);
   };
   
-  // Manual refresh
-  const handleManualRefresh = () => {
-    loadQueueData();
+  // Status counter items
+  const getStatusIcon = (iconType: string) => {
+    switch (iconType) {
+      case 'waiting':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+      case 'processing':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        );
+      case 'completed':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        );
+      case 'error':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        );
+      default:
+        return null;
+    }
   };
   
-  // Filter by priority
-  const handlePriorityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const priority = e.target.value === 'all' ? null : parseInt(e.target.value);
-    setSelectedPriority(priority);
-  };
-  
-  // Format time duration - handle undefined with fallback
-  const formatDuration = (seconds: number | undefined): string => {
-    if (seconds === undefined || seconds === null) {
-      return '0s';
-    }
-    
-    if (seconds < 60) {
-      return `${seconds.toFixed(1)}s`;
-    } else {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      return `${minutes}m ${remainingSeconds.toFixed(0)}s`;
-    }
-  };
-  
-  // Format date - handle undefined with fallback
-  const formatDateTime = (dateString: string | undefined): string => {
-    if (!dateString) {
-      return 'Unknown';
-    }
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
-    } catch (e) {
-      return 'Invalid Date';
-    }
+  // Connection status indicator
+  const connectionStatus = isConnected ? {
+    color: currentTheme.colors.success,
+    label: 'Connected'
+  } : {
+    color: currentTheme.colors.error,
+    label: 'Disconnected'
   };
   
   return (
-    <div className="mb-8 pb-8">
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>
-          Queue Monitor
-        </h1>
-        <div className="mt-2 sm:mt-0 flex items-center space-x-4">
-          <div className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
-            Last updated: {lastUpdated.toLocaleTimeString()}
-          </div>
-          <button
-            onClick={handleManualRefresh}
-            className="p-2 rounded-md text-sm"
+    <div className="space-y-6">
+      {/* Header with refresh controls */}
+      <RefreshControls
+        title="Queue Monitor"
+        lastUpdated={lastUpdated}
+        isLoading={isLoadingStats || isLoadingQueue || isLoadingHistory}
+        onRefresh={handleRefresh}
+        accentColor={currentTheme.colors.accentPrimary}
+        textMutedColor={currentTheme.colors.textMuted}
+        bgSecondaryColor={currentTheme.colors.bgSecondary}
+        textSecondaryColor={currentTheme.colors.textSecondary}
+        borderColor={currentTheme.colors.borderColor}
+      >
+        <div 
+          className="flex items-center text-sm rounded-md px-3 py-1"
+          style={{ 
+            backgroundColor: `${connectionStatus.color}15`,
+            color: connectionStatus.color
+          }}
+        >
+          <span className="inline-block w-2 h-2 rounded-full mr-2" 
             style={{ 
-              backgroundColor: currentTheme.colors.bgSecondary,
-              color: currentTheme.colors.textSecondary,
-              border: `1px solid ${currentTheme.colors.borderColor}`
-            }}
-            disabled={loading}
-          >
-            {loading ? 'Refreshing...' : 'Refresh Now'}
-          </button>
+              backgroundColor: connectionStatus.color,
+              boxShadow: `0 0 0 2px ${connectionStatus.color}40`,
+              ...(isConnected ? { animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' } : {})
+            }} 
+          />
+          {connectionStatus.label}
         </div>
-      </div>
+      </RefreshControls>
       
+      {/* Queue Stats */}
+      <Card title="Queue Status">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatusCounter
+            count={queueStats.total_waiting || 0}
+            label="Waiting"
+            icon={getStatusIcon('waiting')}
+            color={currentTheme.colors.primary}
+            onClick={() => setActiveTab('active')}
+            isActive={activeTab === 'active'}
+            showIndicator={queueStats.total_waiting > 0}
+          />
+          
+          <StatusCounter
+            count={queueStats.total_processing || 0}
+            label="Processing"
+            icon={getStatusIcon('processing')}
+            color={currentTheme.colors.warning}
+            onClick={() => setActiveTab('active')}
+            isActive={activeTab === 'active'}
+            showIndicator={queueStats.total_processing > 0}
+          />
+          
+          <StatusCounter
+            count={queueStats.total_completed || 0}
+            label="Completed"
+            icon={getStatusIcon('completed')}
+            color={currentTheme.colors.success}
+            onClick={() => setActiveTab('history')}
+            isActive={activeTab === 'history'}
+          />
+          
+          <StatusCounter
+            count={queueStats.total_error || 0}
+            label="Errors"
+            icon={getStatusIcon('error')}
+            color={currentTheme.colors.error}
+            onClick={() => setActiveTab('history')}
+            isActive={activeTab === 'history'}
+            showIndicator={queueStats.total_error > 0}
+          />
+        </div>
+        
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 rounded-lg"
+            style={{ backgroundColor: currentTheme.colors.bgSecondary }}
+          >
+            <div className="text-sm font-medium mb-1" style={{ color: currentTheme.colors.textSecondary }}>
+              Worker Count
+            </div>
+            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
+              {queueStats.worker_count || 0}
+            </div>
+          </div>
+          
+          <div className="p-4 rounded-lg"
+            style={{ backgroundColor: currentTheme.colors.bgSecondary }}
+          >
+            <div className="text-sm font-medium mb-1" style={{ color: currentTheme.colors.textSecondary }}>
+              Avg. Wait Time
+            </div>
+            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
+              {queueStats.avg_wait_time ? `${queueStats.avg_wait_time.toFixed(1)}s` : 'N/A'}
+            </div>
+          </div>
+          
+          <div className="p-4 rounded-lg"
+            style={{ backgroundColor: currentTheme.colors.bgSecondary }}
+          >
+            <div className="text-sm font-medium mb-1" style={{ color: currentTheme.colors.textSecondary }}>
+              Avg. Process Time
+            </div>
+            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
+              {queueStats.avg_process_time ? `${queueStats.avg_process_time.toFixed(1)}s` : 'N/A'}
+            </div>
+          </div>
+          
+          <div className="p-4 rounded-lg"
+            style={{ backgroundColor: currentTheme.colors.bgSecondary }}
+          >
+            <div className="text-sm font-medium mb-1" style={{ color: currentTheme.colors.textSecondary }}>
+              Total Items
+            </div>
+            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
+              {(queueStats.total_waiting || 0) + 
+               (queueStats.total_processing || 0) + 
+               (queueStats.total_completed || 0) + 
+               (queueStats.total_error || 0)}
+            </div>
+          </div>
+        </div>
+      </Card>
+      
+      {/* Error message */}
       {error && (
         <div 
-          className="mb-6 p-3 rounded-md"
+          className="p-3 rounded-md"
           style={{
             backgroundColor: `${currentTheme.colors.error}20`,
             color: currentTheme.colors.error,
@@ -191,270 +457,49 @@ const QueueMonitor: React.FC = () => {
         </div>
       )}
       
-      {/* Controls */}
-      <Card className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-2">
-            <label 
-              htmlFor="auto-refresh" 
-              className="flex items-center cursor-pointer"
-              style={{ color: currentTheme.colors.textSecondary }}
-            >
-              <input
-                id="auto-refresh"
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={toggleAutoRefresh}
-                className="mr-2"
-              />
-              Auto-refresh
-            </label>
-            
-            {autoRefresh && (
-              <select
-                value={refreshInterval}
-                onChange={handleRefreshIntervalChange}
-                className="p-1 rounded-md text-sm"
-                style={{
-                  backgroundColor: currentTheme.colors.bgTertiary,
-                  color: currentTheme.colors.textPrimary,
-                  border: `1px solid ${currentTheme.colors.borderColor}`
-                }}
-              >
-                <option value={5000}>Every 5 seconds</option>
-                <option value={10000}>Every 10 seconds</option>
-                <option value={30000}>Every 30 seconds</option>
-                <option value={60000}>Every minute</option>
-              </select>
-            )}
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <label 
-              htmlFor="priority-filter" 
-              className="text-sm"
-              style={{ color: currentTheme.colors.textSecondary }}
-            >
-              Priority Filter:
-            </label>
-            <select
-              id="priority-filter"
-              value={selectedPriority === null ? 'all' : selectedPriority.toString()}
-              onChange={handlePriorityChange}
-              className="p-1 rounded-md text-sm"
-              style={{
-                backgroundColor: currentTheme.colors.bgTertiary,
-                color: currentTheme.colors.textPrimary,
-                border: `1px solid ${currentTheme.colors.borderColor}`
-              }}
-            >
-              <option value="all">All Priorities</option>
-              <option value="1">High (1)</option>
-              <option value="2">Medium (2)</option>
-              <option value="3">Low (3)</option>
-            </select>
-          </div>
-        </div>
-      </Card>
-      
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl font-bold" style={{ color: currentTheme.colors.accentPrimary }}>
-              {queueStats.total_waiting}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Waiting in Queue
-            </div>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl font-bold" style={{ color: currentTheme.colors.warning }}>
-              {queueStats.total_processing}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Currently Processing
-            </div>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl font-bold" style={{ color: currentTheme.colors.success }}>
-              {queueStats.total_completed}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Completed (Last 24h)
-            </div>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="text-center">
-            <div className="text-3xl font-bold" style={{ color: currentTheme.colors.error }}>
-              {queueStats.total_error}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Errors (Last 24h)
-            </div>
-          </div>
-        </Card>
-      </div>
-      
-      {/* Additional Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card>
-          <div className="text-center">
-            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
-              {queueStats.requests_per_hour !== undefined ? queueStats.requests_per_hour.toFixed(1) : "0.0"}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Requests/Hour
-            </div>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="text-center">
-            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
-              {formatDuration(queueStats.average_wait_time)}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Average Wait Time
-            </div>
-          </div>
-        </Card>
-        
-        <Card>
-          <div className="text-center">
-            <div className="text-xl font-bold" style={{ color: currentTheme.colors.textPrimary }}>
-              {formatDuration(queueStats.average_processing_time)}
-            </div>
-            <div className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
-              Average Processing Time
-            </div>
-          </div>
-        </Card>
-      </div>
-      
-      {/* Current Queue */}
-      <Card title="Current Queue" className="mb-6">
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-2"
-              style={{ borderColor: `${currentTheme.colors.accentPrimary}40`, borderTopColor: 'transparent' }}
+      {/* Tab view for queue/history */}
+      <Card>
+        <TabView
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          accentColor={currentTheme.colors.accentPrimary}
+          textColor={currentTheme.colors.textPrimary}
+          inactiveTextColor={currentTheme.colors.textSecondary}
+          borderColor={currentTheme.colors.borderColor}
+        >
+          {activeTab === 'active' ? (
+            <DataTable
+              data={queueItems}
+              columns={queueColumns}
+              keyExtractor={(item) => item.id || `queue-${Math.random()}`}
+              isLoading={isLoadingQueue}
+              emptyStateMessage="No active queue items"
+              headerBgColor={currentTheme.colors.bgSecondary}
+              headerTextColor={currentTheme.colors.textSecondary}
+              rowBgColor={currentTheme.colors.bgPrimary}
+              rowHoverColor={currentTheme.colors.bgSecondary}
+              borderColor={currentTheme.colors.borderColor}
+              textPrimaryColor={currentTheme.colors.textPrimary}
+              textSecondaryColor={currentTheme.colors.textSecondary}
             />
-            <p style={{ color: currentTheme.colors.textSecondary }}>Loading queue data...</p>
-          </div>
-        ) : queueItems.length === 0 ? (
-          <div className="text-center py-8" style={{ color: currentTheme.colors.textSecondary }}>
-            No items currently in queue
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full" style={{ color: currentTheme.colors.textPrimary }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${currentTheme.colors.borderColor}` }}>
-                  <th className="p-3 text-left font-medium">ID</th>
-                  <th className="p-3 text-left font-medium">Status</th>
-                  <th className="p-3 text-left font-medium">Priority</th>
-                  <th className="p-3 text-left font-medium">User</th>
-                  <th className="p-3 text-left font-medium">Created</th>
-                  <th className="p-3 text-left font-medium">Wait Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {queueItems.map((item) => (
-                  <tr 
-                    key={item.id}
-                    style={{ 
-                      borderBottom: `1px solid ${currentTheme.colors.borderColor}30`,
-                      backgroundColor: item.status === 'processing' ? `${currentTheme.colors.warning}10` : 'transparent'
-                    }}
-                  >
-                    <td className="p-3 font-mono">{item.id?.substring(0, 8) || 'Unknown'}...</td>
-                    <td className="p-3">
-                      <span 
-                        className="px-2 py-1 rounded-full text-xs font-medium"
-                        style={{ 
-                          backgroundColor: item.status === 'waiting' 
-                            ? `${currentTheme.colors.info}20` 
-                            : `${currentTheme.colors.warning}20`,
-                          color: item.status === 'waiting' 
-                            ? currentTheme.colors.info 
-                            : currentTheme.colors.warning
-                        }}
-                      >
-                        {item.status || 'Unknown'}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      {item.priority === 1 ? 'High' : item.priority === 2 ? 'Medium' : 'Low'}
-                    </td>
-                    <td className="p-3">{item.username || 'Unknown'}</td>
-                    <td className="p-3">{formatDateTime(item.created_at)}</td>
-                    <td className="p-3">
-                      {item.queue_wait_time ? formatDuration(item.queue_wait_time) : 'N/A'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-      
-      {/* Recent History */}
-      <Card title="Recent Completions">
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-2"
-              style={{ borderColor: `${currentTheme.colors.accentPrimary}40`, borderTopColor: 'transparent' }}
+          ) : (
+            <DataTable
+              data={historyItems}
+              columns={historyColumns}
+              keyExtractor={(item) => item.id || `history-${Math.random()}`}
+              isLoading={isLoadingHistory}
+              emptyStateMessage="No history items"
+              headerBgColor={currentTheme.colors.bgSecondary}
+              headerTextColor={currentTheme.colors.textSecondary}
+              rowBgColor={currentTheme.colors.bgPrimary}
+              rowHoverColor={currentTheme.colors.bgSecondary}
+              borderColor={currentTheme.colors.borderColor}
+              textPrimaryColor={currentTheme.colors.textPrimary}
+              textSecondaryColor={currentTheme.colors.textSecondary}
             />
-            <p style={{ color: currentTheme.colors.textSecondary }}>Loading history data...</p>
-          </div>
-        ) : historyItems.length === 0 ? (
-          <div className="text-center py-8" style={{ color: currentTheme.colors.textSecondary }}>
-            No recent completions
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full" style={{ color: currentTheme.colors.textPrimary }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${currentTheme.colors.borderColor}` }}>
-                  <th className="p-3 text-left font-medium">ID</th>
-                  <th className="p-3 text-left font-medium">User</th>
-                  <th className="p-3 text-left font-medium">Priority</th>
-                  <th className="p-3 text-left font-medium">Completed</th>
-                  <th className="p-3 text-left font-medium">Processing Time</th>
-                  <th className="p-3 text-left font-medium">Tokens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyItems.map((item) => (
-                  <tr 
-                    key={item.id}
-                    style={{ borderBottom: `1px solid ${currentTheme.colors.borderColor}30` }}
-                  >
-                    <td className="p-3 font-mono">{item.id?.substring(0, 8) || 'Unknown'}...</td>
-                    <td className="p-3">{item.username || 'Unknown'}</td>
-                    <td className="p-3">
-                      {item.priority === 1 ? 'High' : item.priority === 2 ? 'Medium' : 'Low'}
-                    </td>
-                    <td className="p-3">{formatDateTime(item.completed_at)}</td>
-                    <td className="p-3">{formatDuration(item.processing_time)}</td>
-                    <td className="p-3">
-                      {item.total_tokens ? item.total_tokens.toLocaleString() : 'N/A'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          )}
+        </TabView>
       </Card>
     </div>
   );

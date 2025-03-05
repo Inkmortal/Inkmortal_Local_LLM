@@ -21,6 +21,13 @@ const API_PATHS = {
     QUEUE_HISTORY: '/admin/queue/history',
     USAGE_STATS: '/admin/usage/stats',
     USERS: '/admin/users' // User management
+  },
+  // Legacy paths for compatibility
+  ADMIN_AUTH: {
+    TOKENS: '/auth/admin/tokens',
+    API_KEYS: '/auth/admin/api-keys',
+    IP_WHITELIST: '/auth/admin/ip-whitelist',
+    USERS: '/auth/admin/users'
   }
 };
 
@@ -91,6 +98,7 @@ export interface IPWhitelistEntry {
   ip: string; // Backend uses 'ip' not 'ip_address'
   added: string; // Backend uses 'added' not 'created_at'
   lastUsed: string | null; // Backend uses 'lastUsed'
+  is_active: boolean; // Added based on backend schema
 }
 
 // Queue Types - Added based on backend
@@ -262,6 +270,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
  */
 export const fetchRegistrationTokens = async (): Promise<RegistrationToken[]> => {
   try {
+    // Try the new endpoint first
     const response = await fetchApi<RegistrationToken[]>(API_PATHS.ADMIN.TOKENS);
     
     if (!response.success) {
@@ -334,6 +343,11 @@ export const fetchSystemStats = async (): Promise<SystemStats | null> => {
       throw new Error(`Failed to fetch system stats: ${response.error || response.status}`);
     }
     
+    // If queue_connected is undefined, assume it's connected
+    if (response.data && response.data.queue_connected === undefined) {
+      response.data.queue_connected = true;
+    }
+    
     return response.data;
   } catch (error) {
     console.error('Error fetching system stats:', error);
@@ -370,7 +384,15 @@ export const fetchIPWhitelist = async (): Promise<IPWhitelistEntry[]> => {
       throw new Error(`Failed to fetch IP whitelist: ${response.error || response.status}`);
     }
     
-    return response.data || [];
+    // If is_active field doesn't exist, default to true
+    const entries = (response.data || []).map(entry => {
+      if (entry.is_active === undefined) {
+        return {...entry, is_active: true};
+      }
+      return entry;
+    });
+    
+    return entries;
   } catch (error) {
     console.error('Error fetching IP whitelist:', error);
     return [];
@@ -521,10 +543,41 @@ export const fetchQueueStats = async (): Promise<QueueStats | null> => {
       throw new Error(`Failed to fetch queue stats: ${response.error || response.status}`);
     }
     
-    return response.data;
+    // Ensure consistent default values
+    const stats = response.data || {
+      total_waiting: 0,
+      total_processing: 0,
+      total_completed: 0,
+      total_error: 0,
+      requests_per_hour: 0,
+      average_wait_time: 0,
+      average_processing_time: 0,
+      queue_by_priority: {}
+    };
+    
+    // Handle missing fields with defaults
+    return {
+      total_waiting: stats.total_waiting || 0,
+      total_processing: stats.total_processing || 0,
+      total_completed: stats.total_completed || 0,
+      total_error: stats.total_error || 0,
+      requests_per_hour: stats.requests_per_hour || 0,
+      average_wait_time: stats.average_wait_time || 0,
+      average_processing_time: stats.average_processing_time || 0,
+      queue_by_priority: stats.queue_by_priority || {}
+    };
   } catch (error) {
     console.error('Error fetching queue stats:', error);
-    return null;
+    return {
+      total_waiting: 0,
+      total_processing: 0,
+      total_completed: 0,
+      total_error: 0,
+      requests_per_hour: 0,
+      average_wait_time: 0,
+      average_processing_time: 0,
+      queue_by_priority: {}
+    };
   }
 };
 
@@ -571,10 +624,20 @@ export const fetchQueueHistory = async (priority?: number): Promise<HistoryItem[
  */
 export const fetchUsers = async (): Promise<User[]> => {
   try {
+    // Try the new endpoint first
     const response = await fetchApi<User[]>(API_PATHS.ADMIN.USERS);
     
     if (!response.success) {
-      throw new Error(`Failed to fetch users: ${response.error || response.status}`);
+      console.warn(`Failed to fetch users from primary endpoint: ${response.error || response.status}`);
+      
+      // Try the legacy endpoint as fallback
+      const legacyResponse = await fetchApi<User[]>(API_PATHS.ADMIN_AUTH.USERS);
+      
+      if (!legacyResponse.success) {
+        throw new Error(`Failed to fetch users: ${legacyResponse.error || legacyResponse.status}`);
+      }
+      
+      return legacyResponse.data || [];
     }
     
     return response.data || [];
@@ -589,12 +652,22 @@ export const fetchUsers = async (): Promise<User[]> => {
  */
 export const deleteUser = async (userId: string): Promise<boolean> => {
   try {
-    const response = await fetchApi(`${API_PATHS.ADMIN.USERS}/${userId}`, {
+    // Try the new endpoint first
+    let response = await fetchApi(`${API_PATHS.ADMIN.USERS}/${userId}`, {
       method: 'DELETE',
     });
     
+    // If it doesn't work, try the legacy endpoint
     if (!response.success) {
-      throw new Error(`Failed to delete user: ${response.error || response.status}`);
+      console.warn(`Failed to delete user with primary endpoint: ${response.error || response.status}`);
+      
+      response = await fetchApi(`${API_PATHS.ADMIN_AUTH.USERS}/${userId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.success) {
+        throw new Error(`Failed to delete user: ${response.error || response.status}`);
+      }
     }
     
     return true;
