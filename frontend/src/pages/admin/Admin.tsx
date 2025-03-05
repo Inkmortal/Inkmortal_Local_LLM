@@ -93,7 +93,7 @@ const AdminDashboard: React.FC = () => {
             id: 'tokens',
             title: 'Registration Tokens',
             count: tokensResponse.length,
-            active: tokensResponse.filter(token => !token.is_used).length,
+            active: tokensResponse.filter(token => !token.used).length,
             path: '/admin/tokens'
           },
           {
@@ -310,7 +310,7 @@ const AdminDashboard: React.FC = () => {
                   style={{ 
                     width: `${systemStats.cpu}%`,
                     background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                    boxShadow: systemStats.cpu > 80 ? `0 0 8px ${currentTheme.colors.accentPrimary}` : 'none'
+                    boxShadow: Number(systemStats.cpu) > 80 ? `0 0 8px ${currentTheme.colors.accentPrimary}` : 'none'
                   }}
                 />
               </div>
@@ -320,7 +320,7 @@ const AdminDashboard: React.FC = () => {
               <div className="flex justify-between mb-2 items-center">
                 <span className="font-medium">Memory Usage</span>
                 <span className="font-mono font-medium" style={{ 
-                  color: systemStats.memory > 80 ? currentTheme.colors.error : currentTheme.colors.accentSecondary
+                  color: Number(systemStats.memory) > 80 ? currentTheme.colors.error : currentTheme.colors.accentSecondary
                 }}>{systemStats.memory}%</span>
               </div>
               <div className="h-2.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}60` }}>
@@ -328,10 +328,10 @@ const AdminDashboard: React.FC = () => {
                   className="h-full rounded-full transition-all duration-500"
                   style={{ 
                     width: `${systemStats.memory}%`,
-                    background: systemStats.memory > 80 
+                    background: Number(systemStats.memory) > 80 
                       ? `linear-gradient(to right, ${currentTheme.colors.error}, ${currentTheme.colors.warning})` 
                       : `linear-gradient(to right, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.accentTertiary})`,
-                    boxShadow: systemStats.memory > 80 ? `0 0 8px ${currentTheme.colors.error}` : 'none'
+                    boxShadow: Number(systemStats.memory) > 80 ? `0 0 8px ${currentTheme.colors.error}` : 'none'
                   }}
                 />
               </div>
@@ -356,7 +356,7 @@ const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t" style={{ borderColor: `${currentTheme.colors.borderColor}40` }}>
               <div>
                 <p className="text-sm font-medium" style={{ color: currentTheme.colors.textMuted }}>Uptime</p>
-                <p className="font-medium mt-1">{systemStats.uptime}</p>
+                <p className="font-medium mt-1">{typeof systemStats.uptime === 'string' ? systemStats.uptime : 'Unknown'}</p>
               </div>
               <div>
                 <p className="text-sm font-medium" style={{ color: currentTheme.colors.textMuted }}>Ollama Status</p>
