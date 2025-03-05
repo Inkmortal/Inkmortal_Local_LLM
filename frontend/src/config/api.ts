@@ -41,7 +41,10 @@ const isProtectedRoute = (endpoint: string): boolean => {
   const publicAuthEndpoints = [
     '/auth/login',
     '/auth/admin/login',
-    '/auth/register'
+    '/auth/register',
+    '/auth/admin/setup-status',
+    '/auth/admin/fetch-setup-token',
+    '/auth/admin/setup'
   ];
   
   // If this is a public auth endpoint, it doesn't need a token
@@ -53,12 +56,26 @@ const isProtectedRoute = (endpoint: string): boolean => {
   // - Admin routes
   // - Auth routes except login/register endpoints
   // - User routes
-  // - Chat routes
+  // - Chat routes (both direct and API endpoints)
+  // - API gateway routes
+  // Special handling for admin setup endpoints which should ALWAYS be public
+  const adminSetupEndpoints = [
+    '/auth/admin/setup-status',
+    '/auth/admin/fetch-setup-token',
+    '/auth/admin/setup'
+  ];
+  
+  if (adminSetupEndpoints.includes(endpoint)) {
+    console.log(`Access to public admin setup endpoint: ${endpoint}`);
+    return false; 
+  }
+
   return (
     endpoint.startsWith('/admin') ||
     endpoint.startsWith('/auth/') ||
     endpoint.startsWith('/user') ||
     endpoint.startsWith('/chat') ||
+    endpoint.startsWith('/api/chat') || // API chat routes
     endpoint.startsWith('/api/v1') // API gateway routes
   );
 };
@@ -134,12 +151,24 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
     };
     
     // Handle 401 Unauthorized responses by clearing token
-    if (response.status === 401 && isProtectedRoute(endpoint)) {
-      console.warn('Authentication failed for protected route - clearing token');
-      localStorage.removeItem('authToken');
-      
-      // Authentication redirects should be handled in the auth context component
-      // rather than directly in the API utility
+    if (response.status === 401) {
+      // Special handling for admin setup endpoints
+      if (
+        endpoint === '/auth/admin/setup-status' ||
+        endpoint === '/auth/admin/fetch-setup-token' ||
+        endpoint === '/auth/admin/setup'
+      ) {
+        console.error(`Authentication error for admin setup endpoint: ${endpoint}`);
+        console.error('This should never happen as these are public endpoints');
+      } 
+      // Regular handling for protected routes
+      else if (isProtectedRoute(endpoint)) {
+        console.warn('Authentication failed for protected route - clearing token');
+        localStorage.removeItem('authToken');
+        
+        // Authentication redirects should be handled in the auth context component
+        // rather than directly in the API utility
+      }
     }
     
     // For all responses, try to parse JSON data
@@ -191,6 +220,93 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
  * Helper function to check if the backend is available
  * Returns true if the backend is reachable, false otherwise
  */
+/**
+ * Specialized fetch function for admin setup endpoints that should never require authentication
+ * This function bypasses all authentication checks
+ */
+export const fetchAdminSetup = async <T = any>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> => {
+  // Validate that this is only used for admin setup endpoints
+  const validEndpoints = [
+    '/auth/admin/setup-status',
+    '/auth/admin/fetch-setup-token',
+    '/auth/admin/setup'
+  ];
+  
+  if (!validEndpoints.includes(endpoint)) {
+    console.error(`fetchAdminSetup should only be used with admin setup endpoints, got: ${endpoint}`);
+    return {
+      success: false,
+      status: 400,
+      data: null,
+      error: 'Invalid use of fetchAdminSetup function'
+    };
+  }
+  
+  const url = `${API_BASE_URL}${endpoint}`;
+  console.log(`Admin setup fetch from: ${url} (no auth)`);
+  
+  // Create headers without authentication
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  
+  try {
+    // Make the fetch request with no auth
+    const response = await fetch(url, {
+      ...options,
+      headers
+    });
+    
+    console.log(`Admin setup response from ${url}: ${response.status}`);
+    
+    // Initialize response structure
+    const apiResponse: ApiResponse<T> = {
+      success: response.ok,
+      status: response.status,
+      data: null
+    };
+    
+    // Process response body
+    try {
+      if (response.status !== 204 && response.headers.get('content-length') !== '0') {
+        const responseText = await response.text();
+        if (responseText) {
+          try {
+            apiResponse.data = JSON.parse(responseText);
+          } catch (jsonError) {
+            apiResponse.data = responseText as unknown as T;
+          }
+        }
+      }
+      
+      if (!response.ok) {
+        if (apiResponse.data && typeof apiResponse.data === 'object' && (apiResponse.data as any).detail) {
+          apiResponse.error = (apiResponse.data as any).detail;
+        } else if (apiResponse.data && typeof apiResponse.data === 'string') {
+          apiResponse.error = apiResponse.data;
+        } else {
+          apiResponse.error = `Error ${response.status}: ${response.statusText}`;
+        }
+        console.error(`Admin setup API error (${response.status}): ${apiResponse.error}`);
+      }
+    } catch (e) {
+      console.error('Error processing admin setup response:', e);
+      apiResponse.error = `Error ${response.status}: ${response.statusText}`;
+    }
+    
+    return apiResponse;
+  } catch (error) {
+    console.error(`Network error in admin setup fetch ${url}:`, error);
+    return {
+      success: false,
+      status: 0,
+      data: null,
+      error: `Cannot connect to backend server at ${API_BASE_URL}`
+    };
+  }
+};
+
 export const checkBackendConnection = async (): Promise<boolean> => {
   try {
     // First check if the health endpoint exists

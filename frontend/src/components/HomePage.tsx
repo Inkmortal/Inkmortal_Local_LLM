@@ -124,7 +124,14 @@ const HomePage: React.FC = () => {
             size="sm"
             variant="ghost"
             onClick={() => {
-              navigate(ROUTES.CHAT);
+              // Check auth state before navigating
+              const token = localStorage.getItem('authToken');
+              if (token) {
+                navigate(ROUTES.CHAT);
+              } else {
+                // Redirect to login with chat as destination
+                navigate(ROUTES.LOGIN, { state: { from: ROUTES.CHAT } });
+              }
             }}
             className="hover-float transition-all duration-300"
           >
@@ -175,7 +182,14 @@ const HomePage: React.FC = () => {
               <Button 
                 size="lg"
                 onClick={() => {
-                  navigate(ROUTES.CHAT);
+                  // Check auth state before navigating
+                  const token = localStorage.getItem('authToken');
+                  if (token) {
+                    navigate(ROUTES.CHAT);
+                  } else {
+                    // Redirect to login with chat as destination
+                    navigate(ROUTES.LOGIN, { state: { from: ROUTES.CHAT } });
+                  }
                 }}
                 className="button-shimmer group"
                 style={{ 
@@ -421,7 +435,14 @@ const HomePage: React.FC = () => {
               <Button
                 size="lg"
                 onClick={() => {
-                  navigate(ROUTES.CHAT);
+                  // Check auth state before navigating
+                  const token = localStorage.getItem('authToken');
+                  if (token) {
+                    navigate(ROUTES.CHAT);
+                  } else {
+                    // Redirect to login with chat as destination
+                    navigate(ROUTES.LOGIN, { state: { from: ROUTES.CHAT } });
+                  }
                 }}
                 className="button-shimmer"
               >

@@ -78,8 +78,16 @@ export async function createConversation(): Promise<{ conversation_id: string }>
   });
   
   if (!response.success || !response.data) {
-    const errorMessage = response.error || 'Failed to create conversation';
-    console.error(errorMessage);
+    // Provide more informative error message based on status code
+    let errorMessage = response.error || 'Failed to create conversation';
+    
+    if (response.status === 401) {
+      errorMessage = 'Authentication required. Please log in to create a conversation.';
+    } else if (response.status === 0) {
+      errorMessage = 'Network error: Cannot connect to server. Please check your connection.';
+    }
+    
+    console.error(`Create conversation error (${response.status}): ${errorMessage}`);
     throw new Error(errorMessage);
   }
   

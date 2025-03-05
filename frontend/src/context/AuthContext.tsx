@@ -396,9 +396,11 @@ export const RequireAuth = ({
       if (requireAdmin) {
         // Admin routes go to admin login
         redirectPath = '/admin/login';
-      } else if (location.pathname.includes('/chat')) {
+      } else if (location.pathname.includes('/chat') || location.pathname.startsWith('/api/chat')) {
         // Chat routes go to regular login
         redirectPath = '/login';
+        // Add a console message to help debugging
+        console.log(`Redirecting from ${location.pathname} to ${redirectPath} - user not authenticated`);
       } else {
         // Other routes go to unauthorized page
         redirectPath = '/unauthorized';
@@ -445,9 +447,11 @@ export const withAuth = <P extends ComponentProps>(
       if (requireAdmin) {
         // Admin routes go to admin login
         navigate('/admin/login', { state: { from: location.pathname } });
-      } else if (location.pathname.includes('/chat')) {
+      } else if (location.pathname.includes('/chat') || location.pathname.startsWith('/api/chat')) {
         // Chat routes go to regular login
         navigate('/login', { state: { from: location.pathname } });
+        // Add a console message to help debugging
+        console.log(`Legacy HOC redirecting from ${location.pathname} to /login - user not authenticated`);
       } else {
         // Other routes go to unauthorized page
         navigate('/unauthorized', { state: { from: location.pathname } });

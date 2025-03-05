@@ -63,16 +63,30 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   
   // Run loadConversation when the component mounts
   useEffect(() => {
+    // Check if we have an auth token before attempting API calls
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+      console.warn('No auth token found - skipping conversation initialization');
+      return;
+    }
+    
     if (initialConversationId) {
       loadConversation();
     } else if (!conversationId) {
       // Create a new conversation if no ID is provided
       createNewConversation();
     }
-  }, [initialConversationId, loadConversation]);
+  }, [initialConversationId, loadConversation, conversationId]);
   
   // Function to create a new conversation
   const createNewConversation = async () => {
+    // Check for auth token first
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+      console.warn('Cannot create conversation - user not authenticated');
+      return;
+    }
+    
     try {
       const response = await createConversation();
       setConversationId(response.conversation_id);
@@ -85,6 +99,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       }]);
     } catch (error) {
       console.error('Error creating new conversation:', error);
+      // Don't set error message here - let the API function handle it
     }
   };
   

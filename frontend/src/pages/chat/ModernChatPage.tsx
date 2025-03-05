@@ -53,6 +53,12 @@ const ModernChatPage: React.FC = () => {
   // Initialize conversation and load conversation history when component mounts
   useEffect(() => {
     const initConversation = async () => {
+      // Verify authentication before making API calls
+      if (!isAuthenticated) {
+        console.warn('User not authenticated, skipping conversation initialization');
+        return;
+      }
+      
       // First try to initialize the conversation if needed
       if (!chatState.conversationId) {
         try {
@@ -122,7 +128,7 @@ const ModernChatPage: React.FC = () => {
     return () => {
       // Cleanup function
     };
-  }, []);
+  }, [isAuthenticated, chatState.conversationId, chatState.createNewConversation]);
 
   // Sidebar toggles
   const toggleHistorySidebar = () => {
