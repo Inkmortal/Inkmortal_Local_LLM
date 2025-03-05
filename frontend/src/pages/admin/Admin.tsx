@@ -220,6 +220,19 @@ const AdminDashboard: React.FC = () => {
     return gradients[index % gradients.length];
   };
 
+  // Helper function to handle system stats that might be objects
+  const getCpuValue = () => {
+    return typeof systemStats.cpu === 'object' ? (systemStats.cpu?.usage || 0) : systemStats.cpu;
+  }
+  
+  const getMemoryValue = () => {
+    return typeof systemStats.memory === 'object' ? (systemStats.memory?.percentage || 0) : systemStats.memory;
+  }
+  
+  const getStorageValue = () => {
+    return typeof systemStats.storage === 'object' ? (systemStats.storage?.percentage || 0) : systemStats.storage;
+  }
+
   return (
     <div className="mb-8 pb-8">
       <div className="mb-8 pb-4 border-b" style={{ borderColor: `${currentTheme.colors.borderColor}40` }}>
@@ -302,15 +315,17 @@ const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between mb-2 items-center">
                 <span className="font-medium">CPU Usage</span>
-                <span className="font-mono font-medium" style={{ color: currentTheme.colors.accentPrimary }}>{systemStats.cpu}%</span>
+                <span className="font-mono font-medium" style={{ color: currentTheme.colors.accentPrimary }}>
+                  {getCpuValue()}%
+                </span>
               </div>
               <div className="h-2.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}60` }}>
                 <div 
                   className="h-full rounded-full transition-all duration-500"
                   style={{ 
-                    width: `${systemStats.cpu}%`,
+                    width: `${getCpuValue()}%`,
                     background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-                    boxShadow: Number(systemStats.cpu) > 80 ? `0 0 8px ${currentTheme.colors.accentPrimary}` : 'none'
+                    boxShadow: Number(getCpuValue()) > 80 ? `0 0 8px ${currentTheme.colors.accentPrimary}` : 'none'
                   }}
                 />
               </div>
@@ -320,18 +335,20 @@ const AdminDashboard: React.FC = () => {
               <div className="flex justify-between mb-2 items-center">
                 <span className="font-medium">Memory Usage</span>
                 <span className="font-mono font-medium" style={{ 
-                  color: Number(systemStats.memory) > 80 ? currentTheme.colors.error : currentTheme.colors.accentSecondary
-                }}>{systemStats.memory}%</span>
+                  color: Number(getMemoryValue()) > 80 ? currentTheme.colors.error : currentTheme.colors.accentSecondary
+                }}>
+                  {getMemoryValue()}%
+                </span>
               </div>
               <div className="h-2.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}60` }}>
                 <div 
                   className="h-full rounded-full transition-all duration-500"
                   style={{ 
-                    width: `${systemStats.memory}%`,
-                    background: Number(systemStats.memory) > 80 
+                    width: `${getMemoryValue()}%`,
+                    background: Number(getMemoryValue()) > 80 
                       ? `linear-gradient(to right, ${currentTheme.colors.error}, ${currentTheme.colors.warning})` 
                       : `linear-gradient(to right, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.accentTertiary})`,
-                    boxShadow: Number(systemStats.memory) > 80 ? `0 0 8px ${currentTheme.colors.error}` : 'none'
+                    boxShadow: Number(getMemoryValue()) > 80 ? `0 0 8px ${currentTheme.colors.error}` : 'none'
                   }}
                 />
               </div>
@@ -340,13 +357,15 @@ const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between mb-2 items-center">
                 <span className="font-medium">Storage</span>
-                <span className="font-mono font-medium" style={{ color: currentTheme.colors.accentTertiary }}>{systemStats.storage}%</span>
+                <span className="font-mono font-medium" style={{ color: currentTheme.colors.accentTertiary }}>
+                  {getStorageValue()}%
+                </span>
               </div>
               <div className="h-2.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}60` }}>
                 <div 
                   className="h-full rounded-full transition-all duration-500"
                   style={{ 
-                    width: `${systemStats.storage}%`,
+                    width: `${getStorageValue()}%`,
                     background: `linear-gradient(to right, ${currentTheme.colors.accentTertiary}, ${currentTheme.colors.success})`,
                   }}
                 />
@@ -408,7 +427,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm font-medium" style={{ color: currentTheme.colors.textMuted }}>Model</p>
-                <p className="font-medium mt-1">{systemStats.ollama.model}</p>
+                <p className="font-medium mt-1">{typeof systemStats.ollama.model === 'string' ? systemStats.ollama.model : (typeof systemStats.ollama.model === 'object' ? JSON.stringify(systemStats.ollama.model) : 'Unknown')}</p>
               </div>
             </div>
 
