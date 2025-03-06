@@ -15,7 +15,7 @@ This implementation plan details the step-by-step process to connect the fronten
 
 1. Connect frontend chat UI to backend API endpoints ✅
 2. Implement proper error handling and loading states ✅
-3. Add conversation history management 
+3. Add conversation history management ✅
 4. Support file uploads
 5. Handle queue timeouts gracefully
 
@@ -32,6 +32,7 @@ This implementation plan details the step-by-step process to connect the fronten
 - `/frontend/src/components/chat/ChatInput.tsx` - Message input component
 - `/frontend/src/components/chat/ChatMessage.tsx` - Message display component with status indicators
 - `/frontend/src/pages/chat/ModernChatPage.tsx` - Main chat page
+- `/frontend/src/pages/chat/components/sidebars/HistorySidebar/HistorySidebar.tsx` - Conversation history sidebar
 
 ### Backend
 - `/backend/app/api/chat.py` - Chat API endpoints
@@ -112,31 +113,33 @@ This implementation plan details the step-by-step process to connect the fronten
 - Implemented proper error handling with status updates
 - Added support for queue position tracking when available
 
-### 6. Enhance useChatState Loading States (1-2 interactions)
+### 6. Enhance useChatState Loading States (1-2 interactions) ✅
 
 **Tasks:**
-- [ ] Refine loading state management in useChatState
-- [ ] Add differentiated states for network loading vs queue processing
-- [ ] Implement visual feedback for each state
-- [ ] Handle transition between states properly
+- [x] Refine loading state management in useChatState
+- [x] Add differentiated states for network loading vs queue processing
+- [x] Implement visual feedback for each state
+- [x] Handle transition between states properly
 
 **Notes:**
-- Loading states should be granular (initial load, sending, queued, receiving)
-- Use separate flags for different loading scenarios
-- Consider timeout handling for long-running requests
+- Added granular loading states (initial load, sending, queued, processing, receiving)
+- Implemented separate flags for different loading scenarios (isNetworkLoading, isQueueLoading, isProcessing)
+- Added proper state transitions based on message status
+- Connected loading indicators to UI components
 
-### 7. Implement Basic Conversation History (2-3 interactions)
+### 7. Implement Basic Conversation History (2-3 interactions) ✅
 
 **Tasks:**
-- [ ] Update loadConversation method to fetch from backend
-- [ ] Implement conversation listing in sidebar
-- [ ] Add conversation selection functionality
-- [ ] Store current conversation ID in state or URL
+- [x] Update loadConversation method to fetch from backend
+- [x] Implement conversation listing in sidebar
+- [x] Add conversation selection functionality
+- [x] Store current conversation ID in state or URL
 
 **Notes:**
-- Should load conversation messages when selected
-- Handle pagination if backend supports it
-- Provide loading states during fetching
+- Updated HistorySidebar component with conversation selection
+- Added loading states for conversation fetching
+- Implemented URL-based conversation tracking
+- Connected conversation history UI to backend API
 
 ### 8. Add Error Handling for Common Scenarios (1-2 interactions) ✅
 
@@ -293,9 +296,9 @@ This implementation plan details the step-by-step process to connect the fronten
 
 - [ ] Authentication works properly
 - [ ] Messages are sent and received correctly
-- [ ] Conversations can be created and loaded
+- [x] Conversations can be created and loaded
 - [ ] File uploads work as expected
-- [ ] Error scenarios are handled gracefully
+- [x] Error scenarios are handled gracefully
 - [x] Queue status is displayed correctly
 - [x] Network issues are handled properly
 - [x] UI states reflect backend status accurately

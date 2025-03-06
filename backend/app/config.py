@@ -44,7 +44,7 @@ class Settings:
         
         # Auth settings
         self.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
-        self.token_expire_minutes = int(os.getenv("TOKEN_EXPIRE_MINUTES", "60"))
+        self.token_expire_minutes = int(os.getenv("TOKEN_EXPIRE_MINUTES", "129600")) # 90 days
         
         # IP Whitelist management
         self.whitelisted_ips_env = os.getenv("WHITELISTED_IPS", "127.0.0.1")

@@ -7,7 +7,7 @@ import {
   listConversations, 
   MessageStatus 
 } from '../../../services/chat';
-import { Message, ChatRequestParams } from '../types/chat';
+import { Message, ChatRequestParams, Conversation } from '../types/chat';
 
 // Token counting utility function (rough estimate)
 // This is a simplified version - a proper tokenizer would be more accurate
@@ -35,13 +35,16 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   ]);
 
   // Conversation state
-  const [conversations, setConversations] = useState<Array<{id: string, title: string, date: Date}>>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const [conversationLoading, setConversationLoading] = useState(false);
 
-  // UI state
-  const [messageLoading, setMessageLoading] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Enhanced UI state for more granular loading tracking
+  const [messageLoading, setMessageLoading] = useState(false);        // General loading state
+  const [isGenerating, setIsGenerating] = useState(false);            // LLM is generating a response
+  const [isNetworkLoading, setIsNetworkLoading] = useState(false);    // Network request in progress
+  const [isQueueLoading, setIsQueueLoading] = useState(false);        // Message is in queue
+  const [isProcessing, setIsProcessing] = useState(false);            // Message is being processed
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
@@ -49,12 +52,13 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   // Load conversation history
   const loadConversations = useCallback(async () => {
     try {
+      setIsNetworkLoading(true);
       const result = await listConversations();
       
       if (result.length > 0) {
         const formattedConversations = result.map(conv => ({
           id: conv.conversation_id,
-          title: conv.title,
+          title: conv.title || "Untitled Conversation",
           date: new Date(conv.created_at)
         }));
         
@@ -62,15 +66,19 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       }
     } catch (error) {
       console.error('Error loading conversations:', error);
+    } finally {
+      setIsNetworkLoading(false);
     }
   }, []);
   
   // Load conversation if ID is provided
-  const loadConversation = useCallback(async () => {
-    if (initialConversationId) {
+  const loadConversation = useCallback(async (id?: string) => {
+    const conversationIdToLoad = id || initialConversationId;
+    if (conversationIdToLoad) {
       setConversationLoading(true);
+      setIsNetworkLoading(true);
       try {
-        const conversationData = await getConversation(initialConversationId);
+        const conversationData = await getConversation(conversationIdToLoad);
         
         if (!conversationData) {
           console.error('Conversation not found or error loading conversation');
@@ -96,6 +104,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         createNewConversation();
       } finally {
         setConversationLoading(false);
+        setIsNetworkLoading(false);
       }
     }
   }, [initialConversationId]);
@@ -130,6 +139,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     }
     
     setConversationLoading(true);
+    setIsNetworkLoading(true);
     try {
       const response = await createConversation();
       if (response) {
@@ -152,6 +162,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       console.error('Error creating new conversation:', error);
     } finally {
       setConversationLoading(false);
+      setIsNetworkLoading(false);
     }
   };
   
@@ -170,6 +181,25 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         ? { ...msg, status, ...(error && { error }) }
         : msg
     ));
+    
+    // Update UI loading states based on message status
+    if (status === MessageStatus.SENDING) {
+      setIsNetworkLoading(true);
+      setIsQueueLoading(false);
+      setIsProcessing(false);
+    } else if (status === MessageStatus.QUEUED) {
+      setIsNetworkLoading(false);
+      setIsQueueLoading(true);
+      setIsProcessing(false);
+    } else if (status === MessageStatus.PROCESSING) {
+      setIsNetworkLoading(false);
+      setIsQueueLoading(false);
+      setIsProcessing(true);
+    } else if (status === MessageStatus.COMPLETE || status === MessageStatus.ERROR) {
+      setIsNetworkLoading(false);
+      setIsQueueLoading(false);
+      setIsProcessing(false);
+    }
   }, []);
 
   // Handle sending a message
@@ -194,10 +224,13 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     
     setMessages(prev => [...prev, userMessage]);
     setMessageLoading(true);
+    setIsNetworkLoading(true);
     
     try {
       // Update user message status to show it's in the queue
       updateMessageStatus(messageId, MessageStatus.QUEUED);
+      setIsQueueLoading(true);
+      setIsNetworkLoading(false);
       
       // Prepare request params
       const requestParams: ChatRequestParams = {
@@ -281,6 +314,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     } finally {
       setMessageLoading(false);
       setIsGenerating(false);
+      setIsNetworkLoading(false);
+      setIsQueueLoading(false);
+      setIsProcessing(false);
       setQueuePosition(null);
     }
   };
@@ -300,6 +336,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     // Regenerate answer
     setMessageLoading(true);
     setIsGenerating(true);
+    setIsNetworkLoading(true);
     
     try {
       // Call the API again with the same user message
@@ -307,6 +344,10 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         message: lastUserMessage.content,
         conversation_id: conversationId
       };
+      
+      // Set to queued state
+      setIsNetworkLoading(false);
+      setIsQueueLoading(true);
       
       const response = await sendMessage(requestParams);
       
@@ -351,6 +392,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     } finally {
       setMessageLoading(false);
       setIsGenerating(false);
+      setIsNetworkLoading(false);
+      setIsQueueLoading(false);
+      setIsProcessing(false);
     }
   };
   
@@ -359,6 +403,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     // In a real application, this would cancel the API request
     setIsGenerating(false);
     setMessageLoading(false);
+    setIsNetworkLoading(false);
+    setIsQueueLoading(false);
+    setIsProcessing(false);
   }, []);
 
   // Handler for opening modals or using templates
@@ -444,6 +491,7 @@ ${template}
     if (id === conversationId) return; // Don't reload if it's the same conversation
     
     setConversationLoading(true);
+    setIsNetworkLoading(true);
     try {
       const conversationData = await getConversation(id);
       
@@ -468,6 +516,7 @@ ${template}
       console.error('Error switching conversation:', error);
     } finally {
       setConversationLoading(false);
+      setIsNetworkLoading(false);
     }
   }, [conversationId]);
 
@@ -478,6 +527,9 @@ ${template}
     messageLoading,
     conversationLoading,
     isGenerating,
+    isNetworkLoading,
+    isQueueLoading,
+    isProcessing,
     selectedFile,
     showFileUpload,
     conversationId,
@@ -500,6 +552,7 @@ ${template}
     
     // Conversation management
     loadConversation,
+    loadConversations,
     createNewConversation,
     switchConversation,
     updateMessageStatus
