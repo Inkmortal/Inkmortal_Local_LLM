@@ -54,8 +54,35 @@ class RequestProcessor:
                         # Update statistics
                         self._update_stats(self.current_request)
                         
-                        # Get response data
+                        # Get response data and log it
                         response_data = response.json()
+                        
+                        # Check response format and make it compatible with OpenAI format
+                        if response_data and not response_data.get("choices") and response_data.get("response"):
+                            logger.info("Converting Ollama response format to OpenAI format...")
+                            # Transform Ollama response to OpenAI format
+                            response_data = {
+                                "choices": [
+                                    {
+                                        "message": {
+                                            "role": "assistant",
+                                            "content": response_data.get("response")
+                                        },
+                                        "index": 0,
+                                        "finish_reason": "stop"
+                                    }
+                                ],
+                                "model": response_data.get("model") or request.body.get("model"),
+                                "object": "chat.completion",
+                                "usage": response_data.get("usage", {})
+                            }
+                        
+                        # Log response structure for debugging
+                        logger.info(f"Response keys: {list(response_data.keys())}")
+                        if response_data.get("choices"):
+                            logger.info(f"Choices count: {len(response_data['choices'])}")
+                            if len(response_data['choices']) > 0:
+                                logger.info(f"First choice keys: {list(response_data['choices'][0].keys())}")
                         
                         # Clear current request
                         self.current_request = None
@@ -72,7 +99,17 @@ class RequestProcessor:
                         self.stats.failed_requests += 1
                         self.current_request = None
                     
-                    return {"error": f"Request timed out after {timeout_seconds} seconds"}
+                    return {
+                        "choices": [{
+                            "message": {
+                                "role": "assistant",
+                                "content": f"Sorry, the request timed out after {timeout_seconds} seconds. Please try again with a shorter message."
+                            },
+                            "index": 0,
+                            "finish_reason": "timeout"
+                        }],
+                        "error": f"Request timed out after {timeout_seconds} seconds"
+                    }
             
             except Exception as e:
                 # Log the error
@@ -84,8 +121,18 @@ class RequestProcessor:
                     self.stats.failed_requests += 1
                     self.current_request = None
                 
-                # Return error instead of raising to avoid crashing
-                return {"error": str(e)}
+                # Return error in a format compatible with our API
+                return {
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "content": f"I encountered an error while processing your request: {str(e)}. Please try again."
+                        },
+                        "index": 0,
+                        "finish_reason": "error"
+                    }],
+                    "error": str(e)
+                }
     
     async def process_streaming_request(
         self,
