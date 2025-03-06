@@ -1,4 +1,5 @@
-# Main application entry point.
+"""
+Main application entry point.
 """
 
 from fastapi import FastAPI, Depends
