@@ -144,6 +144,7 @@ const ModernChatPage: React.FC = () => {
         currentConversationId={chatState.conversationId}
         onConversationSelect={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onConversationDeleted={chatState.loadConversations}
         isLoading={chatState.conversationLoading}
       />
 
@@ -177,30 +178,34 @@ const ModernChatPage: React.FC = () => {
               selectedFile={chatState.selectedFile}
               setSelectedFile={chatState.setSelectedFile}
               handleFileSelect={chatState.handleFileSelect}
-              handleInsertCode={chatState.handleInsertCode}
-              handleInsertMath={chatState.handleInsertMath}
               codeInsertRef={chatState.codeInsertRef}
               mathInsertRef={chatState.mathInsertRef}
+              handleInsertCode={chatState.handleInsertCode}
+              handleInsertMath={chatState.handleInsertMath}
+              isQueueLoading={chatState.isQueueLoading}
+              isProcessing={chatState.isProcessing}
+              queuePosition={chatState.queuePosition}
             />
             
-            {/* Artifacts Sidebar */}
-            <ArtifactsSidebar 
-              isOpen={showArtifactsSidebar}
-              onClose={toggleArtifactsSidebar}
+            {/* Right Sidebar - Artifacts/Documents */}
+            <ArtifactsSidebar
+              showSidebar={showArtifactsSidebar}
+              toggleSidebar={toggleArtifactsSidebar}
               onArtifactSelect={handleArtifactSelect}
               onDocumentSelect={handleDocumentSelect}
-            />
-
-            {/* Artifact Canvas for detailed view */}
-            <ArtifactCanvas 
-              artifact={selectedArtifact}
-              document={selectedDocument}
-              isOpen={showArtifactCanvas}
-              onClose={handleCloseArtifactCanvas}
             />
           </div>
         </div>
       </div>
+      
+      {/* Artifact Canvas (overlay) */}
+      {showArtifactCanvas && (
+        <ArtifactCanvas
+          artifact={selectedArtifact}
+          document={selectedDocument}
+          onClose={handleCloseArtifactCanvas}
+        />
+      )}
     </div>
   );
 };

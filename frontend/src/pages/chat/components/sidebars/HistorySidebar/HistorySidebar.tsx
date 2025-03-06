@@ -11,6 +11,7 @@ interface HistorySidebarProps {
   currentConversationId?: string;
   onConversationSelect: (id: string) => void;
   onNewConversation: () => void;
+  onConversationDeleted?: () => void; // Add callback for when a conversation is deleted
   isLoading?: boolean;
 }
 
@@ -21,6 +22,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
   currentConversationId,
   onConversationSelect,
   onNewConversation,
+  onConversationDeleted,
   isLoading = false,
 }) => {
   const { currentTheme } = useTheme();
@@ -42,7 +44,10 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({
             onNewConversation();
           }
           
-          // List will be refreshed by parent component
+          // Notify parent that a conversation was deleted to refresh the list
+          if (onConversationDeleted) {
+            onConversationDeleted();
+          }
         } else {
           alert(`Failed to delete: ${result.error || 'Unknown error'}`);
         }

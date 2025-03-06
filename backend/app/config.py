@@ -42,6 +42,10 @@ class Settings:
         self.ollama_api_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
         self.default_model = os.getenv("DEFAULT_MODEL", "llama3.3:70b")
         
+        # LangChain settings
+        self.use_langchain = os.getenv("USE_LANGCHAIN", "true").lower() == "true"
+        self.langchain_temperature = float(os.getenv("LANGCHAIN_TEMPERATURE", "0.7"))
+        
         # Auth settings
         self.secret_key = os.getenv("SECRET_KEY", "dev_secret_key")
         self.token_expire_minutes = int(os.getenv("TOKEN_EXPIRE_MINUTES", "129600")) # 90 days
