@@ -92,6 +92,52 @@ export interface ApiResponse<T> {
   error?: string;       // Error message (if any)
 }
 
+// Create a reusable retrying fetch with exponential backoff
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 2, backoff = 1000): Promise<Response> => {
+  try {
+    // Use AbortController for timeout with proper error handling
+    const controller = new AbortController();
+    const timeoutMs = 30000; // 30 seconds
+    
+    // Only add the abort signal if it's not a streaming request
+    const isStreaming = url.includes('/streaming') || url.includes('/sse');
+    const fetchOptions = {
+      ...options,
+      headers: options.headers,
+      // Don't use AbortController for streaming endpoints
+      signal: isStreaming ? undefined : controller.signal,
+      // Prevent browser caching
+      cache: 'no-store' as RequestCache
+    };
+    
+    // Set up the timeout
+    const timeoutId = setTimeout(() => {
+      console.log(`Request to ${url} timed out after ${timeoutMs}ms, aborting`);
+      controller.abort();
+    }, timeoutMs);
+    
+    // Execute the fetch
+    const response = await fetch(url, fetchOptions);
+    
+    // Clear the timeout since we got a response
+    clearTimeout(timeoutId);
+    
+    return response;
+  } catch (error) {
+    if (retries === 0) throw error;
+    
+    // Check if it's a network error (not an abort)
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      console.log(`Network error fetching ${url}, retrying in ${backoff}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    }
+    
+    // Re-throw abort errors or other errors
+    throw error;
+  }
+};
+
 /**
  * Enhanced fetch function that automatically includes the API base URL
  * and provides better debugging information with a standardized response format
@@ -140,19 +186,11 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
   }
   
   try {
-    // Use AbortController for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-    
-    // Make the fetch request with timeout
-    const response = await fetch(url, {
+    // Use our fetchWithRetry that includes timeout and retry logic
+    const response = await fetchWithRetry(url, {
       ...options,
-      headers,
-      signal: controller.signal
+      headers
     });
-    
-    // Clear timeout since request completed
-    clearTimeout(timeoutId);
     
     // Log response status for debugging
     console.log(`Response from ${url}: ${response.status}`);

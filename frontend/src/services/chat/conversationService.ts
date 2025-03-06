@@ -129,35 +129,72 @@ export async function deleteConversation(conversationId: string): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetchApi<{ message: string }>(`/api/chat/conversation/${conversationId}`, {
-      method: 'DELETE',
-    });
+    console.log(`Deleting conversation ID: ${conversationId}`);
     
-    if (!response.success || !response.data) {
-      let errorMessage = response.error || 'Failed to delete conversation';
-      
-      // Handle different error types
-      if (response.status === 401) {
-        errorMessage = 'Authentication required. Please log in to delete this conversation.';
-      } else if (response.status === 404) {
-        errorMessage = 'Conversation not found. It may have already been deleted.';
-      } else if (response.status === 403) {
-        errorMessage = 'You do not have permission to delete this conversation.';
-      } else if (response.status === 0) {
-        errorMessage = 'Network error. Please check your internet connection.';
+    // Use retry logic for delete operation since it's critical
+    let retries = 3;
+    let lastError = null;
+    
+    while (retries > 0) {
+      try {
+        const response = await fetchApi<{ message: string }>(`/api/chat/conversation/${conversationId}`, {
+          method: 'DELETE',
+        });
+        
+        // Log the raw response for debugging
+        console.log(`Delete conversation response:`, response);
+        
+        if (!response.success) {
+          let errorMessage = response.error || 'Failed to delete conversation';
+          
+          // Handle different error types
+          if (response.status === 401) {
+            errorMessage = 'Authentication required. Please log in to delete this conversation.';
+          } else if (response.status === 404) {
+            errorMessage = 'Conversation not found. It may have already been deleted.';
+            // Consider 404 as success since the conversation is already gone
+            return {
+              success: true,
+              message: 'Conversation already deleted'
+            };
+          } else if (response.status === 403) {
+            errorMessage = 'You do not have permission to delete this conversation.';
+          } else if (response.status === 0) {
+            errorMessage = 'Network error. Will retry the deletion.';
+            retries--;
+            lastError = errorMessage;
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+            continue;
+          }
+          
+          console.error(`Delete conversation error (${response.status}): ${errorMessage}`);
+          
+          return {
+            success: false,
+            error: errorMessage
+          };
+        }
+        
+        // Successfully deleted
+        console.log('Conversation successfully deleted:', conversationId);
+        return {
+          success: true,
+          message: response.data?.message || 'Conversation deleted successfully'
+        };
+      } catch (innerError) {
+        retries--;
+        lastError = innerError instanceof Error ? innerError.message : 'Unknown error';
+        console.error(`Delete attempt failed, retries left: ${retries}`, innerError);
+        
+        if (retries <= 0) break;
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
       }
-      
-      console.error(`Delete conversation error (${response.status}): ${errorMessage}`);
-      
-      return {
-        success: false,
-        error: errorMessage
-      };
     }
     
+    // If we got here, all retries failed
     return {
-      success: true,
-      message: response.data.message || 'Conversation deleted successfully'
+      success: false,
+      error: `Failed after multiple attempts: ${lastError}`
     };
   } catch (error) {
     console.error('Unexpected error in deleteConversation:', error);

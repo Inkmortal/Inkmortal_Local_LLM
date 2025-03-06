@@ -77,6 +77,31 @@ class RequestProcessor:
             # Get model from request body
             model_name = request.body.get("model", settings.default_model)
             
+            # Log model being used
+            logger.info(f"Using LangChain with model: {model_name}, Ollama URL: {self.ollama_url}")
+            
+            try:
+                # First check if the model exists by making a simple request
+                # This prevents cryptic 404 errors from LangChain
+                async with httpx.AsyncClient() as client:
+                    model_check_url = f"{self.ollama_url}/api/tags"
+                    logger.info(f"Checking available models at: {model_check_url}")
+                    models_response = await client.get(model_check_url, timeout=10.0)
+                    
+                    if models_response.status_code != 200:
+                        logger.error(f"Failed to get model list from Ollama: {models_response.status_code}")
+                        raise Exception(f"Ollama API returned error {models_response.status_code} when checking models")
+                    
+                    available_models = models_response.json().get("models", [])
+                    available_model_names = [m.get("name") for m in available_models]
+                    logger.info(f"Available models: {available_model_names}")
+                    
+                    if model_name not in available_model_names:
+                        logger.warning(f"Model {model_name} not found in available models, will try anyway")
+            except Exception as e:
+                logger.warning(f"Error checking Ollama model availability: {e}")
+                # Continue anyway, as the model might still be available
+            
             # Initialize LangChain client with the model
             langchain_client = ChatOllama(
                 base_url=self.ollama_url,
@@ -98,6 +123,9 @@ class RequestProcessor:
                 elif role == "assistant":
                     langchain_messages.append(AIMessage(content=content))
             
+            # Log message count for debugging
+            logger.info(f"Sending {len(langchain_messages)} messages to LangChain")
+            
             # Set timeout for LangChain request
             timeout_seconds = 120.0  # 2 minutes max processing time
             
@@ -109,6 +137,7 @@ class RequestProcessor:
             
             # Get response text
             assistant_response = langchain_response.generations[0][0].text
+            logger.info(f"LangChain generated response with {len(assistant_response)} characters")
             
             # Format to OpenAI-compatible structure
             response_data = {
