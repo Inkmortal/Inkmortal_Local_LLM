@@ -1,5 +1,5 @@
 // Type definitions for chat functionality
-import { MessageStatus } from '../../../services/chatService';
+import { MessageStatus } from '../../../services/chat';
 
 // Message interface for UI
 export interface Message {
