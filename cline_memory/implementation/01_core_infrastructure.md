@@ -1,32 +1,71 @@
 # Core Infrastructure Implementation
 
 ## Overview
-This document outlines the steps to set up the base system, including project structure, initial deployment scripts, and environment configuration. Each step includes a description of the task and the corresponding code/configuration where applicable.
+
+This document outlines the steps to set up the base system, including project structure, initial deployment scripts, and environment configuration.
 
 ## Steps
 
 1.  **Project Directory Structure:**
 
-    *Task Description:* Create the project subdirectories within the existing `Inkmortal_Local_LLM` directory to organize the backend, frontend, Nginx configuration, and deployment scripts. This structure is crucial for maintaining a clean and manageable codebase.
+    The project is organized into the following subdirectories within the `Inkmortal_Local_LLM` directory:
 
     ```
     Inkmortal_Local_LLM/
-    ├── backend/
+    ├── .clinerules          # Project-specific intelligence
+    ├── .gitignore          # Files and directories to ignore in Git
+    ├── CLAUDE.md           # Documentation
+    ├── backend/            # Backend application (FastAPI)
     │   ├── app/
     │   │   ├── __init__.py
-    │   │   ├── main.py        # FastAPI entry point
-    │   │   ├── queue/       # Queue management
+    │   │   ├── admin/      # Admin API endpoints
     │   │   │   ├── __init__.py
-    │   │   │   └── manager.py
-    │   │   ├── auth/        # Authentication service
+    │   │   │   ├── api_keys.py
+    │   │   │   ├── ip_whitelist.py
+    │   │   │   ├── queue_monitor.py
+    │   │   │   ├── registration_tokens.py
+    │   │   │   ├── router.py
+    │   │   │   ├── stats.py
+    │   │   │   └── system_stats.py
+    │   │   ├── api/        # API endpoints
     │   │   │   ├── __init__.py
+    │   │   │   ├── artifacts.py
+    │   │   │   ├── chat.py
+    │   │   │   └── gateway.py
+    │   │   ├── auth/       # Authentication service
+    │   │   │   ├── __init__.py
+    │   │   │   ├── activities.py
     │   │   │   ├── models.py
-    │   │   │   └── router.py
-    │   │   └── api/         # API endpoints
-    │   │       └── ...
-    │   ├── venv/            # Virtual environment
+    │   │   │   ├── router.py
+    │   │   │   └── utils.py
+    │   │   ├── config.py   # Configuration settings
+    │   │   ├── db.py       # Database setup
+    │   │   ├── main.py     # FastAPI entry point
+    │   │   └── queue/      # Queue management
+    │   │       ├── __init__.py
+    │   │       ├── base.py
+    │   │       ├── interface.py
+    │   │       ├── models.py
+    │   │       ├── mock/
+    │   │       │   ├── __init__.py
+    │   │       │   └── manager.py
+    │   │       └── rabbitmq/
+    │   │           ├── __init__.py
+    │   │           ├── aging.py
+    │   │           ├── connection.py
+    │   │           ├── exchanges.py
+    │   │           ├── manager.py
+    │   │           ├── processor.py
+    │   │           └── queues.py
+    │   ├── .coverage
+    │   ├── .env.example
+    │   ├── pytest.ini
+    │   ├── README_ARTIFACTS.md
+    │   ├── requirements.txt
+    │   └── update_main.py
+    ├── cline_memory/       # Memory bank for Cline
     │   └── ...
-    ├── frontend/
+    ├── frontend/           # Frontend application (React)
     │   ├── public/
     │   ├── src/
     │   │   ├── components/
@@ -38,101 +77,75 @@ This document outlines the steps to set up the base system, including project st
     │   ├── tsconfig.json
     │   └── ...
     ├── nginx/
-    │   └── nginx.conf       # Nginx configuration
-    ├── scripts/             # Deployment and utility scripts
-    │   ├── setup.sh
+    │   └── nginx.conf      # Nginx configuration
     │   └── ...
-    └── .clinerules          # Project-specific intelligence
+    ├── scripts/            # Deployment and utility scripts
+    │   └── setup.ps1       # PowerShell setup script
+    └── temp_implementationplan.md
     ```
 
-2.  **Initial `backend/app/main.py`:**
+2.  **Automated Setup (`scripts/setup.ps1`):**
 
-    *Task Description:* Create a minimal FastAPI application with a single root endpoint that returns a simple message. This serves as a starting point and a basic check to ensure the backend is running.
+    The `scripts/setup.ps1` PowerShell script automates the initial project setup. It handles tasks such as:
 
-    ```python
-    from fastapi import FastAPI
+    -   Creating the project directory structure.
+    -   Setting up the Python virtual environment.
+    -   Installing backend dependencies.
+    -   Initializing the React frontend.
+    -   Installing frontend dependencies.
+    -   Detecting and configuring PostgreSQL.
 
-    app = FastAPI()
+    Run the script from the `Inkmortal_Local_LLM` directory:
 
-    @app.get("/")
-    async def root():
-        return {"message": "Seadragon LLM Server"}
-
+    ```powershell
+    .\scripts\setup.ps1
     ```
 
-3.  **Initial `frontend/src/App.tsx`:**
+3.  **Manual Service Setup (and verification):**
 
-    *Task Description:* Create a very basic React component that displays a heading. This provides a starting point for the frontend and confirms that the React setup is working.
+    The `setup.ps1` script attempts to automate service setup, but you should verify and, if necessary, manually configure the following services using Homebrew:
 
-    ```typescript
-    function App() {
-      return (
-        <div>
-          <h1>Seadragon LLM</h1>
-        </div>
-      )
-    }
+    -   **PostgreSQL:**
+        -   Install: `brew install postgresql`
+        -   Start: `brew services start postgresql`
+        -   Verify (should show "started"): `brew services list`
+        -   Default Port: 5432
+        -   Create a database user and database. You can do this manually using the `psql` command-line tool, or the `setup.ps1` script will handle it if PostgreSQL is detected. The default database URL expected by the application is `postgresql://postgres:postgres@localhost/seadragon`. You can customize this by setting the `DATABASE_URL` environment variable in the `backend/.env` file. Example commands using `psql`:
+            ```sql
+            CREATE USER postgres WITH PASSWORD 'postgres';
+            CREATE DATABASE seadragon;
+            GRANT ALL PRIVILEGES ON DATABASE seadragon TO postgres;
+            ```
 
-    export default App
-    ```
+    -   **Ollama:**
+        -   Install: `brew install ollama`
+        -   Start: `brew services start ollama`
+        -   Verify (should show "started"): `brew services list`
+        -   Default Port: 11434
+        -   Pull the Llama 3 70B model: `ollama pull llama3:70b`
 
-4. **Initial `nginx/nginx.conf` (Basic proxy):**
+    -   **RabbitMQ:**
+        - Install: `brew install rabbitmq`
+        - Start: `brew services start rabbitmq`
+        - Verify (should show "started"): `brew services list`
+        - Default Port: 5672 (for AMQP), 15672 (for management UI)
+        - Note: The `setup.ps1` script does *not* automatically configure RabbitMQ users or virtual hosts.  For a development environment, the default "guest" user with password "guest" is often sufficient, and this is what the default `RABBITMQ_URL` in `.env.example` assumes.  For production, you *must* create a dedicated user and virtual host.
 
-    *Task Description:* Configure Nginx as a reverse proxy to forward requests to the FastAPI backend. This sets up the basic routing for the application.
+    - **Nginx:**
+        - Install: `brew install nginx`
+        - Start: `brew services start nginx`
+        - Verify (should show "started"): `brew services list`
+        - Default Port: 8080 (but we'll configure it to listen on 80 in `nginx.conf`)
+        - You'll need to link the configuration file: `brew link nginx`
 
-    ```
-    http {
-        server {
-            listen 80;
-            server_name local-llm.seadragoninkmortal.com;
+4.  **Environment Variables:**
 
-            location / {
-                proxy_pass http://localhost:8000; # FastAPI
-                proxy_http_version 1.1;
-                proxy_set_header Connection '';
-                proxy_buffering off;
-                proxy_cache off;
-                proxy_read_timeout 24h;
-            }
-        }
-    }
-    ```
+    Create `.env` files in both the `backend/` and `frontend/` directories to store environment-specific settings (API keys, database connection strings, etc.). Refer to the `.env.example` file in the `backend` directory for the required variables.
 
-5.  **`scripts/setup.sh`:**
+5.  **Cloudflare Tunnel:**
 
-    *Task Description:* Create a shell script to automate the initial project setup. This script creates the directory structure, sets up the Python virtual environment, installs backend dependencies, initializes the React frontend, and installs frontend dependencies.  **Note:** This script now assumes it's being run from the `Inkmortal_Local_LLM` directory.
+    Set up a Cloudflare Tunnel for secure remote access:
 
-    ```bash
-    #!/bin/bash
-
-    # Create project directories
-    mkdir -p backend/{app,app/queue,app/auth,app/api} frontend nginx scripts
-    touch backend/app/__init__.py backend/app/queue/__init__.py backend/app/auth/__init__.py
-
-    # Backend setup
-    cd backend
-    python -m venv venv
-    source venv/bin/activate
-    pip install fastapi uvicorn
-
-    # Frontend setup
-    cd ../frontend
-    pnpm create vite . --template react-ts
-    pnpm install
-    pnpm install tailwindcss postcss autoprefixer
-    pnpm tailwindcss init -p
-
-    echo "Project structure created.  Remember to configure Nginx and Cloudflare."
-    ```
-
-6. **Database Setup:**
-
-    *Task Description:* Initialize the PostgreSQL database service using Homebrew. Create a dedicated database user and a database specifically for this project. This ensures that the application has a persistent data store.
-
-7. **Environment Variables:**
-
-    *Task Description:* Create `.env` files within both the `backend/` and `frontend/` directories. These files will store environment-specific settings, such as API keys, database connection strings, and other sensitive information, keeping them separate from the codebase.
-
-8. **Cloudflare Tunnel:**
-
-    *Task Description:* Set up a Cloudflare Tunnel to provide secure remote access to the application without exposing any ports directly. This involves creating a tunnel in the Cloudflare dashboard, configuring DNS records, and creating a `~/.cloudflared/config.yml` file with the tunnel credentials on the server.
+    -   Install `cloudflared`: `brew install cloudflared`
+    -   Create a tunnel and configure DNS records in the Cloudflare dashboard.
+    -   Create `~/.cloudflared/config.yml` with the tunnel credentials.

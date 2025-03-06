@@ -5,6 +5,11 @@
   100% { background-position: 0% 50%; }
 }
 
+@keyframes gradientSlide {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -39,6 +44,11 @@
 
 @keyframes blink {
   50% { border-color: transparent }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Utility classes */
@@ -177,6 +187,20 @@
 /* Glass morphism */
 .glass-effect {
   backdrop-filter: blur(8px);
+}
+
+/* Status spinner */
+.spinner {
+  animation: spin 1.5s linear infinite;
+}
+
+/* Message status indicators */
+.error-message {
+  position: relative;
+}
+
+.status-text {
+  transition: opacity 0.3s ease;
 }
 
 /* Responsive animations */

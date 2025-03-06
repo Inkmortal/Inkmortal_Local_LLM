@@ -160,4 +160,4 @@ The web interface is designed to be fun, beautiful, and functional, allowing fri
 - Proxy: Nginx
 - Network: Cloudflare Tunnel
 - Authentication: JWT
-- Monitoring: Custom implementation
+- Monitoring: Custom implementation using FastAPI and React

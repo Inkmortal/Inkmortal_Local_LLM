@@ -1,4 +1,5 @@
 // Type definitions for chat functionality
+import { MessageStatus } from '../../../services/chatService';
 
 // Message interface for UI
 export interface Message {
@@ -6,6 +7,9 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
+  status?: MessageStatus;
+  error?: string;
+  queue_position?: number;
 }
 
 // Conversation history item
@@ -13,6 +17,7 @@ export interface Conversation {
   id: string;
   title: string;
   date: Date;
+  lastMessage?: string;
 }
 
 // Artifact types
@@ -28,4 +33,5 @@ export interface ChatRequestParams {
   message: string;
   conversation_id?: string;
   file?: File;
+  timeout?: number;
 }

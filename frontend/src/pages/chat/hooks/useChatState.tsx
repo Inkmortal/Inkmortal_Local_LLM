@@ -1,6 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { sendMessage, createConversation, getConversation } from '../../../services/chatService';
+import { 
+  sendMessage, 
+  createConversation, 
+  getConversation, 
+  listConversations, 
+  MessageStatus 
+} from '../../../services/chat';
 import { Message, ChatRequestParams } from '../types/chat';
 
 // Token counting utility function (rough estimate)
@@ -23,30 +29,63 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       id: 'welcome',
       role: 'assistant',
       content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-      timestamp: new Date()
+      timestamp: new Date(),
+      status: MessageStatus.COMPLETE
     }
   ]);
 
+  // Conversation state
+  const [conversations, setConversations] = useState<Array<{id: string, title: string, date: Date}>>([]);
+  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  const [conversationLoading, setConversationLoading] = useState(false);
+
   // UI state
-  const [loading, setLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  
+  // Load conversation history
+  const loadConversations = useCallback(async () => {
+    try {
+      const result = await listConversations();
+      
+      if (result.length > 0) {
+        const formattedConversations = result.map(conv => ({
+          id: conv.conversation_id,
+          title: conv.title,
+          date: new Date(conv.created_at)
+        }));
+        
+        setConversations(formattedConversations);
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    }
+  }, []);
   
   // Load conversation if ID is provided
   const loadConversation = useCallback(async () => {
     if (initialConversationId) {
-      setLoading(true);
+      setConversationLoading(true);
       try {
         const conversationData = await getConversation(initialConversationId);
+        
+        if (!conversationData) {
+          console.error('Conversation not found or error loading conversation');
+          createNewConversation();
+          return;
+        }
         
         // Map API messages to UI format
         const uiMessages: Message[] = conversationData.messages.map(msg => ({
           id: msg.id,
           role: msg.role as 'user' | 'assistant' | 'system',
           content: msg.content,
-          timestamp: new Date(msg.created_at)
+          timestamp: new Date(msg.created_at),
+          status: msg.status || MessageStatus.COMPLETE,
+          error: msg.error
         }));
         
         setMessages(uiMessages);
@@ -56,7 +95,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         // If conversation doesn't exist, create a new one
         createNewConversation();
       } finally {
-        setLoading(false);
+        setConversationLoading(false);
       }
     }
   }, [initialConversationId]);
@@ -70,13 +109,16 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       return;
     }
     
+    // Load conversation list
+    loadConversations();
+    
     if (initialConversationId) {
       loadConversation();
     } else if (!conversationId) {
       // Create a new conversation if no ID is provided
       createNewConversation();
     }
-  }, [initialConversationId, loadConversation, conversationId]);
+  }, [initialConversationId, loadConversation, conversationId, loadConversations]);
   
   // Function to create a new conversation
   const createNewConversation = async () => {
@@ -87,19 +129,29 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       return;
     }
     
+    setConversationLoading(true);
     try {
       const response = await createConversation();
-      setConversationId(response.conversation_id);
-      // Reset messages to just the welcome message
-      setMessages([{
-        id: 'welcome',
-        role: 'assistant',
-        content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-        timestamp: new Date()
-      }]);
+      if (response) {
+        setConversationId(response.conversation_id);
+        // Reset messages to just the welcome message
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+          timestamp: new Date(),
+          status: MessageStatus.COMPLETE
+        }]);
+        
+        // Refresh conversation list
+        loadConversations();
+      } else {
+        console.error('Failed to create conversation - response was null');
+      }
     } catch (error) {
       console.error('Error creating new conversation:', error);
-      // Don't set error message here - let the API function handle it
+    } finally {
+      setConversationLoading(false);
     }
   };
   
@@ -111,6 +163,15 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const openMathModalRef = useRef<() => void>(() => console.log("Math modal ref not initialized"));
   const openCodeModalRef = useRef<() => void>(() => console.log("Code modal ref not initialized"));
 
+  // Update a message's status
+  const updateMessageStatus = useCallback((messageId: string, status: MessageStatus, error?: string) => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId 
+        ? { ...msg, status, ...(error && { error }) }
+        : msg
+    ));
+  }, []);
+
   // Handle sending a message
   const handleSendMessage = async (messageText: string) => {
     if (messageText.trim() === '') return;
@@ -119,19 +180,25 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     const estimatedTokens = estimateTokenCount(messageText);
     console.log(`Estimated tokens in message: ${estimatedTokens}`);
     
+    // Generate a predictable ID for tracking this message
+    const messageId = uuidv4();
+    
     // Add user message
     const userMessage: Message = {
-      id: uuidv4(),
+      id: messageId,
       role: 'user',
       content: messageText,
-      timestamp: new Date()
+      timestamp: new Date(),
+      status: MessageStatus.SENDING
     };
     
     setMessages(prev => [...prev, userMessage]);
-    setLoading(true);
-    setIsGenerating(true);
+    setMessageLoading(true);
     
     try {
+      // Update user message status to show it's in the queue
+      updateMessageStatus(messageId, MessageStatus.QUEUED);
+      
       // Prepare request params
       const requestParams: ChatRequestParams = {
         message: messageText,
@@ -139,15 +206,40 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         file: selectedFile || undefined
       };
       
+      // Show that we're generating
+      setIsGenerating(true);
+      
       // Call real API service
       const response = await sendMessage(requestParams);
+      
+      // Check if the response contains an error
+      if (response.status === MessageStatus.ERROR) {
+        // Update the user message to show the error
+        updateMessageStatus(messageId, MessageStatus.ERROR, response.error);
+        
+        // Add system error message
+        const errorMessage: Message = {
+          id: uuidv4(),
+          role: 'system',
+          content: response.error || 'An error occurred while processing your message.',
+          timestamp: new Date(),
+          status: MessageStatus.ERROR
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+        return;
+      }
+      
+      // Update user message status to complete since it was processed
+      updateMessageStatus(messageId, MessageStatus.COMPLETE);
       
       // Add assistant response
       const assistantMessage: Message = {
         id: response.id,
         role: 'assistant',
         content: response.content,
-        timestamp: new Date(response.created_at)
+        timestamp: new Date(response.created_at),
+        status: response.status || MessageStatus.COMPLETE
       };
       
       setMessages(prev => [...prev, assistantMessage]);
@@ -160,6 +252,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       // Save conversation ID if not already set
       if (!conversationId && response.conversation_id) {
         setConversationId(response.conversation_id);
+        
+        // Refresh conversation list
+        loadConversations();
       }
       
       // Clear file after sending
@@ -170,18 +265,23 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     } catch (error) {
       console.error('Error sending message:', error);
       
+      // Update the user message to show the error
+      updateMessageStatus(messageId, MessageStatus.ERROR, 'Failed to send message');
+      
       // Add error message
       const errorMessage: Message = {
         id: uuidv4(),
         role: 'system',
-        content: 'Sorry, there was an error processing your request. Please try again.',
-        timestamp: new Date()
+        content: 'Sorry, there was an unexpected error processing your request. Please try again.',
+        timestamp: new Date(),
+        status: MessageStatus.ERROR
       };
       
       setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setLoading(false);
+      setMessageLoading(false);
       setIsGenerating(false);
+      setQueuePosition(null);
     }
   };
   
@@ -198,7 +298,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     setMessages(newMessages);
     
     // Regenerate answer
-    setLoading(true);
+    setMessageLoading(true);
     setIsGenerating(true);
     
     try {
@@ -210,12 +310,28 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       
       const response = await sendMessage(requestParams);
       
+      // Check if response has an error
+      if (response.status === MessageStatus.ERROR) {
+        // Add system error message
+        const errorMessage: Message = {
+          id: uuidv4(),
+          role: 'system',
+          content: response.error || 'An error occurred while regenerating the response.',
+          timestamp: new Date(),
+          status: MessageStatus.ERROR
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+        return;
+      }
+      
       // Add new assistant response
       const assistantMessage: Message = {
         id: response.id,
         role: 'assistant',
         content: response.content,
-        timestamp: new Date(response.created_at)
+        timestamp: new Date(response.created_at),
+        status: response.status || MessageStatus.COMPLETE
       };
       
       setMessages(prev => [...prev, assistantMessage]);
@@ -227,12 +343,13 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         id: uuidv4(),
         role: 'system',
         content: 'Sorry, there was an error regenerating the response. Please try again.',
-        timestamp: new Date()
+        timestamp: new Date(),
+        status: MessageStatus.ERROR
       };
       
       setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setLoading(false);
+      setMessageLoading(false);
       setIsGenerating(false);
     }
   };
@@ -241,7 +358,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const handleStopGeneration = useCallback(() => {
     // In a real application, this would cancel the API request
     setIsGenerating(false);
-    setLoading(false);
+    setMessageLoading(false);
   }, []);
 
   // Handler for opening modals or using templates
@@ -322,16 +439,52 @@ ${template}
     setSelectedFile(file);
   }, []);
 
+  // Switch to a different conversation
+  const switchConversation = useCallback(async (id: string) => {
+    if (id === conversationId) return; // Don't reload if it's the same conversation
+    
+    setConversationLoading(true);
+    try {
+      const conversationData = await getConversation(id);
+      
+      if (!conversationData) {
+        console.error('Conversation not found or error loading conversation');
+        return;
+      }
+      
+      // Map API messages to UI format
+      const uiMessages: Message[] = conversationData.messages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        status: msg.status || MessageStatus.COMPLETE,
+        error: msg.error
+      }));
+      
+      setMessages(uiMessages);
+      setConversationId(id);
+    } catch (error) {
+      console.error('Error switching conversation:', error);
+    } finally {
+      setConversationLoading(false);
+    }
+  }, [conversationId]);
+
   return {
     // State
     messages,
-    loading,
+    loading: messageLoading || conversationLoading,
+    messageLoading,
+    conversationLoading,
     isGenerating,
     selectedFile,
     showFileUpload,
     conversationId,
+    conversations,
     codeInsertRef,
     mathInsertRef,
+    queuePosition,
     
     // Setters
     setShowFileUpload,
@@ -348,6 +501,8 @@ ${template}
     // Conversation management
     loadConversation,
     createNewConversation,
+    switchConversation,
+    updateMessageStatus
   };
 };
 
