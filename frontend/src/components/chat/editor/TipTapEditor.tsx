@@ -33,6 +33,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const [previewMode, setPreviewMode] = useState(false);
   const editorContentRef = useRef<HTMLDivElement>(null);
   
+  // Keep references to handlers to avoid recreating them on each render
+  const mathHandlerRef = useRef<((input: string) => void) | null>(null);
+  const codeHandlerRef = useRef<((input: string) => void) | null>(null);
+  
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -46,37 +50,30 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     ],
     editorProps: {
       attributes: {
-        class: 'focus:outline-none p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin',
+        class: 'editor-content prose p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin',
+        spellcheck: 'false',
       },
     },
-    content: '',
-    editable: !disabled,
+    onFocus: () => {
+      if (editorContentRef.current) {
+        editorContentRef.current.style.boxShadow = `0 0 0 2px ${currentTheme.colors.accentPrimary}40`;
+      }
+    },
+    onBlur: () => {
+      if (editorContentRef.current) {
+        editorContentRef.current.style.boxShadow = 'none';
+      }
+    },
   });
 
-  // Convert HTML to markdown and send
-  const convertAndSend = async () => {
-    if (editor?.isEmpty) return;
+  // Function to convert editor content to string and send it
+  const convertAndSend = useCallback(() => {
+    if (!editor || editor.isEmpty || disabled) return;
     
-    const html = editor?.getHTML() || '';
-    
-    try {
-      // Import the converter function (will be bundled at build time)
-      const { convertEditorContentToMarkdown } = await import('../../../utils/editorUtils');
-      
-      // Convert HTML to markdown
-      const markdown = convertEditorContentToMarkdown(html);
-      console.log('Sending converted markdown to LLM:', markdown);
-      
-      // Send markdown to the LLM
-      onSend(markdown);
-      editor?.commands.clearContent();
-    } catch (error) {
-      console.error('Error converting HTML to markdown:', error);
-      // Fallback to plain text if conversion fails
-      onSend(editor?.getText() || '');
-      editor?.commands.clearContent();
-    }
-  };
+    const content = editor.getHTML();
+    onSend(content);
+    editor.commands.clearContent();
+  }, [editor, onSend, disabled]);
   
   // Handle submit with Enter (not Shift+Enter)
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -100,26 +97,24 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     setCodeEditorOpen(true);
   }, []);
 
-  // Register handlers for external components to open these modals
+  // Register handlers for external components to open these modals with proper cleanup
   useEffect(() => {
-    if (onInsertMath) {
-      // Important: Pass a new function that directly opens the modal
-      // when the special "OPEN_MODAL" command is received
-      onInsertMath((input: string) => {
-        console.log("Math handler called with:", input);
-        
+    // Skip this effect if editor isn't ready
+    if (!editor) return;
+    
+    // Create persistent handlers that don't change on each render
+    if (onInsertMath && !mathHandlerRef.current) {
+      mathHandlerRef.current = (input: string) => {
         if (input === "OPEN_MODAL") {
-          console.log("Opening math modal directly!");
           setMathEditorOpen(true);
           return;
         }
         
-        // Otherwise handle as regular math content
-        if (editor) {
+        // Only try to insert if editor exists and is mounted
+        if (editor && editor.isEditable) {
           try {
             // Extract latex from $$ delimiters if present
             const latex = input.replace(/\$\$/g, '').trim();
-            console.log("Inserting math content:", latex.substring(0, 30) + "...");
             
             editor
               .chain()
@@ -131,39 +126,34 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
               // Add a newline after the block
               .insertContent({ type: 'paragraph' })
               .run();
-              
-            console.log("Math block inserted successfully!");
           } catch (error) {
             console.error("Failed to insert math block:", error);
           }
         }
-      });
+      };
+      
+      // Register the persistent handler
+      onInsertMath(mathHandlerRef.current);
     }
     
-    if (onInsertCode) {
-      // Important: Pass a new function that directly opens the modal
-      // when the special "OPEN_MODAL" command is received
-      onInsertCode((input: string) => {
-        console.log("Code handler called with:", input);
-        
+    if (onInsertCode && !codeHandlerRef.current) {
+      codeHandlerRef.current = (input: string) => {
         if (input === "OPEN_MODAL") {
-          console.log("Opening code modal directly!");
           setCodeEditorOpen(true);
           return;
         }
         
-        // Otherwise handle as regular code content
-        if (editor) {
+        // Only try to insert if editor exists and is mounted
+        if (editor && editor.isEditable) {
           try {
             // Extract language and code from markdown code block syntax if present
             let language = 'javascript';
             let code = input;
             
-            const codeBlockMatch = input.match(/```(\w+)?\s*([\s\S]*?)```/);
+            const codeBlockMatch = input.match(/```([a-zA-Z0-9_]+)?\s*([\s\S]*?)```/);
             if (codeBlockMatch) {
-              language = codeBlockMatch[1] || 'javascript';
+              if (codeBlockMatch[1]) language = codeBlockMatch[1];
               code = codeBlockMatch[2].trim();
-              console.log(`Extracted code: language=${language}, content=${code.substring(0, 30)}...`);
             }
             
             editor
@@ -177,29 +167,34 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
               // Add a newline after the block
               .insertContent({ type: 'paragraph' })
               .run();
-              
-            console.log("Code block inserted successfully!");
           } catch (error) {
             console.error("Failed to insert code block:", error);
           }
         }
-      });
+      };
+      
+      // Register the persistent handler
+      onInsertCode(codeHandlerRef.current);
     }
-  }, [onInsertMath, onInsertCode, editor]);
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      mathHandlerRef.current = null;
+      codeHandlerRef.current = null;
+    };
+  }, [editor, onInsertMath, onInsertCode]);
 
-  // Debug logging to see what's happening with the editor
+  // Cleanup on unmount
   useEffect(() => {
-    console.log("Editor initialized:", !!editor);
-    if (editor) {
-      console.log("Editor has mathBlock:", !!editor.commands.mathBlock);
-      console.log("Editor has customCodeBlock:", !!editor.commands.customCodeBlock);
-    }
+    return () => {
+      if (editor) {
+        editor.destroy();
+      }
+    };
   }, [editor]);
 
   const handleMathSubmit = (latex: string) => {
     if (!latex.trim() || !editor) return;
-
-    console.log("Inserting math from editor:", latex.trim());
 
     try {
       // Safe approach with manual content insertion
@@ -213,8 +208,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         // Add a newline after the block
         .insertContent({ type: 'paragraph' })
         .run();
-
-      console.log("Math block inserted successfully");
       
       setMathEditorOpen(false);
     } catch (error) {
@@ -226,8 +219,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   const handleCodeSubmit = (code: string, language: string) => {
     if (!code.trim() || !editor) return;
     
-    console.log("Inserting code from editor:", code.trim(), "language:", language);
-
     try {
       // Safe approach with manual content insertion
       editor
@@ -241,8 +232,6 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         // Add a newline after the block
         .insertContent({ type: 'paragraph' })
         .run();
-
-      console.log("Code block inserted successfully");
       
       setCodeEditorOpen(false);
     } catch (error) {
@@ -287,7 +276,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         />
         
         {/* Editor content or Preview depending on mode */}
-        <div className="relative z-10">
+        <div className="relative z-10" ref={editorContentRef}>
           {previewMode ? (
             <div
               className="p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin whitespace-pre-wrap break-words"
@@ -315,6 +304,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             editor={editor}
             previewMode={previewMode}
             onTogglePreview={togglePreviewMode}
+            onInsertMath={handleInsertMath}
+            onInsertCode={handleInsertCode}
           />
           
           <button
@@ -353,19 +344,19 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
           </button>
         </div>
       </div>
-
-      {/* Advanced Math Expression Editor */}
+      
+      {/* Math expression editor modal */}
       {mathEditorOpen && (
         <MathExpressionEditor
-          onInsert={handleMathSubmit}
+          onSubmit={handleMathSubmit}
           onClose={() => setMathEditorOpen(false)}
         />
       )}
-
-      {/* Advanced Code Editor */}
+      
+      {/* Code editor modal */}
       {codeEditorOpen && (
         <CodeEditor
-          onInsert={handleCodeSubmit}
+          onSubmit={handleCodeSubmit}
           onClose={() => setCodeEditorOpen(false)}
         />
       )}
@@ -373,4 +364,4 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   );
 };
 
-export default TipTapEditor;
+export default React.memo(TipTapEditor);

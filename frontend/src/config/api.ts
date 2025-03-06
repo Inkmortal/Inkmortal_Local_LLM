@@ -26,8 +26,8 @@ const getApiBaseUrl = (): string => {
     }
   }
   
-  // Use hardcoded default as fallback
-  return 'http://localhost:8000';
+  // Use hardcoded default as fallback - ensure it matches your backend
+  return 'http://127.0.0.1:8000';
 };
 
 // Base URL for all API requests
@@ -140,12 +140,19 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
   }
   
   try {
-    // Make the fetch request
+    // Use AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
+    // Make the fetch request with timeout
     const response = await fetch(url, {
       ...options,
-      // Use our enhanced headers
-      headers
+      headers,
+      signal: controller.signal
     });
+    
+    // Clear timeout since request completed
+    clearTimeout(timeoutId);
     
     // Log response status for debugging
     console.log(`Response from ${url}: ${response.status}`);
@@ -212,13 +219,24 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
     return apiResponse;
   } catch (error) {
     // Network or other errors
+    let errorMessage = "Failed to connect to backend server";
+    
+    // Check if this was an abort error (timeout)
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      errorMessage = "Request timed out. The server is taking too long to respond.";
+    } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      errorMessage = "Cannot connect to the backend server. Please check if the server is running at " + API_BASE_URL;
+    } else {
+      errorMessage = `Network error: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    
     console.error(`Network error when fetching ${url}:`, error);
     
     return {
       success: false,
       status: 0, // 0 indicates network error
       data: null,
-      error: `Cannot connect to backend server at ${API_BASE_URL}. Please check if the server is running.`
+      error: errorMessage
     };
   }
 };

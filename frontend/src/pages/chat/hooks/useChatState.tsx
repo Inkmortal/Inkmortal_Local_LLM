@@ -49,36 +49,74 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   
-  // Load conversation history
+  // Track if the component is mounted to avoid state updates after unmounting
+  const isMountedRef = useRef(true);
+  
+  // Record last successful API call timestamp to avoid rapid requests
+  const lastApiCallRef = useRef(Date.now() - 10000);
+  
+  // On unmount, update the ref to prevent state updates
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  // Load conversation history with throttling to prevent hammering the server
   const loadConversations = useCallback(async () => {
+    // Check if mounted and enough time has passed since last API call (at least 1 second)
+    if (!isMountedRef.current || Date.now() - lastApiCallRef.current < 1000) {
+      return;
+    }
+    
     try {
-      setIsNetworkLoading(true);
+      // Update last API call time
+      lastApiCallRef.current = Date.now();
+      
+      if (isMountedRef.current) {
+        setIsNetworkLoading(true);
+      }
+      
       const result = await listConversations();
       
-      if (result.length > 0) {
-        const formattedConversations = result.map(conv => ({
-          id: conv.conversation_id,
-          title: conv.title || "Untitled Conversation",
-          date: new Date(conv.created_at)
-        }));
-        
-        setConversations(formattedConversations);
-      }
+      if (!isMountedRef.current) return;
+      
+      // Always update conversations, even with empty array
+      const formattedConversations = result.map(conv => ({
+        id: conv.conversation_id,
+        title: conv.title || "New conversation",
+        date: new Date(conv.created_at)
+      }));
+      
+      setConversations(formattedConversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
+      if (isMountedRef.current) {
+        // Set empty conversations on error to avoid stale data
+        setConversations([]);
+      }
     } finally {
-      setIsNetworkLoading(false);
+      if (isMountedRef.current) {
+        setIsNetworkLoading(false);
+      }
     }
   }, []);
   
   // Load conversation if ID is provided
   const loadConversation = useCallback(async (id?: string) => {
     const conversationIdToLoad = id || initialConversationId;
-    if (conversationIdToLoad) {
+    if (conversationIdToLoad && isMountedRef.current) {
       setConversationLoading(true);
       setIsNetworkLoading(true);
       try {
+        // Record API call time
+        lastApiCallRef.current = Date.now();
+        
         const conversationData = await getConversation(conversationIdToLoad);
+        
+        if (!isMountedRef.current) return;
         
         if (!conversationData) {
           console.error('Conversation not found or error loading conversation');
@@ -101,10 +139,14 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       } catch (error) {
         console.error('Error loading conversation:', error);
         // If conversation doesn't exist, create a new one
-        createNewConversation();
+        if (isMountedRef.current) {
+          createNewConversation();
+        }
       } finally {
-        setConversationLoading(false);
-        setIsNetworkLoading(false);
+        if (isMountedRef.current) {
+          setConversationLoading(false);
+          setIsNetworkLoading(false);
+        }
       }
     }
   }, [initialConversationId]);
@@ -138,10 +180,19 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       return;
     }
     
-    setConversationLoading(true);
-    setIsNetworkLoading(true);
+    if (isMountedRef.current) {
+      setConversationLoading(true);
+      setIsNetworkLoading(true);
+    }
+    
     try {
+      // Record API call time
+      lastApiCallRef.current = Date.now();
+      
       const response = await createConversation();
+      
+      if (!isMountedRef.current) return;
+      
       if (response) {
         setConversationId(response.conversation_id);
         // Reset messages to just the welcome message
@@ -154,7 +205,11 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         }]);
         
         // Refresh conversation list
-        loadConversations();
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            loadConversations();
+          }
+        }, 500);
       } else {
         console.error('Failed to create conversation - response was null');
         // Even if we failed to create a conversation, still show the welcome message
@@ -170,16 +225,20 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     } catch (error) {
       console.error('Error creating new conversation:', error);
       // Even on error, we still want to show a welcome message
-      setMessages([{
-        id: 'error-welcome',
-        role: 'assistant',
-        content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-        timestamp: new Date(),
-        status: MessageStatus.COMPLETE
-      }]);
+      if (isMountedRef.current) {
+        setMessages([{
+          id: 'error-welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+          timestamp: new Date(),
+          status: MessageStatus.COMPLETE
+        }]);
+      }
     } finally {
-      setConversationLoading(false);
-      setIsNetworkLoading(false);
+      if (isMountedRef.current) {
+        setConversationLoading(false);
+        setIsNetworkLoading(false);
+      }
     }
   };
   
@@ -193,6 +252,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
 
   // Update a message's status
   const updateMessageStatus = useCallback((messageId: string, status: MessageStatus, error?: string) => {
+    if (!isMountedRef.current) return;
+    
     setMessages(prev => prev.map(msg => 
       msg.id === messageId 
         ? { ...msg, status, ...(error && { error }) }
@@ -221,7 +282,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
 
   // Handle sending a message
   const handleSendMessage = async (messageText: string) => {
-    if (messageText.trim() === '') return;
+    if (messageText.trim() === '' || !isMountedRef.current) return;
     
     // Estimate token count for analytics
     const estimatedTokens = estimateTokenCount(messageText);
@@ -244,6 +305,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     setIsNetworkLoading(true);
     
     try {
+      // Record API call time
+      lastApiCallRef.current = Date.now();
+      
       // Update user message status to show it's in the queue
       updateMessageStatus(messageId, MessageStatus.QUEUED);
       setIsQueueLoading(true);
@@ -261,6 +325,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       
       // Call real API service
       const response = await sendMessage(requestParams);
+      
+      if (!isMountedRef.current) return;
       
       // Check if the response contains an error
       if (response.status === MessageStatus.ERROR) {
@@ -303,8 +369,12 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       if (!conversationId && response.conversation_id) {
         setConversationId(response.conversation_id);
         
-        // Refresh conversation list
-        loadConversations();
+        // Refresh conversation list after a delay
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            loadConversations();
+          }
+        }, 500);
       }
       
       // Clear file after sending
@@ -314,6 +384,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      if (!isMountedRef.current) return;
       
       // Update the user message to show the error
       updateMessageStatus(messageId, MessageStatus.ERROR, 'Failed to send message');
@@ -329,17 +401,21 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       
       setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setMessageLoading(false);
-      setIsGenerating(false);
-      setIsNetworkLoading(false);
-      setIsQueueLoading(false);
-      setIsProcessing(false);
-      setQueuePosition(null);
+      if (isMountedRef.current) {
+        setMessageLoading(false);
+        setIsGenerating(false);
+        setIsNetworkLoading(false);
+        setIsQueueLoading(false);
+        setIsProcessing(false);
+        setQueuePosition(null);
+      }
     }
   };
   
   // Handle regenerating a response
   const handleRegenerate = async (messageId: string) => {
+    if (!isMountedRef.current) return;
+    
     // Find the last user message
     const lastUserMessageIndex = [...messages].reverse().findIndex(m => m.role === 'user');
     if (lastUserMessageIndex === -1) return;
@@ -356,6 +432,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     setIsNetworkLoading(true);
     
     try {
+      // Record API call time
+      lastApiCallRef.current = Date.now();
+      
       // Call the API again with the same user message
       const requestParams: ChatRequestParams = {
         message: lastUserMessage.content,
@@ -367,6 +446,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       setIsQueueLoading(true);
       
       const response = await sendMessage(requestParams);
+      
+      if (!isMountedRef.current) return;
       
       // Check if response has an error
       if (response.status === MessageStatus.ERROR) {
@@ -396,6 +477,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     } catch (error) {
       console.error('Error regenerating response:', error);
       
+      if (!isMountedRef.current) return;
+      
       // Add error message
       const errorMessage: Message = {
         id: uuidv4(),
@@ -407,16 +490,20 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       
       setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setMessageLoading(false);
-      setIsGenerating(false);
-      setIsNetworkLoading(false);
-      setIsQueueLoading(false);
-      setIsProcessing(false);
+      if (isMountedRef.current) {
+        setMessageLoading(false);
+        setIsGenerating(false);
+        setIsNetworkLoading(false);
+        setIsQueueLoading(false);
+        setIsProcessing(false);
+      }
     }
   };
   
   // Handle stopping generation
   const handleStopGeneration = useCallback(() => {
+    if (!isMountedRef.current) return;
+    
     // In a real application, this would cancel the API request
     setIsGenerating(false);
     setMessageLoading(false);
@@ -500,17 +587,24 @@ ${template}
   }, []);
 
   const handleFileSelect = useCallback((file: File) => {
-    setSelectedFile(file);
+    if (isMountedRef.current) {
+      setSelectedFile(file);
+    }
   }, []);
 
   // Switch to a different conversation
   const switchConversation = useCallback(async (id: string) => {
-    if (id === conversationId) return; // Don't reload if it's the same conversation
+    if (id === conversationId || !isMountedRef.current) return; // Don't reload if it's the same conversation
     
     setConversationLoading(true);
     setIsNetworkLoading(true);
     try {
+      // Record API call time
+      lastApiCallRef.current = Date.now();
+      
       const conversationData = await getConversation(id);
+      
+      if (!isMountedRef.current) return;
       
       if (!conversationData) {
         console.error('Conversation not found or error loading conversation');
@@ -532,8 +626,10 @@ ${template}
     } catch (error) {
       console.error('Error switching conversation:', error);
     } finally {
-      setConversationLoading(false);
-      setIsNetworkLoading(false);
+      if (isMountedRef.current) {
+        setConversationLoading(false);
+        setIsNetworkLoading(false);
+      }
     }
   }, [conversationId]);
 

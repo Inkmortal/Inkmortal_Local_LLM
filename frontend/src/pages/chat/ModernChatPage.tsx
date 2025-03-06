@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -44,42 +44,43 @@ const ModernChatPage: React.FC = () => {
   const [selectedDocument, setSelectedDocument] = useState<UploadedDocument | undefined>(undefined);
   const [showArtifactCanvas, setShowArtifactCanvas] = useState(false);
   
-  // Initialize conversation and load conversation history when component mounts
+  // Using a ref to track initialization state to prevent multiple initializations
+  const hasInitializedRef = useRef(false);
+  
+  // Initialize conversation only once when component mounts
   useEffect(() => {
-    let isMounted = true;
+    // Skip if not authenticated or already initialized
+    if (!isAuthenticated || hasInitializedRef.current) {
+      return;
+    }
     
     const initConversation = async () => {
-      // Verify authentication before making API calls
-      if (!isAuthenticated) {
-        console.warn('User not authenticated, skipping conversation initialization');
-        return;
-      }
+      console.log('Initializing conversation once');
+      hasInitializedRef.current = true;
       
-      // First try to initialize the conversation if needed
-      if (!chatState.conversationId && isMounted) {
-        try {
-          // Create a new conversation through the chat state
+      try {
+        // For existing conversation ID from URL
+        if (conversationId) {
+          await chatState.loadConversation(conversationId);
+        } 
+        // For a new session without conversation ID
+        else if (!chatState.conversationId) {
           await chatState.createNewConversation();
-        } catch (error) {
-          if (isMounted) {
-            console.error('Error creating new conversation:', error);
-          }
         }
-      }
-      
-      // Load all conversations from the server
-      if (isMounted) {
+        
+        // Load conversations list just once
         chatState.loadConversations();
+      } catch (error) {
+        console.error('Error initializing conversation:', error);
+        hasInitializedRef.current = false; // Reset on error to allow retry
       }
     };
     
+    // Run initialization only once
     initConversation();
     
-    return () => {
-      // Cleanup function to prevent state updates after unmounting
-      isMounted = false;
-    };
-  }, [isAuthenticated, chatState.conversationId, chatState.createNewConversation, chatState.loadConversations]);
+    // Only recreate this effect if authentication state changes
+  }, [isAuthenticated, conversationId, chatState]);
 
   // Handler for selecting a conversation
   const handleSelectConversation = (conversationId: string) => {
