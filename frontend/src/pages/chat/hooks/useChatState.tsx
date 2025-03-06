@@ -157,9 +157,26 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         loadConversations();
       } else {
         console.error('Failed to create conversation - response was null');
+        // Even if we failed to create a conversation, still show the welcome message
+        // so the user can still use the chat interface
+        setMessages([{
+          id: 'local-welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+          timestamp: new Date(),
+          status: MessageStatus.COMPLETE
+        }]);
       }
     } catch (error) {
       console.error('Error creating new conversation:', error);
+      // Even on error, we still want to show a welcome message
+      setMessages([{
+        id: 'error-welcome',
+        role: 'assistant',
+        content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+        timestamp: new Date(),
+        status: MessageStatus.COMPLETE
+      }]);
     } finally {
       setConversationLoading(false);
       setIsNetworkLoading(false);
