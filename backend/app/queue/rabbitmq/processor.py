@@ -97,14 +97,19 @@ class RequestProcessor:
                     logger.info(f"Available models: {available_model_names}")
                     
                     if model_name not in available_model_names:
-                        logger.warning(f"Model {model_name} not found in available models, will try anyway")
+                        logger.error(f"Model {model_name} not found in available models")
+                        raise Exception(f"Model '{model_name}' not available. Please select one of: {', '.join(available_model_names)}")
             except Exception as e:
-                logger.warning(f"Error checking Ollama model availability: {e}")
-                # Continue anyway, as the model might still be available
+                logger.error(f"Error checking Ollama model availability: {e}")
+                raise Exception(f"Failed to validate model availability: {str(e)}")
             
-            # Initialize LangChain client with the model
+            # Initialize LangChain client with the model, ensuring properly formatted URL
+            # Remove any trailing slashes from the URL to prevent double slashes in requests
+            base_url = self.ollama_url.rstrip("/")
+            logger.info(f"Initializing LangChain with base URL: {base_url}")
+            
             langchain_client = ChatOllama(
-                base_url=self.ollama_url,
+                base_url=base_url,
                 model=model_name,
                 temperature=settings.langchain_temperature
             )

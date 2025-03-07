@@ -131,8 +131,8 @@ export async function deleteConversation(conversationId: string): Promise<{
   try {
     console.log(`Deleting conversation ID: ${conversationId}`);
     
-    // Use retry logic for delete operation since it's critical
-    let retries = 3;
+    // Use retry logic with reduced retries and exponential backoff
+    let retries = 2; // Reduced from 3 to 2 to avoid excessive retries
     let lastError = null;
     
     while (retries > 0) {
@@ -159,11 +159,21 @@ export async function deleteConversation(conversationId: string): Promise<{
             };
           } else if (response.status === 403) {
             errorMessage = 'You do not have permission to delete this conversation.';
+          } else if (response.status === 409) {
+            errorMessage = 'Database conflict. Please try again in a moment.';
+            retries--;
+            lastError = errorMessage;
+            // Exponential backoff - wait longer for each retry
+            const backoffTime = retries === 1 ? 2000 : 4000;
+            await new Promise(resolve => setTimeout(resolve, backoffTime));
+            continue;
           } else if (response.status === 0) {
             errorMessage = 'Network error. Will retry the deletion.';
             retries--;
             lastError = errorMessage;
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+            // Exponential backoff - wait longer for each retry
+            const backoffTime = retries === 1 ? 2000 : 4000;
+            await new Promise(resolve => setTimeout(resolve, backoffTime));
             continue;
           }
           
@@ -175,7 +185,7 @@ export async function deleteConversation(conversationId: string): Promise<{
           };
         }
         
-        // Successfully deleted
+        // Successfully deleted - immediately update UI before returning
         console.log('Conversation successfully deleted:', conversationId);
         return {
           success: true,
@@ -187,7 +197,9 @@ export async function deleteConversation(conversationId: string): Promise<{
         console.error(`Delete attempt failed, retries left: ${retries}`, innerError);
         
         if (retries <= 0) break;
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+        // Exponential backoff - wait longer for each retry
+        const backoffTime = retries === 1 ? 2000 : 4000;
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
       }
     }
     

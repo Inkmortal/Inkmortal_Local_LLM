@@ -280,28 +280,39 @@ async def delete_conversation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a conversation"""
+    """Delete a conversation with improved transaction handling"""
     try:
-        # Query conversation
-        conversation = db.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == current_user.id
-        ).first()
+        # Start a transaction with better isolation
+        with db.begin_nested():
+            # Query conversation with a row lock to prevent race conditions
+            conversation = db.query(Conversation).filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).with_for_update().first()
+            
+            if not conversation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found"
+                )
+            
+            # Delete conversation (messages will be deleted by cascade)
+            db.delete(conversation)
         
-        if not conversation:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Conversation not found"
-            )
-        
-        # Delete conversation (messages will be deleted by cascade)
-        db.delete(conversation)
+        # Commit the outer transaction
         db.commit()
         
         logger.info(f"Deleted conversation {conversation_id} for user {current_user.id}")
         return {"message": "Conversation deleted successfully"}
     except HTTPException:
         raise
+    except sqlalchemy_exc.IntegrityError as e:
+        db.rollback()
+        logger.error(f"Database integrity error deleting conversation {conversation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Database conflict when deleting conversation. Please try again."
+        )
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting conversation {conversation_id}: {str(e)}")

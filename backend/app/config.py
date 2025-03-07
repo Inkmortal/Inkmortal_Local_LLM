@@ -40,7 +40,41 @@ class Settings:
         
         # Ollama settings
         self.ollama_api_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-        self.default_model = os.getenv("DEFAULT_MODEL", "llama3.3:70b")
+        # Default model from environment variable, will be updated from DB if available
+        self._default_model = os.getenv("DEFAULT_MODEL", "llama3.3:70b")
+        
+        # Try to load model settings from database if not in testing mode
+        if env_name != "testing" and "pytest" not in os.getenv("PYTHONPATH", "") and not os.getenv("PYTEST_CURRENT_TEST"):
+            try:
+                # Import needed for database access, but avoid circular imports
+                import sqlite3
+                from pathlib import Path
+                
+                # Determine database path based on DATABASE_URL
+                db_url = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+                if db_url.startswith("sqlite:///"):
+                    db_path = db_url.replace("sqlite:///", "")
+                    
+                    # Make sure the DB file exists
+                    if Path(db_path).exists():
+                        # Connect to the database
+                        conn = sqlite3.connect(db_path)
+                        cursor = conn.cursor()
+                        
+                        # Check if config table exists
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='config'")
+                        if cursor.fetchone():
+                            # Get the default model from config
+                            cursor.execute("SELECT value FROM config WHERE key = 'default_model'")
+                            result = cursor.fetchone()
+                            if result:
+                                self._default_model = result[0]
+                                print(f"Loaded default model from database: {self._default_model}")
+                        
+                        conn.close()
+            except Exception as e:
+                print(f"Warning: Failed to load default model from database: {str(e)}")
+                print("Using default model from environment variable instead")
         
         # LangChain settings
         self.use_langchain = os.getenv("USE_LANGCHAIN", "true").lower() == "true"
@@ -76,6 +110,16 @@ class Settings:
             ]
         else:  # Testing
             self.allowed_origins = ["*"]  # Allow all origins in test mode
+    
+    @property
+    def default_model(self) -> str:
+        """Get the current default model"""
+        return self._default_model
+        
+    @default_model.setter
+    def default_model(self, value: str) -> None:
+        """Set the default model"""
+        self._default_model = value
             
     @property
     def is_testing(self) -> bool:
