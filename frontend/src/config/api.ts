@@ -121,9 +121,7 @@ const getAuthToken = (): string | null => {
     return localStorage.getItem('authToken');
   }
 };
-  // Fallback to legacy token storage
-  return localStorage.getItem('authToken');
-};
+
 
 /**
  * Standard response structure for all API calls
