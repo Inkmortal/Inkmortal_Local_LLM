@@ -4,6 +4,7 @@
 import { fetchApi } from '../../config/api';
 import { ChatRequestParams, ChatResponse, MessageStatus } from './types';
 import { createErrorResponse, createErrorResponseFromApiResponse } from './errorHandling';
+import { showError } from '../../utils/notifications';
 
 /**
  * Sends a message to the LLM backend
@@ -57,6 +58,10 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
       
       // Handle different error types based on status code
       if (!response.success || !response.data) {
+        // Show error notification to user
+        const errorMessage = response.error || 'Failed to send message to server';
+        showError(errorMessage, 'Message Error');
+        
         return createErrorResponseFromApiResponse(response, params.conversation_id);
       }
       
@@ -69,8 +74,13 @@ export async function sendMessage(params: ChatRequestParams): Promise<ChatRespon
       return result;
     }
   } catch (error) {
-    // Handle unexpected errors (should rarely happen due to fetchApi error handling)
+    // Handle unexpected errors and show user-facing notification
     console.error('Unexpected error in sendMessage:', error);
-    return createErrorResponse(error instanceof Error ? error.message : 'Unknown error', params.conversation_id);
+    
+    // Use notification utility
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred while sending message';
+    showError(errorMessage, 'Chat Error');
+    
+    return createErrorResponse(errorMessage, params.conversation_id);
   }
 }

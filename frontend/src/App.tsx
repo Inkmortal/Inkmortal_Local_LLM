@@ -3,6 +3,7 @@ import './App.css';
 import { useRoutes } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import NotificationProvider from './components/ui/Notification';
 import { appRoutes } from './routes';
 
 // Clean up global window navigateTo function to avoid issues
@@ -26,9 +27,11 @@ function App() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        {routeElement}
-      </AuthProvider>
+      <NotificationProvider>
+        <AuthProvider>
+          {routeElement}
+        </AuthProvider>
+      </NotificationProvider>
     </ThemeProvider>
   );
 }

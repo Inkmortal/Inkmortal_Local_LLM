@@ -489,14 +489,30 @@ async def send_message(
         start_time = asyncio.get_event_loop().time()
         llm_response = None
         
-        # Poll for response
+        # Poll for response with queue position updates
         while asyncio.get_event_loop().time() - start_time < timeout_seconds:
+            # Get current queue position for logging/debugging
+            position = await queue_manager.get_position(request_obj)
+            if position is not None and position >= 0:
+                logger.info(f"Request in queue at position {position}")
+                
+            # Check if we're first in queue
             current_request = await queue_manager.get_current_request()
             if not current_request:
                 next_request = await queue_manager.get_next_request()
                 if next_request and next_request.timestamp == request_obj.timestamp:
+                    logger.info("Processing request now")
                     llm_response = await queue_manager.process_request(next_request)
                     break
+            
+            # Check if our request is being processed
+            elif current_request.timestamp == request_obj.timestamp:
+                logger.info("Request is currently processing")
+                # Wait for it to complete
+                await asyncio.sleep(0.2)
+                continue
+                
+            # Wait before checking again
             await asyncio.sleep(0.1)
         
         # Handle timeout

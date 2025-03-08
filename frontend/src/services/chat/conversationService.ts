@@ -4,6 +4,7 @@
 import { fetchApi } from '../../config/api';
 import { ConversationData, ConversationSummary, MessageStatus } from './types';
 import { createErrorResponse } from './errorHandling';
+import { showError, showInfo, showSuccess } from '../../utils/notifications';
 
 /**
  * Creates a new conversation
@@ -107,13 +108,21 @@ export async function listConversations(): Promise<ConversationSummary[]> {
       
       console.error(`List conversations error (${response.status}): ${errorMessage}`);
       
+      // Show error to user in UI
+      showError(errorMessage, 'Failed to load conversations');
+      
       // Return empty array instead of throwing
       return [];
     }
     
     return response.data;
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Unexpected error in listConversations:', error);
+    
+    // Show error to user in UI
+    showError(errorMessage, 'Failed to load conversations');
+    
     return [];
   }
 }

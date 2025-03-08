@@ -96,3 +96,8 @@ class QueueManagerInterface(ABC):
     async def get_current_request(self) -> Optional[QueuedRequest]:
         """Get the request currently being processed, if any"""
         pass
+        
+    @abstractmethod
+    async def get_position(self, request: QueuedRequest) -> Optional[int]:
+        """Get the position of a request in the queue, or None if not in queue"""
+        pass
