@@ -83,7 +83,7 @@ const saveToken = (token: string, username: string, isAdmin: boolean): void => {
   localStorage.setItem('authData', JSON.stringify(tokenData));
   
   // Create a cookie for additional persistence (useful for cross-tab auth)
-  document.cookie = `auth_session=${encodeURIComponent(username)}; path=/; max-age=86400; SameSite=Lax; secure`;
+  document.cookie = `auth_session=${username}; path=/; max-age=86400; SameSite=Strict`;
   
   // Broadcast login to other tabs if supported
   if (authChannel) {
@@ -96,7 +96,7 @@ const removeToken = (): void => {
   localStorage.removeItem('authData');
   
   // Clear auth cookie
-  document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Lax; secure';
+  document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Strict';
   
   // Broadcast logout to other tabs if supported
   if (authChannel) {
@@ -155,15 +155,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!authChannel) return;
     
     const handleAuthEvent = (event: MessageEvent) => {
-      const data = event.data;
-      if (!data || typeof data !== 'object') return;
-      
-      if (data.type === 'login') {
+      if (event.data.type === 'login') {
         setIsAuthenticated(true);
-        setIsAdmin(!!data.isAdmin);
-        setUsername(data.username || null);
+        setIsAdmin(event.data.isAdmin);
+        setUsername(event.data.username);
         setLoading(false);
-      } else if (data.type === 'logout') {
+      } else if (event.data.type === 'logout') {
         setIsAuthenticated(false);
         setIsAdmin(false);
         setUsername(null);
@@ -228,7 +225,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setLoading(false);
       }
     }
-  }, [navigate]);
+  }, [location.pathname, navigate]);
   
   // Logout handler
   const logout = () => {
@@ -299,6 +296,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsAdmin(userData.is_admin);
         setUserData(userData);
         setConnectionError(null);
+        authCheckInProgressRef.current = false;
         return true;
       }
       
@@ -314,14 +312,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setConnectionError(`Authentication error: ${response.error || 'Unknown error'}`);
       }
       
+      authCheckInProgressRef.current = false;
       return false;
     } catch (error) {
       console.error('Error checking authentication:', error);
       // Don't log out the user here - might be a temporary network issue
       setConnectionError('Error verifying your authentication. Please try again later.');
-      return false;
-    } finally {
       authCheckInProgressRef.current = false;
+      return false;
     }
   };
   

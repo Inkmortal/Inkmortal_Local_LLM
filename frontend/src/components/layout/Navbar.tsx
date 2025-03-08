@@ -3,6 +3,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import Button from '../ui/Button';
+import ThemeSelector from "../ui/ThemeSelector";
 import ROUTES from '../../routes.constants';
 
 interface NavbarProps {

@@ -83,6 +83,7 @@ const isProtectedRoute = (endpoint: string): boolean => {
 
 // Get auth token from storage with enhanced functionality
 const getAuthToken = (): string | null => {
+  // Try to get token from enhanced auth data first
   try {
     const authDataStr = localStorage.getItem('authData');
     if (authDataStr) {
@@ -96,7 +97,7 @@ const getAuthToken = (): string | null => {
         // Token expired, clean up and broadcast logout
         localStorage.removeItem('authData');
         localStorage.removeItem('authToken');
-        document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Lax; secure';
+        document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Strict';
         try {
           const authChannel = new BroadcastChannel('auth_channel');
           authChannel.postMessage({ type: 'logout' });
@@ -107,20 +108,10 @@ const getAuthToken = (): string | null => {
         return null;
       }
     }
-    
-    // Fallback to legacy token
-    const legacyToken = localStorage.getItem('authToken');
-    if (legacyToken) {
-      console.warn('Using legacy token format without expiration data');
-    }
-    return legacyToken;
   } catch (e) {
     console.error('Error parsing auth data:', e);
-    // Clean up storage when JSON parsing fails
-    localStorage.removeItem('authData');
-    return localStorage.getItem('authToken');
   }
-};
+  
   // Fallback to legacy token storage
   return localStorage.getItem('authToken');
 };
@@ -263,7 +254,7 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
         // Clear both auth storages
         localStorage.removeItem('authToken');
         localStorage.removeItem('authData');
-        document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Lax; secure';
+        document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Strict';
         
         // Broadcast logout to other tabs
         try {
