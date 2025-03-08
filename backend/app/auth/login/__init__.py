@@ -1,3 +1,3 @@
-from .router import router
+from .router import router, check_admin_exists, generate_setup_token
 
-__all__ = ["router"]
+__all__ = ["router", "check_admin_exists", "generate_setup_token"]

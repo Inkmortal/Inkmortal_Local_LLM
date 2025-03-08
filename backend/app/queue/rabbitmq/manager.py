@@ -355,6 +355,39 @@ class RabbitMQManager(QueueManagerInterface):
             self.processor = RequestProcessor(self.ollama_url)
         return self.processor.current_request
     
+    async def get_position(self, request: QueuedRequest) -> Optional[int]:
+        """Get the position of a request in the queue, or None if not in queue"""
+        try:
+            await self.ensure_connected()
+            
+            # Check if this is the current request being processed
+            current = self.processor.current_request
+            if current and current.timestamp == request.timestamp:
+                return 0
+                
+            # Get queue statistics for all priority levels
+            queue_sizes = await self.get_queue_size()
+            
+            # We can only provide an estimated position since RabbitMQ doesn't easily allow 
+            # searching for a specific message in a queue without consuming it
+            position = 1  # Start at 1 since position 0 is the currently processing request
+            
+            # Add count of all higher priority queues
+            for priority in sorted(RequestPriority):
+                if priority < request.priority:
+                    position += queue_sizes.get(priority, 0)
+            
+            # For the same priority level, we can only approximate
+            # We assume the request is halfway through its own priority queue
+            same_priority_count = queue_sizes.get(request.priority, 0)
+            if same_priority_count > 0:
+                position += same_priority_count // 2
+            
+            return position
+        except Exception as e:
+            logger.error(f"Error getting queue position: {str(e)}")
+            return None
+    
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""
         self.request_history.append(request.to_dict())
