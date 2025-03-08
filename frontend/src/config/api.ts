@@ -81,6 +81,41 @@ const isProtectedRoute = (endpoint: string): boolean => {
   );
 };
 
+// Get auth token from storage with enhanced functionality
+const getAuthToken = (): string | null => {
+  // Try to get token from enhanced auth data first
+  try {
+    const authDataStr = localStorage.getItem('authData');
+    if (authDataStr) {
+      const authData = JSON.parse(authDataStr);
+      // Check for token expiration
+      const expiresAt = new Date(authData.expiresAt);
+      if (expiresAt > new Date()) {
+        return authData.token;
+      } else {
+        console.warn('Token expired, removing from storage');
+        // Token expired, clean up and broadcast logout
+        localStorage.removeItem('authData');
+        localStorage.removeItem('authToken');
+        document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Strict';
+        try {
+          const authChannel = new BroadcastChannel('auth_channel');
+          authChannel.postMessage({ type: 'logout' });
+          authChannel.close();
+        } catch (e) {
+          console.warn('BroadcastChannel not supported');
+        }
+        return null;
+      }
+    }
+  } catch (e) {
+    console.error('Error parsing auth data:', e);
+  }
+  
+  // Fallback to legacy token storage
+  return localStorage.getItem('authToken');
+};
+
 /**
  * Standard response structure for all API calls
  * Provides a consistent way to handle both success and error responses
@@ -156,7 +191,7 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
   
   // Add authentication token for protected routes
   if (isProtectedRoute(endpoint)) {
-    const token = localStorage.getItem('authToken');
+    const token = getAuthToken();
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
       console.log('Added authentication token for protected route');
@@ -216,7 +251,19 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
       // Regular handling for protected routes
       else if (isProtectedRoute(endpoint)) {
         console.warn('Authentication failed for protected route - clearing token');
+        // Clear both auth storages
         localStorage.removeItem('authToken');
+        localStorage.removeItem('authData');
+        document.cookie = 'auth_session=; path=/; max-age=0; SameSite=Strict';
+        
+        // Broadcast logout to other tabs
+        try {
+          const authChannel = new BroadcastChannel('auth_channel');
+          authChannel.postMessage({ type: 'logout' });
+          authChannel.close();
+        } catch (e) {
+          console.warn('BroadcastChannel not supported');
+        }
         
         // Authentication redirects should be handled in the auth context component
         // rather than directly in the API utility

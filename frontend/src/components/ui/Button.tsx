@@ -1,15 +1,42 @@
-import React, { ButtonHTMLAttributes } from 'react';
+import React, { ButtonHTMLAttributes, AnchorHTMLAttributes } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { Link } from 'react-router-dom';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'success';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+// Base props shared between button and link
+interface BaseButtonProps {
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;
   children: React.ReactNode;
+  className?: string;
 }
+
+// Props for button element
+interface ButtonElementProps extends ButtonHTMLAttributes<HTMLButtonElement>, BaseButtonProps {
+  to?: undefined;
+  href?: undefined;
+  isExternal?: undefined;
+}
+
+// Props for Link component (react-router)
+interface LinkButtonProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>, BaseButtonProps {
+  to: string;
+  href?: undefined;
+  isExternal?: undefined;
+}
+
+// Props for regular anchor element
+interface AnchorButtonProps extends AnchorHTMLAttributes<HTMLAnchorElement>, BaseButtonProps {
+  href: string;
+  to?: undefined;
+  isExternal?: boolean;
+}
+
+// Union type for all possible button props
+type ButtonProps = ButtonElementProps | LinkButtonProps | AnchorButtonProps;
 
 const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
@@ -17,6 +44,9 @@ const Button: React.FC<ButtonProps> = ({
   fullWidth = false,
   children,
   className = '',
+  to,
+  href,
+  isExternal,
   ...props
 }) => {
   const { currentTheme } = useTheme();
@@ -103,26 +133,59 @@ const Button: React.FC<ButtonProps> = ({
 
   // Combined styles
   const combinedStyles = `${baseStyles} ${sizeStyles[size]} ${className}`;
+  
+  // Common style props
+  const styleProps = {
+    className: combinedStyles,
+    style: {
+      backgroundColor: variantStyles.backgroundColor,
+      color: variantStyles.color,
+      borderColor: variantStyles.borderColor,
+      borderWidth: variantStyles.borderWidth,
+      width: fullWidth ? '100%' : 'auto',
+      opacity: props.disabled ? 0.6 : 1,
+      cursor: props.disabled ? 'not-allowed' : 'pointer'
+    },
+  };
 
+  // Check if it's a Link button (react-router)
+  if (to) {
+    return (
+      <Link
+        to={to}
+        {...styleProps}
+        {...props as any}
+      >
+        {children}
+      </Link>
+    );
+  }
+
+  // Check if it's an anchor element
+  if (href) {
+    return (
+      <a
+        href={href}
+        {...styleProps}
+        {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        {...props as any}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  // Default as button
   return (
     <button 
-      className={combinedStyles}
-      style={{
-        backgroundColor: variantStyles.backgroundColor,
-        color: variantStyles.color,
-        borderColor: variantStyles.borderColor,
-        borderWidth: variantStyles.borderWidth,
-        width: fullWidth ? '100%' : 'auto',
-        opacity: props.disabled ? 0.6 : 1,
-        cursor: props.disabled ? 'not-allowed' : 'pointer'
-      }}
-      {...props}
+      {...styleProps}
+      {...props as any}
       onClick={(e) => {
         if (props.disabled) {
           e.preventDefault();
           return;
         }
-        props.onClick?.(e);
+        (props as any).onClick?.(e);
       }}
     >
       {children}

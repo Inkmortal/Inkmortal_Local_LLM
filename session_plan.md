@@ -11,6 +11,13 @@ This implementation plan details the step-by-step process to connect the fronten
 - Authentication: JWT-based auth system implemented on both sides
 - Integration progress: Chat service restructured with message status tracking and error handling
 
+## Remaining Issues
+
+- Session management: Authentication not persisting between tabs/refreshes
+- Conversation history: Random new conversations being created unexpectedly
+- Admin dashboard: Queue information not accurate, cards not updating properly
+- UI/UX: Ongoing conversations disrupted by navigation
+
 ## Implementation Goals
 
 1. Connect frontend chat UI to backend API endpoints ✅
@@ -312,3 +319,29 @@ This implementation plan details the step-by-step process to connect the fronten
 5. Message searching and filtering
 6. Conversation management (rename, delete, share)
 7. Notification system for new messages
+
+## Recent Bug Fixes
+
+1. **LangChain 404 Error Fix**:
+   - Added proper model validation in processor.py
+   - Implemented fail-fast when model isn't available
+   - Fixed URL construction for the LangChain client
+
+2. **Conversation Deletion Fix**:
+   - Improved transaction handling with proper isolation
+   - Added row-locking to prevent race conditions
+   - Modified frontend retry logic with exponential backoff
+
+3. **Model Selection Persistence**:
+   - Added database storage for model settings
+   - Created config table to store selected model
+   - Modified config.py to load model from database on startup
+
+## Next Steps
+
+Priority tasks to fix the remaining issues:
+
+1. Fix authentication persistence between tabs/navigation
+2. Debug and fix random conversation creation issues
+3. Fix admin dashboard queue monitoring
+4. Complete file upload functionality

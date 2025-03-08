@@ -1,10 +1,9 @@
 import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Button from '../ui/Button';
 import ROUTES from '../../routes.constants';
-import ThemeSelector from '../ui/ThemeSelector';
 
 interface NavbarProps {
   toggleSidebar: () => void;
@@ -19,33 +18,14 @@ const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, isAdmin, username: authUsername, logout } = useAuth();
-  const navigate = useNavigate();
 
   // Use the username from either props or auth context
   const username = propUsername || authUsername;
 
-  const handleHomeClick = () => {
-    navigate(ROUTES.HOME);
-  };
-
-  const handleLoginClick = () => {
-    navigate(ROUTES.LOGIN);
-  };
-
-  const handleRegisterClick = () => {
-    navigate(ROUTES.REGISTER);
-  };
-
-  const handleChatClick = () => {
-    navigate(ROUTES.CHAT);
-  };
-
-  const handleProfileClick = () => {
-    navigate(ROUTES.USER.PROFILE);
-  };
-
-  const handleAdminDashboardClick = () => {
-    navigate(ROUTES.ADMIN.ROOT);
+  // Logout handler
+  const handleLogout = (e: React.MouseEvent) => {
+    e.preventDefault();
+    logout();
   };
 
   return (
@@ -146,7 +126,7 @@ const Navbar: React.FC<NavbarProps> = ({
         <Button 
           size="sm"
           variant="outline"
-          onClick={handleHomeClick}
+          to={ROUTES.HOME}
           style={{ color: currentTheme.colors.textPrimary }}
         >
           Home
@@ -159,14 +139,14 @@ const Navbar: React.FC<NavbarProps> = ({
             <Button 
               size="sm"
               variant="primary"
-              onClick={handleChatClick}
+              to={ROUTES.CHAT}
             >
               Chat
             </Button>
             
             {/* Logout Button */}
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="p-2 rounded-lg transition-all duration-200 hover:scale-105"
               title="Logout"
               style={{ 
@@ -187,7 +167,7 @@ const Navbar: React.FC<NavbarProps> = ({
             <Button 
               size="sm"
               variant="primary"
-              onClick={handleChatClick}
+              to={ROUTES.CHAT}
             >
               Chat
             </Button>
@@ -200,7 +180,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={handleAdminDashboardClick}
+                    to={ROUTES.ADMIN.ROOT}
                   >
                     Admin
                   </Button>
@@ -208,7 +188,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 
                 {/* Logout Button */}
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="p-2 rounded-lg transition-all duration-200 hover:scale-105"
                   title="Logout"
                   style={{ 
@@ -226,15 +206,15 @@ const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  variant="ghost"
-                  onClick={handleLoginClick}
+                  variant="outline"
+                  to={ROUTES.LOGIN}
                 >
                   Login
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={handleRegisterClick}
+                  to={ROUTES.REGISTER}
                 >
                   Register
                 </Button>
