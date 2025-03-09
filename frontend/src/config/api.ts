@@ -45,7 +45,8 @@ const isProtectedRoute = (endpoint: string): boolean => {
     '/auth/token',  // Add token endpoint explicitly
     '/auth/admin/setup-status',
     '/auth/admin/fetch-setup-token',
-    '/auth/admin/setup'
+    '/auth/admin/setup',
+    '/auth/me'
   ];
   
   // If this is a public auth endpoint, it doesn't need a token

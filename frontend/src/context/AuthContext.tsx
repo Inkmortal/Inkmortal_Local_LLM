@@ -279,14 +279,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     lastAuthCheckTimeRef.current = now;
     
     try {
-      console.log('Token found, verifying with backend...');
-      const response = await fetchApi<{
+      console.log('Token found, verifying with backend at /auth/users/me...');
+      let response = await fetchApi<{
         username: string;
         email: string;
         is_admin: boolean;
       }>('/auth/users/me', {
         method: 'GET',
       });
+      
+      // If the first endpoint returns 404, try the fallback endpoint
+      if (response.status === 404) {
+        console.log('Endpoint /auth/users/me returned 404, trying fallback endpoint /auth/me...');
+        response = await fetchApi<{
+          username: string;
+          email: string;
+          is_admin: boolean;
+        }>('/auth/me', {
+          method: 'GET',
+        });
+      }
       
       if (response.success && response.data) {
         // Token is valid, update auth data with fresh data from backend
