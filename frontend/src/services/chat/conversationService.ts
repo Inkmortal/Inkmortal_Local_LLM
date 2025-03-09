@@ -32,12 +32,21 @@ export async function createConversation(title?: string): Promise<{ conversation
       }
       
       console.error(`Create conversation error (${response.status}): ${errorMessage}`);
+      // Show error notification to user
+      showError(errorMessage, 'Conversation Error');
       return null;
     }
     
     return response.data;
   } catch (error) {
     console.error('Unexpected error in createConversation:', error);
+    
+    // Show notification to user
+    showError(
+      error instanceof Error ? error.message : 'Failed to create conversation',
+      'Conversation Error'
+    );
+    
     return null;
   }
 }

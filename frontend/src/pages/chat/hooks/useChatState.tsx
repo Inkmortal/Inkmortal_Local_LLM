@@ -1,676 +1,255 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { 
-  sendMessage, 
-  createConversation, 
-  getConversation, 
-  listConversations, 
-  MessageStatus 
-} from '../../../services/chat';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { 
+  sendMessage, 
+  createConversation, 
+  getConversation, 
+  listConversations, 
+  MessageStatus 
+} from '../../../services/chat';
 import { Message, ChatRequestParams, Conversation } from '../types/chat';
-import { showError, showInfo, showSuccess } from '../../../utils/notifications';
-
-// Token counting utility function (rough estimate)
-// This is a simplified version - a proper tokenizer would be more accurate
-function estimateTokenCount(text: string): number {
-  // Average English word is ~4 characters + 1 for space
-  // GPT models use ~1.3 tokens per word
-  const words = text.trim().split(/\s+/).length;
-  return Math.ceil(words * 1.3);
-}
-
-interface UseChatStateProps {
-  initialConversationId?: string;
-}
-
-export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) => {
-  // Message state
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-      timestamp: new Date(),
-      status: MessageStatus.COMPLETE
-    }
-  ]);
-
-  // Conversation state
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
-  const [conversationLoading, setConversationLoading] = useState(false);
-
-  // Enhanced UI state for more granular loading tracking
-  const [messageLoading, setMessageLoading] = useState(false);        // General loading state
-  const [isGenerating, setIsGenerating] = useState(false);            // LLM is generating a response
-  const [isNetworkLoading, setIsNetworkLoading] = useState(false);    // Network request in progress
-  const [isQueueLoading, setIsQueueLoading] = useState(false);        // Message is in queue
-  const [isProcessing, setIsProcessing] = useState(false);            // Message is being processed
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [showFileUpload, setShowFileUpload] = useState(false);
-  const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  
-  // Track if the component is mounted to avoid state updates after unmounting
-  const isMountedRef = useRef(true);
-  
-  // Record last successful API call timestamp to avoid rapid requests
-  const lastApiCallRef = useRef(Date.now() - 10000);
-  
-  // On unmount, update the ref to prevent state updates
-  useEffect(() => {
-    isMountedRef.current = true;
-    
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-  
-  // Load conversation history with throttling to prevent hammering the server
-  const loadConversations = useCallback(async () => {
-    // Check if mounted and enough time has passed since last API call (at least 1 second)
-    if (!isMountedRef.current || Date.now() - lastApiCallRef.current < 1000) {
-      return;
-    }
-    
-    try {
-      // Update last API call time
-      lastApiCallRef.current = Date.now();
-      
-      if (isMountedRef.current) {
-        setIsNetworkLoading(true);
-      }
-      
-      const result = await listConversations();
-      
-      if (!isMountedRef.current) return;
-      
-      // Always update conversations, even with empty array
-      const formattedConversations = result.map(conv => ({
-        id: conv.conversation_id,
-        title: conv.title || "New conversation",
-        date: new Date(conv.created_at)
-      }));
-      
-      setConversations(formattedConversations);
-    } catch (error) {
-      console.error('Error loading conversations:', error);
-      if (isMountedRef.current) {
-        // Set empty conversations on error to avoid stale data
-        setConversations([]);
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsNetworkLoading(false);
-      }
-    }
-  }, []);
-  
-  // Load conversation if ID is provided
-  const loadConversation = useCallback(async (id?: string) => {
-    const conversationIdToLoad = id || initialConversationId;
-    if (conversationIdToLoad && isMountedRef.current) {
-      setConversationLoading(true);
-      setIsNetworkLoading(true);
-      try {
-        // Record API call time
-        lastApiCallRef.current = Date.now();
-        
-        const conversationData = await getConversation(conversationIdToLoad);
-        
-        if (!isMountedRef.current) return;
-        
-        if (!conversationData) {
-          console.error('Conversation not found or error loading conversation');
-          createNewConversation();
-          return;
-        }
-        
-        // Map API messages to UI format
-        const uiMessages: Message[] = conversationData.messages.map(msg => ({
-          id: msg.id,
-          role: msg.role as 'user' | 'assistant' | 'system',
-          content: msg.content,
-          timestamp: new Date(msg.created_at),
-          status: msg.status || MessageStatus.COMPLETE,
-          error: msg.error
-        }));
-        
-        setMessages(uiMessages);
-        setConversationId(conversationData.conversation_id);
-      } catch (error) {
-        console.error('Error loading conversation:', error);
-        // If conversation doesn't exist, create a new one
-        if (isMountedRef.current) {
-          createNewConversation();
-        }
-      } finally {
-        if (isMountedRef.current) {
-          setConversationLoading(false);
-          setIsNetworkLoading(false);
-        }
-      }
-    }
-  }, [initialConversationId]);
-  
-  // Run loadConversation when the component mounts
-  useEffect(() => {
-    // Check if we have an auth token before attempting API calls
-    const authToken = localStorage.getItem('authToken');
-    if (!authToken) {
-      console.warn('No auth token found - skipping conversation initialization');
-      return;
-    }
-    
-    // Load conversation list
-    loadConversations();
-    
-    if (initialConversationId) {
-      loadConversation();
-    } else if (!conversationId) {
-      // Create a new conversation if no ID is provided
-      createNewConversation();
-    }
-  }, [initialConversationId, loadConversation, conversationId, loadConversations]);
-  
-  // Function to create a new conversation
-  const createNewConversation = async () => {
-    // Check for auth token first
-    const authToken = localStorage.getItem('authToken');
-    if (!authToken) {
-      console.warn('Cannot create conversation - user not authenticated');
-      return;
-    }
-    
-    if (isMountedRef.current) {
-      setConversationLoading(true);
-      setIsNetworkLoading(true);
-    }
-    
-    try {
-      // Record API call time
-      lastApiCallRef.current = Date.now();
-      
-      const response = await createConversation();
-      
-      if (!isMountedRef.current) return;
-      
-      if (response) {
-        setConversationId(response.conversation_id);
-        // Reset messages to just the welcome message
-        setMessages([{
-          id: 'welcome',
-          role: 'assistant',
-          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-          timestamp: new Date(),
-          status: MessageStatus.COMPLETE
-        }]);
-        
-        // Refresh conversation list
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            loadConversations();
-          }
-        }, 500);
-      } else {
-        console.error('Failed to create conversation - response was null');
-        // Even if we failed to create a conversation, still show the welcome message
-        // so the user can still use the chat interface
-        setMessages([{
-          id: 'local-welcome',
-          role: 'assistant',
-          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-          timestamp: new Date(),
-          status: MessageStatus.COMPLETE
-        }]);
-      }
-    } catch (error) {
-      console.error('Error creating new conversation:', error);
-      // Even on error, we still want to show a welcome message
-      if (isMountedRef.current) {
-        setMessages([{
-          id: 'error-welcome',
-          role: 'assistant',
-          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-          timestamp: new Date(),
-          status: MessageStatus.COMPLETE
-        }]);
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setConversationLoading(false);
-        setIsNetworkLoading(false);
-      }
-    }
-  };
-  
-  // Code and math insertion refs
-  const codeInsertRef = useRef<(codeSnippet: string) => void>();
-  const mathInsertRef = useRef<(mathSnippet: string) => void>();
-
-  // For storing modal opening functions
-  const openMathModalRef = useRef<() => void>(() => console.log("Math modal ref not initialized"));
-  const openCodeModalRef = useRef<() => void>(() => console.log("Code modal ref not initialized"));
-
-  // Update a message's status
-  const updateMessageStatus = useCallback((messageId: string, status: MessageStatus, error?: string) => {
-    if (!isMountedRef.current) return;
-    
-    setMessages(prev => prev.map(msg => 
-      msg.id === messageId 
-        ? { ...msg, status, ...(error && { error }) }
-        : msg
-    ));
-    
-    // Update UI loading states based on message status
-    if (status === MessageStatus.SENDING) {
-      setIsNetworkLoading(true);
-      setIsQueueLoading(false);
-      setIsProcessing(false);
-    } else if (status === MessageStatus.QUEUED) {
-      setIsNetworkLoading(false);
-      setIsQueueLoading(true);
-      setIsProcessing(false);
-    } else if (status === MessageStatus.PROCESSING) {
-      setIsNetworkLoading(false);
-      setIsQueueLoading(false);
-      setIsProcessing(true);
-    } else if (status === MessageStatus.COMPLETE || status === MessageStatus.ERROR) {
-      setIsNetworkLoading(false);
-      setIsQueueLoading(false);
-      setIsProcessing(false);
-    }
-  }, []);
-
-  // Handle sending a message
-  const handleSendMessage = async (messageText: string) => {
-    if (messageText.trim() === '' || !isMountedRef.current) return;
-    
-    // Estimate token count for analytics
-    const estimatedTokens = estimateTokenCount(messageText);
-    console.log(`Estimated tokens in message: ${estimatedTokens}`);
-    
-    // Generate a predictable ID for tracking this message
-    const messageId = uuidv4();
-    
-    // Add user message
-    const userMessage: Message = {
-      id: messageId,
-      role: 'user',
-      content: messageText,
-      timestamp: new Date(),
-      status: MessageStatus.SENDING
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
-    setMessageLoading(true);
-    setIsNetworkLoading(true);
-    
-    try {
-      // Record API call time
-      lastApiCallRef.current = Date.now();
-      
-      // Update user message status to show it's in the queue
-      updateMessageStatus(messageId, MessageStatus.QUEUED);
-      setIsQueueLoading(true);
-      setIsNetworkLoading(false);
-      
-      // Prepare request params
-      const requestParams: ChatRequestParams = {
-        message: messageText,
-        conversation_id: conversationId,
-        file: selectedFile || undefined
-      };
-      
-      // Show that we're generating
-      setIsGenerating(true);
-      
-      // Call real API service
-      const response = await sendMessage(requestParams);
-      
-      if (!isMountedRef.current) return;
-      
-      // Check if the response contains an error
-      if (response.status === MessageStatus.ERROR) {
-        // Update the user message to show the error
-        updateMessageStatus(messageId, MessageStatus.ERROR, response.error);
-        
-        // Add system error message
-        const errorMessage: Message = {
-          id: uuidv4(),
-          role: 'system',
-          content: response.error || 'An error occurred while processing your message.',
-          timestamp: new Date(),
-          status: MessageStatus.ERROR
-        };
-        
-        setMessages(prev => [...prev, errorMessage]);
-        return;
-      }
-      
-      // Update user message status to complete since it was processed
-      updateMessageStatus(messageId, MessageStatus.COMPLETE);
-      
-      // Add assistant response
-      const assistantMessage: Message = {
-        id: response.id,
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date(response.created_at),
-        status: response.status || MessageStatus.COMPLETE
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Track token usage of response
-      const responseTokens = estimateTokenCount(response.content);
-      console.log(`Estimated tokens in response: ${responseTokens}`);
-      console.log(`Total estimated token usage: ${estimatedTokens + responseTokens}`);
-      
-      // Save conversation ID if not already set
-      if (!conversationId && response.conversation_id) {
-        setConversationId(response.conversation_id);
-        
-        // Refresh conversation list after a delay
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            loadConversations();
-          }
-        }, 500);
-      }
-      
-      // Clear file after sending
-      if (selectedFile) {
-        setSelectedFile(null);
-        setShowFileUpload(false);
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      
-      if (!isMountedRef.current) return;
-      
-      // Update the user message to show the error
-      updateMessageStatus(messageId, MessageStatus.ERROR, 'Failed to send message');
-      
-      // Add error message
-      const errorMessage: Message = {
-        id: uuidv4(),
-        role: 'system',
-        content: 'Sorry, there was an unexpected error processing your request. Please try again.',
-        timestamp: new Date(),
-        status: MessageStatus.ERROR
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      if (isMountedRef.current) {
-        setMessageLoading(false);
-        setIsGenerating(false);
-        setIsNetworkLoading(false);
-        setIsQueueLoading(false);
-        setIsProcessing(false);
-        setQueuePosition(null);
-      }
-    }
-  };
-  
-  // Handle regenerating a response
-  const handleRegenerate = async (messageId: string) => {
-    if (!isMountedRef.current) return;
-    
-    // Find the last user message
-    const lastUserMessageIndex = [...messages].reverse().findIndex(m => m.role === 'user');
-    if (lastUserMessageIndex === -1) return;
-    
-    const lastUserMessage = [...messages].reverse()[lastUserMessageIndex];
-    
-    // Remove the last assistant message
-    const newMessages = messages.filter(m => m.id !== messageId);
-    setMessages(newMessages);
-    
-    // Regenerate answer
-    setMessageLoading(true);
-    setIsGenerating(true);
-    setIsNetworkLoading(true);
-    
-    try {
-      // Record API call time
-      lastApiCallRef.current = Date.now();
-      
-      // Call the API again with the same user message
-      const requestParams: ChatRequestParams = {
-        message: lastUserMessage.content,
-        conversation_id: conversationId
-      };
-      
-      // Set to queued state
-      setIsNetworkLoading(false);
-      setIsQueueLoading(true);
-      
-      const response = await sendMessage(requestParams);
-      
-      if (!isMountedRef.current) return;
-      
-      // Check if response has an error
-      if (response.status === MessageStatus.ERROR) {
-        // Add system error message
-        const errorMessage: Message = {
-          id: uuidv4(),
-          role: 'system',
-          content: response.error || 'An error occurred while regenerating the response.',
-          timestamp: new Date(),
-          status: MessageStatus.ERROR
-        };
-        
-        setMessages(prev => [...prev, errorMessage]);
-        return;
-      }
-      
-      // Add new assistant response
-      const assistantMessage: Message = {
-        id: response.id,
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date(response.created_at),
-        status: response.status || MessageStatus.COMPLETE
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error regenerating response:', error);
-      
-      if (!isMountedRef.current) return;
-      
-      // Add error message
-      const errorMessage: Message = {
-        id: uuidv4(),
-        role: 'system',
-        content: 'Sorry, there was an error regenerating the response. Please try again.',
-        timestamp: new Date(),
-        status: MessageStatus.ERROR
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      if (isMountedRef.current) {
-        setMessageLoading(false);
-        setIsGenerating(false);
-        setIsNetworkLoading(false);
-        setIsQueueLoading(false);
-        setIsProcessing(false);
-      }
-    }
-  };
-  
-  // Handle stopping generation
-  const handleStopGeneration = useCallback(() => {
-    if (!isMountedRef.current) return;
-    
-    // In a real application, this would cancel the API request
-    setIsGenerating(false);
-    setMessageLoading(false);
-    setIsNetworkLoading(false);
-    setIsQueueLoading(false);
-    setIsProcessing(false);
-  }, []);
-
-  // Handler for opening modals or using templates
-  const handleInsertCode = useCallback((languageArg?: string, templateArg?: string, handlerFn?: any) => {
-    // Special case for registering external handlers
-    if (languageArg === "REGISTER_HANDLER" && handlerFn) {
-      openCodeModalRef.current = () => {
-        if (handlerFn) handlerFn("OPEN_MODAL");
-      };
-      return;
-    }
-    
-    // If called from action bar buttons to open modal
-    if (languageArg === "OPEN_MODAL" && openCodeModalRef.current) {
-      openCodeModalRef.current();
-      return;
-    }
-    
-    // Default JavaScript template if none provided
-    const defaultTemplate = `function example() {
-  // Your code here
-  return true;
-}`;
-
-    // Default language and template
-    const language = languageArg || 'javascript';
-    const template = templateArg || defaultTemplate;
-    
-    // Create code snippet with markdown code block syntax
-    const codeSnippet = `\`\`\`${language}
-${template}
-\`\`\``;
-    
-    // Use the registered callback to insert at cursor position
-    if (codeInsertRef.current) {
-      console.log("Using codeInsertRef from useChatState:", codeSnippet.substring(0, 50) + "...");
-      codeInsertRef.current(codeSnippet);
-    } else {
-      console.error("codeInsertRef.current is not defined in useChatState!");
-    }
-  }, []);
-
-  // Handler for opening modals or using formulas
-  const handleInsertMath = useCallback((formulaArg?: string, templateArg?: string, handlerFn?: any) => {
-    // Special case for registering external handlers
-    if (formulaArg === "REGISTER_HANDLER" && handlerFn) {
-      openMathModalRef.current = () => {
-        if (handlerFn) handlerFn("OPEN_MODAL");
-      };
-      return;
-    }
-    
-    // If called from action bar buttons to open modal
-    if (formulaArg === "OPEN_MODAL" && openMathModalRef.current) {
-      openMathModalRef.current();
-      return;
-    }
-    
-    // Default formula if none provided
-    const defaultFormula = '\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}';
-    
-    // Use provided formula or default
-    const formula = formulaArg || defaultFormula;
-    
-    // LaTeX math template with display mode syntax for LLM compatibility
-    const mathSnippet = `$$${formula}$$`;
-    
-    // Use the registered callback to insert at cursor position
-    if (mathInsertRef.current) {
-      console.log("Using mathInsertRef from useChatState:", mathSnippet.substring(0, 50) + "...");
-      mathInsertRef.current(mathSnippet);
-    } else {
-      console.error("mathInsertRef.current is not defined in useChatState!");
-    }
-  }, []);
-
-  const handleFileSelect = useCallback((file: File) => {
-    if (isMountedRef.current) {
-      setSelectedFile(file);
-    }
-  }, []);
-
-  // Switch to a different conversation
-  const switchConversation = useCallback(async (id: string) => {
-    if (id === conversationId || !isMountedRef.current) return; // Don't reload if it's the same conversation
-    
-    setConversationLoading(true);
-    setIsNetworkLoading(true);
-    try {
-      // Record API call time
-      lastApiCallRef.current = Date.now();
-      
-      const conversationData = await getConversation(id);
-      
-      if (!isMountedRef.current) return;
-      
-      if (!conversationData) {
-        console.error('Conversation not found or error loading conversation');
-        return;
-      }
-      
-      // Map API messages to UI format
-      const uiMessages: Message[] = conversationData.messages.map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-        status: msg.status || MessageStatus.COMPLETE,
-        error: msg.error
-      }));
-      
-      setMessages(uiMessages);
-      setConversationId(id);
-    } catch (error) {
-      console.error('Error switching conversation:', error);
-    } finally {
-      if (isMountedRef.current) {
-        setConversationLoading(false);
-        setIsNetworkLoading(false);
-      }
-    }
-  }, [conversationId]);
-
-  return {
-    // State
-    messages,
-    loading: messageLoading || conversationLoading,
-    messageLoading,
-    conversationLoading,
-    isGenerating,
-    isNetworkLoading,
-    isQueueLoading,
-    isProcessing,
-    selectedFile,
-    showFileUpload,
-    conversationId,
-    conversations,
-    codeInsertRef,
-    mathInsertRef,
-    queuePosition,
-    
-    // Setters
-    setShowFileUpload,
-    setSelectedFile,
-    
-    // Handlers
-    handleSendMessage,
-    handleRegenerate,
-    handleStopGeneration,
-    handleInsertCode,
-    handleInsertMath,
-    handleFileSelect,
-    
-    // Conversation management
-    loadConversation,
-    loadConversations,
-    createNewConversation,
-    switchConversation,
-    updateMessageStatus
-  };
-};
-
-export default useChatState;
+import { showError, showInfo, showSuccess } from '../../../utils/notifications';
+
+// Token counting utility function (rough estimate)
+// This is a simplified version - a proper tokenizer would be more accurate
+function estimateTokenCount(text: string): number {
+  // Average English word is ~4 characters + 1 for space
+  // GPT models use ~1.3 tokens per word
+  const words = text.trim().split(/\s+/).length;
+  return Math.ceil(words * 1.3);
+}
+
+interface UseChatStateProps {
+  initialConversationId?: string;
+}
+
+export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) => {
+  // Message state
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+      timestamp: new Date(),
+      status: MessageStatus.COMPLETE
+    }
+  ]);
+
+  // Conversation state
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
+  const [conversationLoading, setConversationLoading] = useState(false);
+
+  // Enhanced UI state for more granular loading tracking
+  const [messageLoading, setMessageLoading] = useState(false);        // General loading state
+  const [isGenerating, setIsGenerating] = useState(false);            // LLM is generating a response
+  const [isNetworkLoading, setIsNetworkLoading] = useState(false);    // Network request in progress
+  const [isQueueLoading, setIsQueueLoading] = useState(false);        // Message is in queue
+  const [isProcessing, setIsProcessing] = useState(false);            // Message is being processed
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  
+  // Track if the component is mounted to avoid state updates after unmounting
+  const isMountedRef = useRef(true);
+  
+  // Record last successful API call timestamp to avoid rapid requests
+  const lastApiCallRef = useRef(Date.now() - 10000);
+  
+  // On unmount, update the ref to prevent state updates
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  // Load conversation history with throttling to prevent hammering the server
+  const loadConversations = useCallback(async () => {
+    // Check if mounted and enough time has passed since last API call (at least 1 second)
+    if (!isMountedRef.current || Date.now() - lastApiCallRef.current < 1000) {
+      return;
+    }
+    
+    try {
+      // Update last API call time
+      lastApiCallRef.current = Date.now();
+      
+      if (isMountedRef.current) {
+        setIsNetworkLoading(true);
+      }
+      
+      const result = await listConversations();
+      
+      if (!isMountedRef.current) return;
+      
+      // Always update conversations, even with empty array
+      const formattedConversations = result.map(conv => ({
+        id: conv.conversation_id,
+        title: conv.title || "New conversation",
+        date: new Date(conv.created_at)
+      }));
+      
+      setConversations(formattedConversations);
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      if (isMountedRef.current) {
+        // Set empty conversations on error to avoid stale data
+        setConversations([]);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsNetworkLoading(false);
+      }
+    }
+  }, []);
+  
+  // Load conversation if ID is provided
+  const loadConversation = useCallback(async (id?: string) => {
+    const conversationIdToLoad = id || initialConversationId;
+    if (conversationIdToLoad && isMountedRef.current) {
+      setConversationLoading(true);
+      setIsNetworkLoading(true);
+      try {
+        // Record API call time
+        lastApiCallRef.current = Date.now();
+        
+        const conversationData = await getConversation(conversationIdToLoad);
+        
+        if (!isMountedRef.current) return;
+        
+        if (!conversationData) {
+          console.error('Conversation not found or error loading conversation');
+          createNewConversation();
+          return;
+        }
+        
+        // Map API messages to UI format
+        const uiMessages: Message[] = conversationData.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+          status: msg.status || MessageStatus.COMPLETE,
+          error: msg.error
+        }));
+        
+        setMessages(uiMessages);
+        setConversationId(conversationData.conversation_id);
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+        // If conversation doesn't exist, create a new one
+        if (isMountedRef.current) {
+          createNewConversation();
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setConversationLoading(false);
+          setIsNetworkLoading(false);
+        }
+      }
+    }
+  }, [initialConversationId]);
+  
+  // Run loadConversation when the component mounts
+  useEffect(() => {
+    // Check if we have an auth token before attempting API calls
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+      console.warn('No auth token found - skipping conversation initialization');
+      return;
+    }
+    
+    // Load conversation list
+    loadConversations();
+    
+    if (initialConversationId) {
+      loadConversation();
+    } else if (!conversationId) {
+      // Create a new conversation if no ID is provided
+      createNewConversation();
+    }
+  }, [initialConversationId, loadConversation, conversationId, loadConversations]);
+  
+  // Function to create a new conversation
+  const createNewConversation = async () => {
+    // Check for auth token first
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+      console.warn('Cannot create conversation - user not authenticated');
+      return;
+    }
+    
+    if (isMountedRef.current) {
+      setConversationLoading(true);
+      setIsNetworkLoading(true);
+    }
+    
+    try {
+      // Record API call time
+      lastApiCallRef.current = Date.now();
+      
+      const response = await createConversation();
+      
+      if (!isMountedRef.current) return;
+      
+      if (response) {
+        setConversationId(response.conversation_id);
+        // Reset messages to just the welcome message
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+          timestamp: new Date(),
+          status: MessageStatus.COMPLETE
+        }]);
+        
+        // Refresh conversation list
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            loadConversations();
+          }
+        }, 500);
+      } else {
+        console.error('Failed to create conversation - response was null');
+        
+        // Show error notification
+        showError('Failed to create a new conversation. Using local mode instead.', 'Chat Error');
+        
+        // Even if we failed to create a conversation, still show the welcome message
+        // so the user can still use the chat interface
+        setMessages([{
+          id: 'local-welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+          timestamp: new Date(),
+          status: MessageStatus.COMPLETE
+        }]);
+      }
+    } catch (error) {
+      console.error('Error creating new conversation:', error);
+      
+      // Show error notification
+      showError(
+        error instanceof Error ? error.message : 'Failed to create a new conversation',
+        'Chat Error'
+      );
+      
+      // Even on error, we still want to show a welcome message
+      if (isMountedRef.current) {
+        setMessages([{
+          id: 'error-welcome',
+          role: 'assistant',
+          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
+          timestamp: new Date(),
+          status: MessageStatus.COMPLETE
+        }]);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setConversationLoading(false);
+        setIsNetworkLoading(false);
+      }
+    }
+  };
