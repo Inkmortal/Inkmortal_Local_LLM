@@ -26,6 +26,9 @@ interface ChatContainerProps {
   handleInsertMath: (formula?: string) => void;
   codeInsertRef: React.MutableRefObject<((codeSnippet: string) => void) | undefined>;
   mathInsertRef: React.MutableRefObject<((mathSnippet: string) => void) | undefined>;
+  isQueueLoading?: boolean;
+  isProcessing?: boolean;
+  queuePosition?: number;
 }
 
 const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -44,6 +47,9 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   handleInsertMath,
   codeInsertRef,
   mathInsertRef,
+  isQueueLoading,
+  isProcessing,
+  queuePosition
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   

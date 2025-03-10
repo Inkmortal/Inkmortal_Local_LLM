@@ -76,12 +76,15 @@ export async function sendMessagePolling(params: ChatRequestParams): Promise<Cha
       
       // Make API request
       const response = await fetchApi<ChatResponse>(endpoint, requestOptions);
+      console.log(`Message API response status: ${response.status}`);
       
       // Use our enhanced error handler
       const result = handleApiResponse(response, {
         title: 'Message Error',
         notifyOnError: true
       });
+      
+      console.log(`Message API result:`, result);
       
       // Return appropriate response based on success/failure
       if (result.success && result.data) {
@@ -582,6 +585,8 @@ export async function sendMessage(
   file?: any, 
   options?: {mode?: ChatMode}
 ): Promise<ChatResponse> {
+  console.log(`MessageService: Sending message with conversation ID: ${conversationId}`);
+  
   // Construct params object
   const params: ChatRequestParams = {
     message,

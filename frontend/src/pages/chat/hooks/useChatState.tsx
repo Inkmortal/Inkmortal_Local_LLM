@@ -21,7 +21,7 @@ export interface ChatState {
   isNetworkLoading: boolean;
   isGenerating: boolean;
 
-  // Actions
+  // Core Actions
   sendMessage: (content: string, file?: File | null) => Promise<void>;
   regenerateLastMessage: () => Promise<void>;
   stopGeneration: () => void;
@@ -30,29 +30,29 @@ export interface ChatState {
   loadConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
   
-  // Legacy support
-  handleSendMessage?: (content: string, file?: File | null) => Promise<void>;
-  handleRegenerate?: (messageId: string) => Promise<void>;
-  handleStopGeneration?: () => void;
-  switchConversation?: (id: string) => Promise<void>;
+  // Legacy support aliases (for backward compatibility)
+  handleSendMessage: (content: string, file?: File | null) => Promise<void>;
+  handleRegenerate: (messageId: string) => Promise<void>;
+  handleStopGeneration: () => void;
+  switchConversation: (id: string) => Promise<void>;
   
-  // File handling
-  showFileUpload?: boolean;
-  setShowFileUpload?: (show: boolean) => void;
-  selectedFile?: File | null;
-  setSelectedFile?: (file: File | null) => void;
-  handleFileSelect?: (file: File) => void;
+  // File handling props
+  showFileUpload: boolean;
+  setShowFileUpload: (show: boolean) => void;
+  selectedFile: File | null;
+  setSelectedFile: (file: File | null) => void;
+  handleFileSelect: (file: File) => void;
   
-  // Editor refs
-  codeInsertRef?: React.MutableRefObject<((codeSnippet: string) => void) | undefined>;
-  mathInsertRef?: React.MutableRefObject<((mathSnippet: string) => void) | undefined>;
-  handleInsertCode?: (language?: string, template?: string) => void;
-  handleInsertMath?: (formula?: string) => void;
+  // Editor refs and handlers
+  codeInsertRef: React.MutableRefObject<((codeSnippet: string) => void) | undefined>;
+  mathInsertRef: React.MutableRefObject<((mathSnippet: string) => void) | undefined>;
+  handleInsertCode: (language?: string, template?: string) => void;
+  handleInsertMath: (formula?: string) => void;
   
   // Queue properties
-  isQueueLoading?: boolean;
-  isProcessing?: boolean;
-  queuePosition?: number;
+  isQueueLoading: boolean;
+  isProcessing: boolean;
+  queuePosition: number;
 }
 
 // How frequently to poll for message updates in ms
@@ -69,7 +69,8 @@ export default function useChatState(
   options: UseChatStateOptions = {}
 ): ChatState {
   const { initialConversationId } = options;
-  // State
+  
+  // Core state
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(initialConversationId || null);
@@ -77,14 +78,23 @@ export default function useChatState(
   const [isNetworkLoading, setIsNetworkLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Refs for checking component mount state and tracking intervals
+  // File upload state
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Queue state
+  const [isQueueLoading, setIsQueueLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [queuePosition, setQueuePosition] = useState(0);
+  
+  // Refs
   const isMountedRef = useRef(true);
   const lastApiCallRef = useRef<number>(0);
   const pollingTimerRef = useRef<number | null>(null);
   const conversationsTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Editor refs
+  // Editor refs for code and math
   const codeInsertRef = useRef<((codeSnippet: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((mathSnippet: string) => void) | undefined>(undefined);
   
@@ -270,6 +280,14 @@ export default function useChatState(
     
     // If activeConversationId is null, create a new one
     const conversationId = activeConversationId || uuidv4();
+    console.log(`Sending message with conversation ID: ${conversationId} (${activeConversationId ? 'existing' : 'new'})`);
+    
+    // IMPORTANT: Set the active conversation ID BEFORE creating messages or making API calls
+    // This fixes issues with conversation not found errors on first message
+    if (!activeConversationId) {
+      console.log(`Setting new active conversation ID: ${conversationId}`);
+      setActiveConversationId(conversationId);
+    }
     
     // Create temporary user message
     const userMessage: Message = {
@@ -294,10 +312,6 @@ export default function useChatState(
     // Add messages to state immediately for UI feedback
     if (isMountedRef.current) {
       setMessages(prevMessages => [...prevMessages, userMessage, assistantMessage]);
-      
-      if (!activeConversationId) {
-        setActiveConversationId(conversationId);
-      }
     }
     
     try {
@@ -457,7 +471,23 @@ export default function useChatState(
     setMessages([]);
   };
 
+  // File handling
+  const handleFileSelect = (file: File) => {
+    console.log(`Selected file: ${file.name}`);
+    setSelectedFile(file);
+  };
+
+  // Placeholder functions for code and math editors
+  const handleInsertCode = (language?: string, template?: string) => {
+    console.log(`Insert code with language: ${language || 'none'}`);
+  };
+
+  const handleInsertMath = (formula?: string) => {
+    console.log(`Insert math formula: ${formula || 'none'}`);
+  };
+
   return {
+    // Core state
     messages,
     conversations,
     activeConversationId, 
@@ -481,22 +511,22 @@ export default function useChatState(
     handleStopGeneration,
     switchConversation: handleLoadConversation,
     
-    // File handling stubs
-    showFileUpload: false,
-    setShowFileUpload: () => {},
-    selectedFile: null,
-    setSelectedFile: () => {},
-    handleFileSelect: () => {},
+    // File handling
+    showFileUpload,
+    setShowFileUpload,
+    selectedFile,
+    setSelectedFile,
+    handleFileSelect,
     
-    // Editor refs and stubs
+    // Editor refs and handlers
     codeInsertRef,
     mathInsertRef,
-    handleInsertCode: () => {},
-    handleInsertMath: () => {},
+    handleInsertCode,
+    handleInsertMath,
     
-    // Queue stubs
-    isQueueLoading: false,
-    isProcessing: false,
-    queuePosition: 0,
+    // Queue state
+    isQueueLoading,
+    isProcessing,
+    queuePosition,
   };
 }
