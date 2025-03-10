@@ -28,6 +28,141 @@ logger = logging.getLogger("admin.system_stats")
 # Create router
 router = APIRouter(prefix="/admin/system", tags=["admin", "system"])
 
+@router.get("/models")
+async def get_models(
+    current_user: User = Depends(get_current_admin_user),
+    queue_manager: QueueManagerInterface = Depends(get_queue_manager),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get available models from Ollama"""
+    try:
+        # Check if Ollama is available
+        status = await queue_manager.get_status()
+        ollama_connected = status.get("ollama_connected", False)
+        
+        if not ollama_connected:
+            return {
+                "models": [],
+                "active_model": settings.default_model
+            }
+        
+        # Get available models from Ollama
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{settings.ollama_api_url}/api/tags")
+                
+                if response.status_code != 200:
+                    logger.error(f"Failed to fetch models from Ollama: {response.status_code}")
+                    return {
+                        "models": [],
+                        "active_model": settings.default_model
+                    }
+                
+                ollama_models = response.json().get("models", [])
+                
+                # Check if we need to set a default model
+                try:
+                    # Check if we already have a default model set in DB
+                    cursor = db.execute("SELECT value FROM config WHERE key = 'default_model'")
+                    model_from_db = cursor.fetchone()
+                    
+                    # If no model is set in DB and we have models available, set the first one
+                    if (not model_from_db or not settings.default_model) and ollama_models:
+                        first_model = ollama_models[0].get("name")
+                        if first_model:
+                            # Update settings
+                            settings.default_model = first_model
+                            logger.info(f"Using model {first_model} as default")
+                            
+                            # Save to DB if needed
+                            if not model_from_db:
+                                db.execute("INSERT INTO config (key, value) VALUES ('default_model', :value)",
+                                          {"value": first_model})
+                                db.commit()
+                                logger.info(f"Saved default model {first_model} to database")
+                except Exception as db_error:
+                    logger.error(f"Error checking/setting default model: {db_error}")
+                
+                # Transform to frontend format
+                models = []
+                for model in ollama_models:
+                    models.append({
+                        "name": model.get("name"),
+                        "size": model.get("size", 0),
+                        "modified_at": model.get("modified_at", ""),
+                        "is_active": model.get("name") == settings.default_model
+                    })
+                
+                return {
+                    "models": models,
+                    "active_model": settings.default_model
+                }
+        except Exception as e:
+            logger.error(f"Error fetching models from Ollama: {e}")
+            return {
+                "models": [],
+                "active_model": settings.default_model
+            }
+    except Exception as e:
+        logger.error(f"Error getting models: {e}")
+        return {
+            "models": [],
+            "active_model": settings.default_model
+        }
+
+@router.put("/model")
+async def set_active_model(
+    model_data: Dict[str, str],
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Set the active model for Ollama"""
+    try:
+        # Extract model name from request
+        model_name = model_data.get("model")
+        if not model_name:
+            return {
+                "success": False,
+                "model": settings.default_model,
+                "message": "No model name provided"
+            }
+        
+        # Validate model exists (in a production system, we'd check if the model exists in Ollama)
+        # For now, we'll trust the frontend to only send valid model names
+        
+        # Update the default model
+        settings.default_model = model_name
+        
+        # Also update the model in the database for persistence
+        try:
+            cursor = db.execute("SELECT COUNT(*) FROM config WHERE key = 'default_model'")
+            exists = cursor.scalar() > 0
+            
+            if exists:
+                db.execute("UPDATE config SET value = :value WHERE key = 'default_model'", 
+                          {"value": model_name})
+            else:
+                db.execute("INSERT INTO config (key, value) VALUES ('default_model', :value)", 
+                          {"value": model_name})
+            
+            db.commit()
+        except Exception as db_error:
+            logger.error(f"Error updating model in database: {db_error}")
+            # Continue even if database update fails - we'll still have the model in memory
+        
+        return {
+            "success": True,
+            "model": model_name,
+            "message": f"Successfully set active model to {model_name}"
+        }
+    except Exception as e:
+        logger.error(f"Error setting active model: {e}")
+        return {
+            "success": False,
+            "model": settings.default_model,
+            "message": f"Failed to set active model: {str(e)}"
+        }
+
 @router.get("/stats")
 async def get_system_stats(
     current_user: User = Depends(get_current_admin_user),

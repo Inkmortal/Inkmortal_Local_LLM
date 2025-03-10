@@ -33,6 +33,9 @@ export function getErrorMessageFromStatus(response: ApiResponse<any>): string {
     case 403:
       return 'You do not have permission to perform this action.';
     case 404:
+      if (response.url?.includes('model')) {
+        return 'Model not found or not available. The requested model may be offline or not installed.';
+      }
       return 'The requested resource was not found.';
     case 429:
       return 'Too many requests. Please try again later.';

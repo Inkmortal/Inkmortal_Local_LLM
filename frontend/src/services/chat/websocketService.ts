@@ -44,10 +44,14 @@ class WebSocketManager {
   private getWebSocketUrl(token: string): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     let host = window.location.host;
+    let port = window.location.port;
     
-    // Use localhost:8000 for development
+    // Use dynamic port detection with fallback to 8000 for development
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      host = 'localhost:8000';
+      // If frontend is not on port 8000, assume backend is there
+      if (port !== '8000') {
+        host = `${window.location.hostname}:8000`;
+      }
     }
     
     return `${protocol}//${host}/api/chat/ws?token=${token}`;
