@@ -46,41 +46,69 @@ const ModernChatPage: React.FC = () => {
   
   // Using a ref to track initialization state to prevent multiple initializations
   const hasInitializedRef = useRef(false);
+  // Track initialization attempts to prevent infinite retries
+  const initAttemptsRef = useRef(0);
   
   // Initialize conversation only once when component mounts
   useEffect(() => {
-    // Skip if not authenticated or already initialized
-    if (!isAuthenticated || hasInitializedRef.current) {
+    // Skip if not authenticated
+    if (!isAuthenticated) {
+      return;
+    }
+    
+    // Limit initialization attempts to prevent infinite loops (max 3 attempts)
+    if (initAttemptsRef.current >= 3) {
+      console.warn('Maximum initialization attempts reached, giving up');
+      return;
+    }
+    
+    // Skip if already initialized and using the same conversation ID
+    if (hasInitializedRef.current && chatState.conversationId === conversationId) {
+      console.log('Component already initialized with the correct conversation');
       return;
     }
     
     const initConversation = async () => {
-      console.log('Initializing conversation once');
-      hasInitializedRef.current = true;
+      console.log(`Initializing conversation (attempt ${initAttemptsRef.current + 1})`);
+      initAttemptsRef.current += 1;
       
       try {
-        // For existing conversation ID from URL
-        if (conversationId) {
-          await chatState.loadConversation(conversationId);
-        } 
-        // For a new session without conversation ID
-        else if (!chatState.conversationId) {
-          await chatState.createNewConversation();
-        }
+        // First, always load the conversation list
+        await chatState.loadConversations();
         
-        // Load conversations list just once
-        chatState.loadConversations();
+        // Then handle specific cases
+        if (conversationId) {
+          // For existing conversation ID from URL
+          console.log(`Loading existing conversation: ${conversationId}`);
+          await chatState.loadConversation(conversationId);
+          hasInitializedRef.current = true;
+        } 
+        else if (!chatState.conversationId) {
+          // No conversation, create a new one exactly once
+          console.log('No active conversation, creating a new one');
+          await chatState.createNewConversation();
+          hasInitializedRef.current = true;
+        }
+        else {
+          // We already have a conversation, no need to create a new one
+          console.log(`Using existing conversation: ${chatState.conversationId}`);
+          hasInitializedRef.current = true;
+        }
       } catch (error) {
         console.error('Error initializing conversation:', error);
-        hasInitializedRef.current = false; // Reset on error to allow retry
+        // Don't reset hasInitializedRef on error to prevent endless retry loops
       }
     };
     
-    // Run initialization only once
+    // Run initialization
     initConversation();
     
-    // Only recreate this effect if authentication state changes
-  }, [isAuthenticated, conversationId, chatState]);
+    // Clean up on unmount by resetting initAttemptsRef
+    return () => {
+      initAttemptsRef.current = 0;
+    };
+    
+  }, [isAuthenticated, conversationId, chatState.conversationId]);
 
   // Handler for selecting a conversation
   const handleSelectConversation = (conversationId: string) => {

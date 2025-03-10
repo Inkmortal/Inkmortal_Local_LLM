@@ -5,7 +5,11 @@ import {
   createConversation, 
   getConversation, 
   listConversations, 
-  MessageStatus 
+  MessageStatus,
+  ChatMode,
+  sendMessageStreaming,
+  initializeWebSocket,
+  closeWebSocket
 } from '../../../services/chat';
 import { Message, ChatRequestParams, Conversation } from '../types/chat';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
@@ -56,12 +60,32 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   // Record last successful API call timestamp to avoid rapid requests
   const lastApiCallRef = useRef(Date.now() - 10000);
   
-  // On unmount, update the ref to prevent state updates
+  // Track if WebSocket is initialized
+  const wsInitializedRef = useRef(false);
+  
+  // On mount, initialize WebSocket connection
   useEffect(() => {
     isMountedRef.current = true;
     
+    // Initialize WebSocket connection if authenticated
+    const authToken = localStorage.getItem('authToken');
+    if (authToken && !wsInitializedRef.current) {
+      initializeWebSocket(authToken)
+        .then(() => {
+          wsInitializedRef.current = true;
+          console.log('WebSocket connection established');
+        })
+        .catch(err => {
+          console.error('WebSocket initialization failed:', err);
+        });
+    }
+    
+    // Cleanup on unmount
     return () => {
       isMountedRef.current = false;
+      // Close WebSocket connection when component unmounts
+      closeWebSocket();
+      wsInitializedRef.current = false;
     };
   }, []);
   
@@ -121,7 +145,11 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         
         if (!conversationData) {
           console.error('Conversation not found or error loading conversation');
-          createNewConversation();
+          // Only create a new conversation when component is mounted
+          if (isMountedRef.current) {
+            console.log("Conversation data is null, creating a new one");
+            createNewConversation();
+          }
           return;
         }
         
@@ -139,9 +167,17 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         setConversationId(conversationData.conversation_id);
       } catch (error) {
         console.error('Error loading conversation:', error);
-        // If conversation doesn't exist, create a new one
+        // Handle errors when loading conversations
         if (isMountedRef.current) {
-          createNewConversation();
+          console.log("Network or other error occurred, not creating a new conversation");
+          // Only create a new conversation for 404 errors (conversation not found)
+          if (error instanceof Error && error.message.includes("404")) {
+            console.log("Conversation not found (404), creating a new one");
+            createNewConversation();
+          } else {
+            // Show an error notification instead
+            showError("Failed to load conversation. Please try again.", "Conversation Error");
+          }
         }
       } finally {
         if (isMountedRef.current) {
@@ -253,3 +289,289 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       }
     }
   };
+
+  // Function to send a message to the LLM
+  const sendUserMessage = async (messageText: string, file?: File) => {
+    // Don't send if already loading or empty message
+    if (messageLoading || !messageText.trim()) {
+      return;
+    }
+    
+    // Check if conversation ID exists
+    if (!conversationId) {
+      console.log('No conversation ID - creating new conversation before sending message');
+      try {
+        const response = await createConversation();
+        if (response) {
+          setConversationId(response.conversation_id);
+        } else {
+          showError('Failed to create a new conversation.', 'Chat Error');
+          return;
+        }
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        showError('Failed to create a new conversation.', 'Chat Error');
+        return;
+      }
+    }
+    
+    // Create message IDs for both user and assistant messages
+    const userMessageId = uuidv4();
+    
+    // Create user message object
+    const userMessage: Message = {
+      id: userMessageId,
+      role: 'user',
+      content: messageText,
+      timestamp: new Date(),
+      status: MessageStatus.SENDING
+    };
+    
+    // Update UI state
+    setMessageLoading(true);
+    setIsNetworkLoading(true);
+    
+    // Add user message to the UI
+    setMessages(prev => [...prev, userMessage]);
+    
+    try {
+      // Prepare request parameters
+      const params: ChatRequestParams = {
+        message: messageText,
+        conversation_id: conversationId,
+        file: file || selectedFile || undefined,
+        mode: ChatMode.STREAMING // Use streaming mode (WebSockets)
+      };
+      
+      // WebSocket-based approach with real-time status updates
+      sendMessageStreaming(params, {
+        onStart: () => {
+          if (!isMountedRef.current) return;
+          
+          // Update user message to QUEUED status
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessageId 
+              ? { ...msg, status: MessageStatus.QUEUED } 
+              : msg
+          ));
+          
+          setIsNetworkLoading(false);
+          setIsQueueLoading(true);
+        },
+        onStatusUpdate: (status, position) => {
+          if (!isMountedRef.current) return;
+          
+          // Update message status in UI
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessageId 
+              ? { ...msg, status } 
+              : msg
+          ));
+          
+          // Update UI loading states
+          if (status === MessageStatus.QUEUED) {
+            setIsQueueLoading(true);
+            setIsProcessing(false);
+            setQueuePosition(position !== undefined ? position : null);
+          } else if (status === MessageStatus.PROCESSING) {
+            setIsQueueLoading(false);
+            setIsProcessing(true);
+            setQueuePosition(0);
+          } else if (status === MessageStatus.STREAMING) {
+            setIsQueueLoading(false);
+            setIsProcessing(false);
+            setIsGenerating(true);
+          }
+        },
+        onToken: (token) => {
+          if (!isMountedRef.current) return;
+          
+          // For token streaming, we need to update the assistant message content
+          // Since we may not have received the full message yet, check if it exists
+          setMessages(prev => {
+            // Find assistant message if it exists
+            const assistantMsg = prev.find(msg => 
+              msg.role === 'assistant' && 
+              msg.status === MessageStatus.STREAMING
+            );
+            
+            if (assistantMsg) {
+              // Update existing assistant message
+              return prev.map(msg => 
+                msg.id === assistantMsg.id 
+                  ? { ...msg, content: msg.content + token } 
+                  : msg
+              );
+            } else {
+              // Create new assistant message
+              const newAssistantMsg: Message = {
+                id: uuidv4(),
+                role: 'assistant',
+                content: token,
+                timestamp: new Date(),
+                status: MessageStatus.STREAMING
+              };
+              return [...prev, newAssistantMsg];
+            }
+          });
+        },
+        onComplete: (response) => {
+          if (!isMountedRef.current) return;
+          
+          // Create assistant message from response
+          const assistantMessage: Message = {
+            id: response.id,
+            role: 'assistant',
+            content: response.content,
+            timestamp: new Date(response.created_at),
+            status: MessageStatus.COMPLETE
+          };
+          
+          // Update messages - replace any streaming message or add new message
+          setMessages(prev => {
+            // Find if we already have a streaming message
+            const streamingIndex = prev.findIndex(msg => 
+              msg.role === 'assistant' && 
+              msg.status === MessageStatus.STREAMING
+            );
+            
+            if (streamingIndex >= 0) {
+              // Replace streaming message with complete message
+              const newMessages = [...prev];
+              newMessages[streamingIndex] = assistantMessage;
+              return newMessages;
+            } else {
+              // Add new message
+              return [...prev, assistantMessage];
+            }
+          });
+          
+          // Update user message status to complete
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessageId 
+              ? { ...msg, status: MessageStatus.COMPLETE } 
+              : msg
+          ));
+          
+          // Reset UI states
+          setMessageLoading(false);
+          setIsGenerating(false);
+          setIsQueueLoading(false);
+          setIsProcessing(false);
+          setIsNetworkLoading(false);
+          setQueuePosition(null);
+          setSelectedFile(null);
+          setShowFileUpload(false);
+          
+          // Refresh conversation list after delay
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              loadConversations();
+            }
+          }, 500);
+        },
+        onError: (error) => {
+          if (!isMountedRef.current) return;
+          
+          console.error('Error sending message:', error);
+          
+          // Update user message to show error
+          setMessages(prev => prev.map(msg => 
+            msg.id === userMessageId 
+              ? { ...msg, status: MessageStatus.ERROR, error } 
+              : msg
+          ));
+          
+          // Show error notification
+          showError(error, 'Message Error');
+          
+          // Reset UI states
+          setMessageLoading(false);
+          setIsGenerating(false);
+          setIsQueueLoading(false);
+          setIsProcessing(false);
+          setIsNetworkLoading(false);
+          setQueuePosition(null);
+        }
+      });
+    } catch (error) {
+      if (!isMountedRef.current) return;
+      
+      console.error('Error sending message:', error);
+      
+      // Update user message to show error
+      setMessages(prev => prev.map(msg => 
+        msg.id === userMessageId 
+          ? { 
+              ...msg, 
+              status: MessageStatus.ERROR, 
+              error: error instanceof Error ? error.message : 'Unknown error' 
+            } 
+          : msg
+      ));
+      
+      // Show error notification
+      showError(
+        error instanceof Error ? error.message : 'Failed to send message',
+        'Chat Error'
+      );
+      
+      // Reset UI states
+      setMessageLoading(false);
+      setIsGenerating(false);
+      setIsQueueLoading(false);
+      setIsProcessing(false);
+      setIsNetworkLoading(false);
+      setQueuePosition(null);
+    }
+  };
+  
+  // Function to retry a failed message
+  const retryMessage = async (messageId: string) => {
+    // Find the failed message
+    const failedMessage = messages.find(msg => msg.id === messageId);
+    if (!failedMessage || failedMessage.role !== 'user') {
+      return;
+    }
+    
+    // Get the message content
+    const messageText = failedMessage.content;
+    
+    // Remove the failed message and any subsequent messages
+    const failedIndex = messages.findIndex(msg => msg.id === messageId);
+    if (failedIndex >= 0) {
+      setMessages(messages.slice(0, failedIndex));
+    }
+    
+    // Send the message again
+    await sendUserMessage(messageText);
+  };
+  
+  // Function to handle file selection
+  const handleFileSelect = (file: File | null) => {
+    setSelectedFile(file);
+  };
+  
+  // Return the hook API
+  return {
+    messages,
+    conversationId,
+    conversationLoading,
+    messageLoading,
+    isGenerating,
+    isNetworkLoading,
+    isQueueLoading,
+    isProcessing,
+    queuePosition,
+    conversations,
+    selectedFile,
+    showFileUpload,
+    sendUserMessage,
+    retryMessage,
+    loadConversation,
+    loadConversations,
+    createNewConversation,
+    handleFileSelect,
+    setShowFileUpload
+  };
+};

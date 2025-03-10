@@ -2,85 +2,225 @@
  * Message services for chat functionality
  */
 import { fetchApi } from '../../config/api';
-import { ChatRequestParams, ChatResponse, MessageStatus } from './types';
-import { createErrorResponse, createErrorResponseFromApiResponse } from './errorHandling';
-import { showError } from '../../utils/notifications';
+import { 
+  ChatRequestParams, 
+  ChatResponse, 
+  MessageStatus, 
+  ChatMode,
+  MessageStreamHandlers,
+  MessageUpdateEvent
+} from './types';
+import { 
+  createErrorResponse, 
+  executeServiceCall,
+  handleApiResponse 
+} from './errorHandling';
+import {
+  registerMessageHandler,
+  isWebSocketConnected,
+  initializeWebSocket
+} from './websocketService';
 
 /**
- * Sends a message to the LLM backend
+ * Sends a message to the LLM backend using the polling approach
+ * @param params Request parameters including message and optional conversation ID and file
+ * @returns Promise with the chat response
+ */
+export async function sendMessagePolling(params: ChatRequestParams): Promise<ChatResponse> {
+  return executeServiceCall(
+    async () => {
+      // Prepare request based on whether we have a file
+      const endpoint = '/api/chat/message';
+      let requestOptions: RequestInit;
+      
+      if (params.file) {
+        // Use FormData for file uploads
+        const formData = new FormData();
+        formData.append('message', params.message);
+        formData.append('file', params.file);
+        
+        if (params.conversation_id) {
+          formData.append('conversation_id', params.conversation_id);
+        }
+        
+        requestOptions = {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type for FormData
+        };
+      } else {
+        // Regular JSON request for text-only messages
+        requestOptions = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: params.message,
+            conversation_id: params.conversation_id,
+          }),
+        };
+      }
+      
+      // Make API request
+      const response = await fetchApi<ChatResponse>(endpoint, requestOptions);
+      
+      // Use our enhanced error handler
+      const result = handleApiResponse(response, {
+        title: 'Message Error',
+        notifyOnError: true
+      });
+      
+      // Return appropriate response based on success/failure
+      if (result.success && result.data) {
+        return {
+          ...result.data,
+          status: MessageStatus.COMPLETE
+        };
+      } else {
+        return createErrorResponse(response, params.conversation_id);
+      }
+    },
+    createErrorResponse('Failed to send message due to an unexpected error', params.conversation_id)
+  );
+}
+
+/**
+ * Sends a message using WebSockets for real-time status updates
+ */
+export async function sendMessageStreaming(
+  params: ChatRequestParams,
+  handlers: MessageStreamHandlers
+): Promise<void> {
+  handlers.onStart?.();
+  
+  try {
+    // Get authentication token from localStorage
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+    
+    // Ensure WebSocket is connected
+    if (!isWebSocketConnected()) {
+      await initializeWebSocket(token);
+    }
+    
+    // Send the initial message using the REST API
+    const initialResponse = await sendMessagePolling(params);
+    
+    // If there was an immediate error, handle it
+    if (initialResponse.status === MessageStatus.ERROR) {
+      handlers.onError?.(initialResponse.error || 'Unknown error');
+      return;
+    }
+    
+    // Get message ID from the response
+    const messageId = initialResponse.id;
+    
+    // Register handler for status updates
+    const unregisterHandler = registerMessageHandler(messageId, (update: MessageUpdateEvent) => {
+      // Convert status string to enum
+      const status = update.status as unknown as MessageStatus;
+      
+      // Handle status updates
+      if (update.status === 'QUEUED' || update.status === 'PROCESSING') {
+        handlers.onStatusUpdate?.(
+          update.status === 'QUEUED' ? MessageStatus.QUEUED : MessageStatus.PROCESSING,
+          update.queue_position
+        );
+      }
+      // Handle completion
+      else if (update.status === 'COMPLETE' && update.assistant_content) {
+        // Create complete response object
+        const completeResponse: ChatResponse = {
+          id: update.assistant_message_id || initialResponse.id,
+          conversation_id: update.conversation_id,
+          content: update.assistant_content,
+          created_at: new Date().toISOString(),
+          role: 'assistant',
+          status: MessageStatus.COMPLETE
+        };
+        
+        // Simulate streaming if requested
+        if (handlers.onToken && update.assistant_content.length > 0) {
+          // Break the content into chunks to simulate token streaming
+          const chunks = update.assistant_content.split(' ');
+          (async () => {
+            for (const chunk of chunks) {
+              handlers.onToken?.(chunk + ' ');
+              // Small delay to simulate streaming
+              await new Promise(r => setTimeout(r, 15));
+            }
+            
+            // Call complete handler after streaming finishes
+            handlers.onComplete?.(completeResponse);
+            
+            // Clean up handler
+            unregisterHandler();
+          })();
+        } else {
+          // Call complete handler immediately
+          handlers.onComplete?.(completeResponse);
+          
+          // Clean up handler
+          unregisterHandler();
+        }
+      }
+      // Handle errors
+      else if (update.status === 'ERROR') {
+        handlers.onError?.(update.error || 'Unknown error');
+        
+        // Clean up handler
+        unregisterHandler();
+      }
+    });
+    
+    // Return immediately, updates will come through WebSocket
+  } catch (error) {
+    console.error('Streaming error:', error);
+    handlers.onError?.(error instanceof Error ? error.message : 'Unknown error');
+  }
+}
+
+/**
+ * Main message sending function that chooses the appropriate implementation
  * @param params Request parameters including message and optional conversation ID and file
  * @returns Promise with the chat response
  */
 export async function sendMessage(params: ChatRequestParams): Promise<ChatResponse> {
-  try {
-    // Check if we need to handle file upload
-    if (params.file) {
-      // Use FormData for file uploads
-      const formData = new FormData();
-      formData.append('message', params.message);
-      formData.append('file', params.file);
-      
-      if (params.conversation_id) {
-        formData.append('conversation_id', params.conversation_id);
+  // Default to streaming mode with fallback to polling
+  const mode = params.mode || ChatMode.STREAMING;
+  
+  if (mode === ChatMode.STREAMING) {
+    // Use WebSocket-based implementation if possible
+    try {
+      // Get authentication token
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        // Fall back to polling if no auth token
+        return sendMessagePolling(params);
       }
       
-      // Use fetchApi with FormData and our standardized response format
-      const response = await fetchApi<ChatResponse>('/api/chat/message', {
-        method: 'POST',
-        body: formData,
-        // Don't set Content-Type header - browser will set it with boundary for FormData
+      // Ensure WebSocket is connected
+      if (!isWebSocketConnected()) {
+        await initializeWebSocket(token);
+      }
+      
+      // If WebSocket is connected, use the streaming implementation
+      // but wrap it in a Promise to maintain the same interface
+      return new Promise((resolve, reject) => {
+        sendMessageStreaming(params, {
+          onComplete: (response) => resolve(response),
+          onError: (error) => reject(new Error(error))
+        });
       });
-      
-      // Handle different error types based on status code
-      if (!response.success || !response.data) {
-        return createErrorResponseFromApiResponse(response, params.conversation_id);
-      }
-      
-      // Add COMPLETE status to successful responses
-      const result = {
-        ...response.data,
-        status: MessageStatus.COMPLETE
-      };
-      
-      return result;
-    } else {
-      // Regular JSON request for text-only messages
-      const response = await fetchApi<ChatResponse>('/api/chat/message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: params.message,
-          conversation_id: params.conversation_id,
-        }),
-      });
-      
-      // Handle different error types based on status code
-      if (!response.success || !response.data) {
-        // Show error notification to user
-        const errorMessage = response.error || 'Failed to send message to server';
-        showError(errorMessage, 'Message Error');
-        
-        return createErrorResponseFromApiResponse(response, params.conversation_id);
-      }
-      
-      // Add COMPLETE status to successful responses
-      const result = {
-        ...response.data,
-        status: MessageStatus.COMPLETE
-      };
-      
-      return result;
+    } catch (error) {
+      console.warn('WebSocket unavailable, falling back to polling:', error);
+      return sendMessagePolling(params);
     }
-  } catch (error) {
-    // Handle unexpected errors and show user-facing notification
-    console.error('Unexpected error in sendMessage:', error);
-    
-    // Use notification utility
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred while sending message';
-    showError(errorMessage, 'Chat Error');
-    
-    return createErrorResponse(errorMessage, params.conversation_id);
+  } else {
+    // Use polling implementation
+    return sendMessagePolling(params);
   }
 }
