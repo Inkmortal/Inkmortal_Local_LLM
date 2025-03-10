@@ -1,6 +1,6 @@
 /**
- * TokenBufferManager - optimizes token streaming by batching updates
- * This helps reduce the number of React re-renders during streaming
+ * Optimized TokenBufferManager - reduces React re-renders during streaming
+ * by batching updates and preventing memory leaks
  */
 export class TokenBufferManager {
   private buffer: string = '';
@@ -8,9 +8,13 @@ export class TokenBufferManager {
   private updateCallback: (tokens: string) => void;
   private flushDelay: number;
   private maxBufferSize: number;
+  private totalProcessed: number = 0;
+  private isDisposed: boolean = false;
+  private lastFlushTime: number = 0;
+  private creationTime: number = Date.now();
 
   /**
-   * Create a new token buffer manager
+   * Create a new token buffer manager with enhanced performance
    * @param updateCallback Function to call when tokens are flushed
    * @param options Configuration options
    */
@@ -19,29 +23,57 @@ export class TokenBufferManager {
     options: { flushDelay?: number; maxBufferSize?: number } = {}
   ) {
     this.updateCallback = updateCallback;
-    this.flushDelay = options.flushDelay || 100; // ms
-    this.maxBufferSize = options.maxBufferSize || 50; // characters
+    // Smaller flush delay for more responsiveness with smaller batches
+    this.flushDelay = options.flushDelay || 50; // ms (reduced from 100ms)
+    // Larger buffer size to reduce update frequency
+    this.maxBufferSize = options.maxBufferSize || 80; // characters (increased from 50)
+    this.lastFlushTime = Date.now();
   }
 
   /**
-   * Add tokens to the buffer
-   * Will automatically flush if buffer size exceeds maxBufferSize
+   * Add tokens to the buffer with adaptive batching
    * @param tokens Tokens to add
    */
   addTokens(tokens: string): void {
+    // Safety check to avoid memory leaks
+    if (this.isDisposed) {
+      console.warn('Attempted to add tokens to disposed TokenBufferManager');
+      return;
+    }
+    
+    // Track total processed
+    this.totalProcessed += tokens.length;
     this.buffer += tokens;
     
-    // Flush buffer if it exceeds max size
-    if (this.buffer.length >= this.maxBufferSize) {
+    const now = Date.now();
+    const timeSinceLastFlush = now - this.lastFlushTime;
+    
+    // Flush in any of these conditions:
+    // 1. Buffer exceeds max size
+    // 2. It's been more than 100ms since last flush
+    // 3. Total processed is very large (memory safety)
+    if (
+      this.buffer.length >= this.maxBufferSize || 
+      timeSinceLastFlush > 100 ||
+      this.totalProcessed > 50000
+    ) {
       this.flush();
       return;
     }
     
-    // Schedule flush if not already scheduled
+    // Schedule flush if not already scheduled with adaptive delay
     if (this.timeoutId === null) {
+      // Shorter delay for smaller buffers to improve visual responsiveness
+      const adaptiveDelay = this.buffer.length < 20 ? 30 : this.flushDelay;
+      
       this.timeoutId = window.setTimeout(() => {
-        this.flush();
-      }, this.flushDelay);
+        // Execute flush in animation frame for smoother updates
+        window.requestAnimationFrame(() => {
+          if (!this.isDisposed) {
+            this.flush();
+          }
+        });
+      }, adaptiveDelay);
     }
   }
 
@@ -50,11 +82,25 @@ export class TokenBufferManager {
    * Calls the update callback with current buffer contents
    */
   flush(): void {
+    if (this.isDisposed) return;
+    
     if (this.buffer.length > 0) {
-      this.updateCallback(this.buffer);
+      try {
+        this.updateCallback(this.buffer);
+      } catch (error) {
+        console.error('Error in token buffer update callback:', error);
+      }
       this.buffer = '';
+      this.lastFlushTime = Date.now();
     }
     
+    this.clearTimeout();
+  }
+
+  /**
+   * Clear any pending timeout
+   */
+  private clearTimeout(): void {
     if (this.timeoutId !== null) {
       window.clearTimeout(this.timeoutId);
       this.timeoutId = null;
@@ -62,10 +108,18 @@ export class TokenBufferManager {
   }
 
   /**
-   * Clean up resources
+   * Clean up resources and prevent memory leaks
    * Should be called when this manager is no longer needed
    */
   dispose(): void {
+    if (this.isDisposed) return;
+    
     this.flush();
+    this.clearTimeout();
+    this.isDisposed = true;
+    
+    // Log lifetime for monitoring
+    const lifetime = Date.now() - this.creationTime;
+    console.log(`TokenBufferManager disposed after ${lifetime}ms, processed ${this.totalProcessed} characters`);
   }
 }

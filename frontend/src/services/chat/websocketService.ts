@@ -1,17 +1,17 @@
 /**
- * WebSocket service for real-time chat updates
- * Implements a singleton WebSocket connection with heartbeat, reconnection,
- * and message handling capabilities
+ * WebSocket service for real-time chat updates - optimized version
+ * Implements a singleton WebSocket connection with proper cleanup and resource management
  */
 import { MessageStatus, ChatResponse, WebSocketMessage } from './types';
 
 // Connection constants
-const MAX_RECONNECT_ATTEMPTS = 3;
+const MAX_RECONNECT_ATTEMPTS = 2; // Reduced to prevent excessive reconnection attempts
 const BASE_RECONNECT_DELAY_MS = 1000;
 const CONNECTION_TIMEOUT_MS = 5000;
 const HEARTBEAT_INTERVAL_MS = 30000;
+const MESSAGE_HANDLER_LIMIT = 50; // Prevent unbounded growth of handlers
 
-// WebSocket connection manager - singleton pattern
+// WebSocket connection manager - singleton pattern with improved resource management
 class WebSocketManager {
   private static instance: WebSocketManager;
   private websocket: WebSocket | null = null;
@@ -21,9 +21,10 @@ class WebSocketManager {
   private isConnecting = false;
   private reconnectAttempts = 0;
   private authToken: string | null = null;
-  private messageHandlers = new Map<string, (update: any) => void>();
+  private messageHandlers = new Map<string, { handler: (update: any) => void, timestamp: number }>();
   private connectionListeners: Set<(connected: boolean) => void> = new Set();
   private connectionPromise: Promise<boolean> | null = null;
+  private lastCleanupTime = 0;
 
   // Private constructor enforces singleton pattern
   private constructor() {}
@@ -55,39 +56,48 @@ class WebSocketManager {
     
     // Return existing connection if open
     if (this.websocket?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket already connected - reusing existing connection');
       return Promise.resolve(true);
     }
     
     // Return existing promise if connecting
     if (this.isConnecting && this.connectionPromise) {
+      console.log('WebSocket connection already in progress - waiting for result');
       return this.connectionPromise;
     }
+    
+    // Clean up any resources before connecting
+    this.cleanupResources();
     
     this.isConnecting = true;
     this.connectionPromise = new Promise<boolean>((resolve, reject) => {
       // Set connection timeout
-      this.clearTimeouts();
       this.connectionTimeout = window.setTimeout(() => {
+        console.error('WebSocket connection timeout');
         this.isConnecting = false;
+        this.connectionPromise = null;
+        this.cleanupResources();
         reject(new Error('Connection timeout'));
       }, CONNECTION_TIMEOUT_MS);
       
-      // Close existing connection if any
-      this.closeConnection();
-      
       try {
-        // Create new WebSocket
+        // Create new WebSocket with proper error handling
         const wsUrl = this.getWebSocketUrl(token);
+        console.log(`Creating new WebSocket connection to ${wsUrl}`);
+        
         this.websocket = new WebSocket(wsUrl);
         
-        // Setup event handlers
-        this.websocket.onopen = () => this.handleOpen(resolve);
-        this.websocket.onclose = (event) => this.handleClose(event, reject);
-        this.websocket.onerror = this.handleError;
-        this.websocket.onmessage = this.handleMessage;
+        // Setup event handlers with proper binding to prevent "this" context issues
+        this.websocket.onopen = this.handleOpen.bind(this, resolve);
+        this.websocket.onclose = this.handleClose.bind(this, reject);
+        this.websocket.onerror = this.handleError.bind(this);
+        this.websocket.onmessage = this.handleMessage.bind(this);
       } catch (error) {
-        this.clearTimeouts();
+        // Handle any synchronous errors during WebSocket creation
+        console.error('Error creating WebSocket:', error);
+        this.cleanupTimeouts();
         this.isConnecting = false;
+        this.connectionPromise = null;
         reject(error);
       }
     });
@@ -96,52 +106,75 @@ class WebSocketManager {
   }
 
   // Handle connection open
-  private handleOpen = (resolve: (value: boolean) => void): void => {
-    this.clearTimeouts();
+  private handleOpen(resolve: (value: boolean) => void): void {
+    console.log('WebSocket connection opened successfully');
+    this.cleanupTimeouts();
     this.isConnecting = false;
     this.reconnectAttempts = 0;
     this.startHeartbeat();
     this.notifyListeners(true);
     resolve(true);
-  };
+  }
 
   // Handle connection close
-  private handleClose = (event: CloseEvent, reject: (reason: Error) => void): void => {
-    this.clearTimeouts();
+  private handleClose(reject: (reason: Error) => void, event: CloseEvent): void {
+    console.log(`WebSocket closed with code ${event.code}: ${event.reason}`);
+    this.cleanupTimeouts();
     this.isConnecting = false;
     this.notifyListeners(false);
     
-    // Attempt reconnect for unexpected closures
-    if (event.code !== 1000 && event.code !== 1001) {
+    // Only attempt reconnect for unexpected closures and if we have an auth token
+    if (this.authToken && event.code !== 1000 && event.code !== 1001) {
+      console.log('Unexpected WebSocket closure - attempting reconnect');
       this.attemptReconnect();
     } else {
+      console.log('Expected WebSocket closure or no auth token - not reconnecting');
+      // Reset state on expected closure
       this.websocket = null;
+      this.connectionPromise = null;
       reject(new Error(`Connection closed: ${event.reason}`));
     }
-  };
+  }
 
   // Handle connection error
-  private handleError = (): void => {
-    this.clearTimeouts();
+  private handleError(event: Event): void {
+    console.error('WebSocket error:', event);
+    this.cleanupTimeouts();
     this.isConnecting = false;
     this.notifyListeners(false);
-  };
+    // Error is followed by a close event, which will handle reconnection
+  }
 
   // Handle incoming message
-  private handleMessage = (event: MessageEvent): void => {
+  private handleMessage(event: MessageEvent): void {
     try {
+      // Periodically clean up old message handlers
+      this.cleanupOldHandlers();
+      
+      // Parse message
       const data = JSON.parse(event.data) as WebSocketMessage;
       
       if (data.type === 'message_update' && data.message_id) {
-        const handler = this.messageHandlers.get(data.message_id);
-        if (handler) {
-          handler(data);
+        const handlerData = this.messageHandlers.get(data.message_id);
+        if (handlerData) {
+          // Update timestamp to show this handler is still active
+          this.messageHandlers.set(data.message_id, {
+            ...handlerData,
+            timestamp: Date.now()
+          });
+          
+          // Call the handler
+          handlerData.handler(data);
         }
+      } else if (data.type === 'ack') {
+        // Heartbeat acknowledgment - logging would be too noisy
+      } else {
+        console.warn('Unknown WebSocket message type:', data.type);
       }
     } catch (error) {
       console.error('Error handling WebSocket message:', error);
     }
-  };
+  }
 
   // Start heartbeat to keep connection alive
   private startHeartbeat(): void {
@@ -149,14 +182,17 @@ class WebSocketManager {
     
     if (!this.websocket) return;
     
+    console.log('Starting WebSocket heartbeat');
     this.heartbeatInterval = window.setInterval(() => {
       if (this.websocket?.readyState === WebSocket.OPEN) {
         try {
           this.websocket.send('heartbeat');
         } catch (error) {
+          console.error('Error sending heartbeat:', error);
           this.stopHeartbeat();
         }
       } else {
+        console.log('WebSocket not open, stopping heartbeat');
         this.stopHeartbeat();
       }
     }, HEARTBEAT_INTERVAL_MS);
@@ -170,9 +206,48 @@ class WebSocketManager {
     }
   }
 
+  // Clean up old message handlers
+  private cleanupOldHandlers(): void {
+    // Only run cleanup every 10 seconds to avoid excessive work
+    const now = Date.now();
+    if (now - this.lastCleanupTime < 10000) return;
+    
+    this.lastCleanupTime = now;
+    
+    // Check if we have too many handlers
+    if (this.messageHandlers.size <= MESSAGE_HANDLER_LIMIT) return;
+    
+    console.log(`Cleaning up old message handlers (current count: ${this.messageHandlers.size})`);
+    
+    // Find handlers older than 2 minutes (inactive)
+    const expirationTime = now - 120000;
+    const handlersToRemove: string[] = [];
+    
+    this.messageHandlers.forEach((data, messageId) => {
+      if (data.timestamp < expirationTime) {
+        handlersToRemove.push(messageId);
+      }
+    });
+    
+    // Remove old handlers
+    handlersToRemove.forEach(messageId => {
+      this.messageHandlers.delete(messageId);
+    });
+    
+    if (handlersToRemove.length > 0) {
+      console.log(`Removed ${handlersToRemove.length} stale message handlers`);
+    }
+  }
+
   // Attempt reconnection with exponential backoff
   private attemptReconnect(): void {
-    if (!this.authToken || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+    if (!this.authToken || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.log('Max reconnection attempts reached or no auth token - giving up');
+      // Reset state when giving up to prevent stale connections
+      this.websocket = null;
+      this.connectionPromise = null;
+      return;
+    }
     
     // Calculate delay with exponential backoff
     const delay = BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts);
@@ -181,12 +256,23 @@ class WebSocketManager {
     // Clear any existing reconnect timeout
     if (this.reconnectTimeout !== null) {
       window.clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
     }
     
-    // Set new reconnect timeout
+    console.log(`Scheduling reconnect attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
+    
+    // Set new reconnect timeout with proper cleanup
     this.reconnectTimeout = window.setTimeout(() => {
+      this.reconnectTimeout = null;
+      
       if (this.authToken) {
-        this.connect(this.authToken).catch(() => {});
+        console.log('Attempting reconnection now');
+        // Safely attempt reconnection with proper error handling
+        this.connect(this.authToken).catch((error) => {
+          console.error('Reconnection attempt failed:', error);
+        });
+      } else {
+        console.log('Auth token no longer available, cancelling reconnection');
       }
     }, delay);
   }
@@ -202,8 +288,8 @@ class WebSocketManager {
     });
   }
 
-  // Clear all timeouts
-  private clearTimeouts(): void {
+  // Clean up all timeouts
+  private cleanupTimeouts(): void {
     if (this.connectionTimeout !== null) {
       window.clearTimeout(this.connectionTimeout);
       this.connectionTimeout = null;
@@ -217,22 +303,48 @@ class WebSocketManager {
     this.stopHeartbeat();
   }
 
-  // Close connection and clean up
-  public closeConnection(): void {
+  // Clean up all resources
+  private cleanupResources(): void {
+    this.cleanupTimeouts();
+    
+    // Close existing connection if any
     if (this.websocket) {
       try {
-        this.websocket.close(1000, 'Client closing connection');
+        // Only close if not already closing/closed
+        if (this.websocket.readyState === WebSocket.OPEN || this.websocket.readyState === WebSocket.CONNECTING) {
+          console.log('Closing existing WebSocket connection');
+          this.websocket.close(1000, 'Client closing connection for new connection');
+        }
+      } catch (error) {
+        console.error('Error closing WebSocket:', error);
+      }
+      this.websocket = null;
+    }
+  }
+
+  // Close connection and clean up
+  public closeConnection(): void {
+    console.log('Closing WebSocket connection and cleaning up all resources');
+    
+    if (this.websocket) {
+      try {
+        // Only close if not already closing/closed
+        if (this.websocket.readyState === WebSocket.OPEN || this.websocket.readyState === WebSocket.CONNECTING) {
+          this.websocket.close(1000, 'Client closing connection');
+        }
       } catch (error) {
         console.error('Error closing WebSocket:', error);
       }
     }
     
-    this.clearTimeouts();
+    // Full reset of all state
+    this.cleanupTimeouts();
     this.websocket = null;
     this.authToken = null;
     this.reconnectAttempts = 0;
     this.isConnecting = false;
     this.connectionPromise = null;
+    this.messageHandlers.clear();
     this.notifyListeners(false);
   }
 
@@ -243,9 +355,20 @@ class WebSocketManager {
 
   // Register message handler
   public registerHandler(messageId: string, handler: (update: any) => void): () => void {
-    this.messageHandlers.set(messageId, handler);
+    console.log(`Registering handler for message ${messageId}`);
     
+    // Store handler with timestamp
+    this.messageHandlers.set(messageId, {
+      handler,
+      timestamp: Date.now()
+    });
+    
+    // Automatically clean up old handlers when we add new ones
+    this.cleanupOldHandlers();
+    
+    // Return unregister function
     return () => {
+      console.log(`Unregistering handler for message ${messageId}`);
       this.messageHandlers.delete(messageId);
     };
   }
@@ -263,6 +386,7 @@ class WebSocketManager {
       }
     }
     
+    // Return unregister function
     return () => {
       this.connectionListeners.delete(listener);
     };
@@ -272,7 +396,7 @@ class WebSocketManager {
 // Get WebSocket manager instance
 const wsManager = WebSocketManager.getInstance();
 
-// Public API
+// Public API - simplified to reduce code complexity
 
 /**
  * Initialize WebSocket connection

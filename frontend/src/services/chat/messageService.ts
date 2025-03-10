@@ -219,50 +219,91 @@ export async function sendMessageStreaming(
           status: MessageStatus.COMPLETE
         };
         
-        // Handle streaming content if needed
+        // Handle streaming content with significant optimizations
         if (handlers.onToken && update.assistant_content.length > 0) {
-          // Use a more efficient batched token streaming approach
-          const content = update.assistant_content;
-          const batchSize = Math.max(5, Math.floor(content.length / 100)); // Dynamic batch size
-          
-          let position = 0;
-          let timeoutId: number | null = null;
-          
-          const streamNextBatch = () => {
-            // Clear previous timeout if exists
-            if (timeoutId !== null) {
-              window.clearTimeout(timeoutId);
-            }
+          try {
+            const content = update.assistant_content;
             
-            // Stop if we're done
-            if (position >= content.length) {
+            // Improved adaptive batch sizing based on content length
+            const contentLength = content.length;
+            const batchCount = contentLength < 500 ? 10 : (contentLength < 2000 ? 15 : 20);
+            const batchSize = Math.max(10, Math.ceil(contentLength / batchCount));
+            
+            // Use a single immediate batch for very short content to avoid overhead
+            if (contentLength < 100) {
+              if (handlers.onToken) {
+                handlers.onToken(content);
+              }
               handlers.onComplete?.(completeResponse);
               unregisterHandler();
               return;
             }
             
-            // Calculate next position
-            const end = Math.min(position + batchSize, content.length);
-            const batch = content.substring(position, end);
+            // Use animation frames for smoother visual updates
+            let position = 0;
+            let animationFrameId: number | null = null;
+            let isStreamingCancelled = false;
             
-            // Send token batch to handler
-            if (handlers.onToken) {
-              handlers.onToken(batch);
-            }
+            // Single function for updates to avoid nested timeouts
+            const updateNextBatch = () => {
+              // If streaming was cancelled, clean up and exit
+              if (isStreamingCancelled) return;
+              
+              // Break out early if we're done
+              if (position >= contentLength) {
+                handlers.onComplete?.(completeResponse);
+                unregisterHandler();
+                return;
+              }
+              
+              // Calculate next chunk with bounds checking
+              const end = Math.min(position + batchSize, contentLength);
+              const chunk = content.substring(position, end);
+              position = end;
+              
+              // Send the batch
+              if (handlers.onToken) {
+                handlers.onToken(chunk);
+              }
+              
+              // Percentage-based delay - slower at start, faster at end
+              const percentComplete = position / contentLength;
+              const adaptiveDelay = Math.max(5, 30 * (1 - percentComplete));
+              
+              // Schedule next batch using a single mechanism
+              animationFrameId = window.requestAnimationFrame(() => {
+                setTimeout(() => {
+                  animationFrameId = null;
+                  updateNextBatch();
+                }, adaptiveDelay);
+              });
+            };
             
-            // Update position
-            position = end;
+            // Start streaming with initial call
+            updateNextBatch();
             
-            // Schedule next batch using requestAnimationFrame for better performance
-            timeoutId = window.setTimeout(() => {
-              window.requestAnimationFrame(streamNextBatch);
-            }, 10);
-          };
-          
-          // Start streaming
-          streamNextBatch();
+            // Attach cleanup to our handler to prevent memory leaks
+            const originalUnregister = unregisterHandler;
+            unregisterHandler = () => {
+              // Cancel any pending animation frames
+              if (animationFrameId !== null) {
+                window.cancelAnimationFrame(animationFrameId);
+              }
+              
+              // Mark streaming as cancelled to prevent further updates
+              isStreamingCancelled = true;
+              
+              // Call original unregister function
+              originalUnregister();
+            };
+          } catch (error) {
+            // In case of error during streaming, fall back to simple completion
+            console.error('Error during streaming:', error);
+            handlers.onComplete?.(completeResponse);
+            unregisterHandler();
+          }
         } else {
-          // Directly call complete handler
+          // Directly call complete handler without streaming
           handlers.onComplete?.(completeResponse);
           unregisterHandler();
         }
@@ -309,30 +350,70 @@ async function fallbackToPolling(
     if (response.status === MessageStatus.ERROR) {
       handlers.onError?.(response.error || 'Unknown error');
     } else {
-      // Use the same batched streaming approach as with WebSockets
+      // Lightweight streaming implementation for polling fallback
       if (handlers.onToken && response.content.length > 0) {
         const content = response.content;
-        const batchSize = Math.max(5, Math.floor(content.length / 100));
+        const contentLength = content.length;
         
-        let position = 0;
-        
-        // Use a more controlled streaming approach with requestAnimationFrame
-        const streamBatches = async () => {
-          while (position < content.length) {
-            const end = Math.min(position + batchSize, content.length);
-            const batch = content.substring(position, end);
+        // For very short content, just send it all at once
+        if (contentLength < 100) {
+          handlers.onToken(content);
+        } else {
+          // Use simplified batching approach without async/await
+          // This avoids potential promise chain issues and memory leaks
+          const batchCount = contentLength < 500 ? 5 : (contentLength < 2000 ? 10 : 15);
+          const batchSize = Math.max(10, Math.ceil(contentLength / batchCount));
+          
+          let position = 0;
+          let isStreamingCancelled = false;
+          
+          // Function for batched updates without async
+          const processNextBatch = () => {
+            if (isStreamingCancelled || position >= contentLength) {
+              return;
+            }
             
-            handlers.onToken(batch);
+            // Calculate next chunk
+            const end = Math.min(position + batchSize, contentLength);
+            const chunk = content.substring(position, end);
             position = end;
             
-            // Short delay between batches for visual effect
-            await new Promise(resolve => setTimeout(resolve, 10));
-            // Use requestAnimationFrame to align with browser rendering
-            await new Promise(resolve => requestAnimationFrame(() => resolve(true)));
-          }
-        };
-        
-        await streamBatches();
+            // Send chunk to handler
+            if (handlers.onToken) {
+              handlers.onToken(chunk);
+            }
+            
+            // If we're done, exit
+            if (position >= contentLength) {
+              return;
+            }
+            
+            // Schedule next batch with simple setTimeout
+            window.setTimeout(() => {
+              window.requestAnimationFrame(processNextBatch);
+            }, 20);
+          };
+          
+          // Start processing
+          processNextBatch();
+          
+          // Wait for completion (for async compatibility)
+          await new Promise<void>(resolve => {
+            const checkInterval = setInterval(() => {
+              if (position >= contentLength) {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 50);
+            
+            // Timeout after 5s in case something goes wrong
+            setTimeout(() => {
+              clearInterval(checkInterval);
+              isStreamingCancelled = true;
+              resolve();
+            }, 5000);
+          });
+        }
       }
       
       // Mark as complete
