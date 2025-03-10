@@ -5,13 +5,6 @@ import { sendMessage } from '../../../services/chat/messageService';
 import { getConversation, listConversations, createConversation } from '../../../services/chat/conversationService';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
 
-// Function to provide a rough estimate of token count to avoid overloading the API
-// This is a simplistic implementation; actual token counts are more complex
-const estimateTokenCount = (text: string): number => {
-  if (!text) return 0;
-  return text.split(/\s+/).length * 1.3; // Rough estimate based on words
-};
-
 export interface ChatState {
   messages: Message[];
   conversations: Conversation[];
@@ -95,11 +88,12 @@ export default function useChatState(
   const codeInsertRef = useRef<((codeSnippet: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((mathSnippet: string) => void) | undefined>(undefined);
   
-  // Load initial conversations just once when component mounts - no polling
+  // Load initial conversations only once at startup - with explicit user control 
   useEffect(() => {
+    // Set isMountedRef 
     isMountedRef.current = true;
     
-    // Only do the initial load once - never poll for conversations
+    // Only do the initial load once - if not already done
     if (!initialLoadDoneRef.current) {
       loadConversations();
       initialLoadDoneRef.current = true;
@@ -108,47 +102,46 @@ export default function useChatState(
     return () => {
       isMountedRef.current = false;
       
-      // Clear intervals and abort any pending requests
+      // Clear any polling timers
       if (pollingTimerRef.current) {
         window.clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
       }
       
+      // Abort any pending requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
     };
   }, []);
   
   // Load messages when conversation changes
   useEffect(() => {
-    if (activeConversationId) {
-      loadConversationMessages(activeConversationId);
-      
-      // Setup polling for message updates - but only when we have an active conversation
-      if (pollingTimerRef.current) {
-        window.clearInterval(pollingTimerRef.current);
-      }
-      
-      pollingTimerRef.current = window.setInterval(() => {
-        if (activeConversationId && isGenerating) {
-          // Only poll if we're not already loading AND there's an ongoing generation
-          if (!isLoading && !isNetworkLoading) {
-            checkForMessageUpdates(activeConversationId);
-          }
-        }
-      }, MESSAGE_POLL_INTERVAL);
-    } else {
-      // Clear the messages when no active conversation
-      setMessages([]);
-      setIsGenerating(false);
-      
-      // Clear polling timer when no active conversation
-      if (pollingTimerRef.current) {
-        window.clearInterval(pollingTimerRef.current);
-        pollingTimerRef.current = null;
-      }
+    // Clear any existing polling timer
+    if (pollingTimerRef.current) {
+      window.clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
     }
     
+    if (activeConversationId) {
+      // Load conversation messages
+      loadConversationMessages(activeConversationId);
+      
+      // Only set up polling if we have an active generation
+      if (isGenerating) {
+        pollingTimerRef.current = window.setInterval(() => {
+          if (activeConversationId && isGenerating && !isLoading && !isNetworkLoading) {
+            checkForMessageUpdates(activeConversationId);
+          }
+        }, MESSAGE_POLL_INTERVAL);
+      }
+    } else {
+      // If no active conversation, clear messages
+      setMessages([]);
+    }
+    
+    // Cleanup on unmount or conversation change
     return () => {
       if (pollingTimerRef.current) {
         window.clearInterval(pollingTimerRef.current);
@@ -157,17 +150,23 @@ export default function useChatState(
     };
   }, [activeConversationId, isGenerating]);
   
-  // Set Generating status based on message state
+  // Update isGenerating when messages change
   useEffect(() => {
     // Check if any messages are still being generated
     const hasGeneratingMessages = messages.some(
       msg => msg.status === MessageStatus.QUEUED || msg.status === MessageStatus.PROCESSING
     );
-    setIsGenerating(hasGeneratingMessages);
-  }, [messages]);
+    
+    // Only set if it changed to prevent re-renders
+    if (hasGeneratingMessages !== isGenerating) {
+      setIsGenerating(hasGeneratingMessages);
+    }
+  }, [messages, isGenerating]);
   
   // Function to load all user conversations
   const loadConversations = async () => {
+    if (isNetworkLoading) return; // Prevent concurrent calls
+    
     try {
       // Update last API call time
       lastApiCallRef.current = Date.now();
@@ -180,7 +179,7 @@ export default function useChatState(
       
       if (!isMountedRef.current) return;
       
-      // Always update conversations, even with empty array
+      // Format conversations
       const formattedConversations = Array.isArray(result) 
         ? result.map(conv => ({
             id: conv.conversation_id,
@@ -193,8 +192,7 @@ export default function useChatState(
     } catch (error) {
       console.error('Error loading conversations:', error);
       if (isMountedRef.current) {
-        // Set empty conversations on error to avoid stale data
-        setConversations([]);
+        // Keep existing conversations on error
       }
     } finally {
       if (isMountedRef.current) {
@@ -205,9 +203,9 @@ export default function useChatState(
   
   // Function to load messages for a specific conversation
   const loadConversationMessages = async (conversationId: string) => {
-    if (!conversationId) return;
+    if (!conversationId || isLoading) return;
     
-    // Create a new abort controller for this request
+    // Cancel any previous requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -244,7 +242,7 @@ export default function useChatState(
     } catch (error) {
       console.error('Error loading conversation messages:', error);
       if (isMountedRef.current) {
-        // Set empty messages on error to avoid stale data
+        // Set empty messages on error
         setMessages([]);
       }
     } finally {
@@ -254,43 +252,46 @@ export default function useChatState(
     }
   };
   
-  // Function to check for new message status updates
+  // Function to check for message updates - only called during active generation
   const checkForMessageUpdates = async (conversationId: string) => {
-    // Only check messages that are still in-progress
+    // Skip if not generating or already loading
+    if (!isGenerating || isLoading || isNetworkLoading) return;
+    
+    // Check for in-progress messages
     const inProgressMessages = messages.filter(
       msg => msg.status !== MessageStatus.COMPLETE && msg.status !== MessageStatus.ERROR
     );
     
     if (inProgressMessages.length === 0) return;
     
-    // Update message statuses
+    // Update message statuses by reloading the conversation
     await loadConversationMessages(conversationId);
   };
   
   // Function to handle sending a new message
   const handleSendMessage = async (content: string, file: File | null = null) => {
-    // Create a new message ID for UI
+    // Create a message ID for optimistic UI updates
     const messageId = uuidv4();
     const now = new Date();
     
-    // Determine if we need to create a new conversation or use existing one
+    // Check if we need a new conversation
     let conversationId = activeConversationId;
     let needsConversationCreation = !conversationId;
     
-    // Create temporary user message
+    // Create temporary user message for immediate UI feedback
     const userMessage: Message = {
       id: messageId,
-      conversationId: conversationId || 'temp-id', // Use temp ID if we don't have one yet
+      conversationId: conversationId || 'temp-id',
       role: 'user',
       content,
       status: MessageStatus.SENDING,
       timestamp: now,
     };
     
-    // Create a placeholder for the assistant's response
+    // Create a placeholder for the assistant response
     const assistantMessage: Message = {
       id: `assistant-${messageId}`,
-      conversationId: conversationId || 'temp-id', // Use temp ID if we don't have one yet
+      conversationId: conversationId || 'temp-id',
       role: 'assistant',
       content: '',
       status: MessageStatus.QUEUED,
@@ -303,7 +304,7 @@ export default function useChatState(
     }
     
     try {
-      // Create FormData if we have a file
+      // Process file if provided
       let fileData = null;
       if (file) {
         const reader = new FileReader();
@@ -320,33 +321,31 @@ export default function useChatState(
         };
       }
       
-      // If this is a new conversation, create it on the backend first
+      // Create a new conversation first if needed
       if (needsConversationCreation) {
         try {
           const newConv = await createConversation();
           if (newConv && newConv.conversation_id) {
             conversationId = newConv.conversation_id;
-            // Update active conversation ID
             setActiveConversationId(conversationId);
           } else {
             throw new Error('Failed to create conversation');
           }
         } catch (error) {
           console.error('Error creating conversation:', error);
-          throw error; // Re-throw to be caught by outer catch
+          throw error;
         }
       }
       
-      // Now send the message with the confirmed conversation ID
+      // Send the message
       const result = await sendMessage(content, conversationId, fileData);
       
       if (!isMountedRef.current) return;
       
       if (result.id) {
-        // Update messages with real IDs from API
+        // Update messages with real IDs
         setMessages(prevMessages => 
           prevMessages.map(msg => {
-            // Update the user message
             if (msg.id === messageId) {
               return { 
                 ...msg, 
@@ -355,7 +354,6 @@ export default function useChatState(
                 status: MessageStatus.COMPLETE 
               };
             }
-            // Update the assistant message
             if (msg.id === `assistant-${messageId}`) {
               return { 
                 ...msg, 
@@ -367,7 +365,7 @@ export default function useChatState(
           })
         );
         
-        // Load conversations to get updated list, but only if we created a new one
+        // Load conversations list once if we created a new conversation
         if (needsConversationCreation) {
           await loadConversations();
         }
@@ -398,11 +396,13 @@ export default function useChatState(
   
   // Function to regenerate the last assistant message
   const handleRegenerateLastMessage = async () => {
+    if (!activeConversationId) return;
+    
     // Find the last user message
     const lastUserMessageIndex = [...messages].reverse().findIndex(msg => msg.role === 'user');
     
-    if (lastUserMessageIndex === -1 || !activeConversationId) {
-      return; // No user message found or no active conversation
+    if (lastUserMessageIndex === -1) {
+      return; // No user message found
     }
     
     // Get the actual index in the messages array
@@ -425,9 +425,8 @@ export default function useChatState(
     // Update messages state
     setMessages([...truncatedMessages, assistantMessage]);
     
-    // Send the message for regeneration
     try {
-      // Send message to API in "regenerate" mode
+      // Send regeneration request
       const result = await sendMessage(userMessage.content, activeConversationId, null, {
         mode: 'regenerate',
       });
@@ -438,7 +437,7 @@ export default function useChatState(
         throw new Error(result.error || 'Unknown error during regeneration');
       }
       
-      // We don't update any state here, as the polling will handle the updates
+      // Polling will update the messages
     } catch (error) {
       console.error('Error regenerating response:', error);
       
@@ -460,11 +459,8 @@ export default function useChatState(
   
   // Function to stop ongoing generation
   const handleStopGeneration = () => {
-    // Implementation would involve aborting API requests
-    // This is a simplified version that just updates UI state
-    
     if (isMountedRef.current) {
-      // Update messages that are in-progress
+      // Mark all in-progress messages as complete
       setMessages(prevMessages =>
         prevMessages.map(msg => {
           if (msg.status === MessageStatus.PROCESSING || msg.status === MessageStatus.QUEUED) {
@@ -483,7 +479,7 @@ export default function useChatState(
     setActiveConversationId(conversationId);
   };
   
-  // Function to start a new conversation
+  // Function to start a new conversation - just UI state changes
   const handleStartNewConversation = () => {
     setActiveConversationId(null);
     setMessages([]);
@@ -496,11 +492,11 @@ export default function useChatState(
 
   // Placeholder functions for code and math editors
   const handleInsertCode = (language?: string, template?: string) => {
-    console.log(`Insert code with language: ${language || 'none'}`);
+    // Implementation would be provided by parent component
   };
 
   const handleInsertMath = (formula?: string) => {
-    console.log(`Insert math formula: ${formula || 'none'}`);
+    // Implementation would be provided by parent component
   };
 
   return {
