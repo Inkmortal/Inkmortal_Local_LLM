@@ -181,7 +181,7 @@ export async function sendMessageStreaming(
     }, 10000); // 10 seconds
     
     // Register handler for WebSocket updates
-    const unregisterHandler = registerMessageHandler(messageId, (update: MessageUpdateEvent) => {
+    let unregisterHandler = registerMessageHandler(messageId, (update: MessageUpdateEvent) => {
       // Convert status string to enum if needed
       let status: MessageStatus;
       if (update.status === 'QUEUED') status = MessageStatus.QUEUED;

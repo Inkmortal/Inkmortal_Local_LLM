@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ChatWindow from '../../../../components/chat/ChatWindow';
-import TipTapEditor
-import ChatInput from '../../../../components/chat/ChatInput'; from '../../../../components/chat/editor/TipTapEditor';
+import TipTapEditor from '../../../../components/chat/editor/TipTapEditor';
+import ChatInput from '../../../../components/chat/ChatInput';
 import FileUploadArea from './FileUploadArea';
 import ChatActionBar from './ChatActionBar';
 import { Message } from '../../types/chat';
@@ -88,7 +88,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       {/* Content area */}
       <div className="flex-grow flex flex-col overflow-hidden">
         {showEmptyState ? (
-          <EmptyConversationView onSend={onSendMessage} />
+          <EmptyConversationView onSendMessage={onSendMessage} />
         ) : (
           <>
             {/* Messages area */}
@@ -117,11 +117,12 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           )}
           
           <div className="relative border-t border-gray-200 dark:border-gray-700">
-            <TipTapEditor 
+            <ChatInput 
               onSend={onSendMessage}
-              loading={loading || isGenerating}
-              codeInsertRef={codeInsertRef}
-              mathInsertRef={mathInsertRef}
+              disabled={loading || isGenerating}
+              isGenerating={isGenerating}
+              onInsertCode={(code) => codeInsertRef.current && codeInsertRef.current(code)}
+              onInsertMath={(math) => mathInsertRef.current && mathInsertRef.current(math)}
             />
             
             <ChatActionBar 
