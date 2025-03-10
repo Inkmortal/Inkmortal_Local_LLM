@@ -189,14 +189,15 @@ export async function sendMessageStreaming(
  * @returns Promise with the chat response
  */
 export async function sendMessage(params: ChatRequestParams): Promise<ChatResponse> {
-  // TEMPORARY FIX: Disable WebSockets to prevent freezing
-  console.log('TEMPORARY FIX: Disabling WebSockets to prevent freezing');
+  // EMERGENCY FIX: Force polling mode only
+  console.log('EMERGENCY FIX: Using polling mode only');
   return sendMessagePolling(params);
-  
-  /* 
+}
+
+// Original implementation kept for reference
+export async function originalSendMessage(params: ChatRequestParams): Promise<ChatResponse> {
   // Default to streaming mode with fallback to polling
   const mode = params.mode || ChatMode.STREAMING;
-  */
   
   if (mode === ChatMode.STREAMING) {
     // Use WebSocket-based implementation if possible
