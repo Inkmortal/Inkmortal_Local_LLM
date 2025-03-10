@@ -189,38 +189,72 @@ export async function sendMessageStreaming(
  * @returns Promise with the chat response
  */
 export async function sendMessage(params: ChatRequestParams): Promise<ChatResponse> {
+  // TEMPORARY FIX: Disable WebSockets to prevent freezing
+  console.log('TEMPORARY FIX: Disabling WebSockets to prevent freezing');
+  return sendMessagePolling(params);
+  
+  /* 
   // Default to streaming mode with fallback to polling
   const mode = params.mode || ChatMode.STREAMING;
+  */
   
   if (mode === ChatMode.STREAMING) {
     // Use WebSocket-based implementation if possible
     try {
+      console.log('Attempting to use streaming message mode');
+      
       // Get authentication token
       const token = localStorage.getItem('authToken');
       if (!token) {
+        console.log('No auth token found, falling back to polling');
         // Fall back to polling if no auth token
         return sendMessagePolling(params);
       }
       
-      // Ensure WebSocket is connected
-      if (!isWebSocketConnected()) {
-        await initializeWebSocket(token);
+      // Instead of waiting indefinitely for WebSocket to connect,
+      // use the ensureWebSocketConnection helper which has a timeout
+      const wsAvailable = await ensureWebSocketConnection(token);
+      
+      if (!wsAvailable) {
+        console.log('WebSocket not available, falling back to polling');
+        return sendMessagePolling(params);
       }
       
-      // If WebSocket is connected, use the streaming implementation
-      // but wrap it in a Promise to maintain the same interface
+      console.log('WebSocket available, using streaming implementation');
+      
+      // Wrap the streaming implementation in a Promise with timeout
       return new Promise((resolve, reject) => {
+        // Add timeout to avoid hanging
+        const timeoutId = setTimeout(() => {
+          console.error('Streaming message timed out, falling back to polling');
+          // Fall back to polling if streaming times out
+          sendMessagePolling(params)
+            .then(resolve)
+            .catch(reject);
+        }, 15000); // 15 second timeout
+        
         sendMessageStreaming(params, {
-          onComplete: (response) => resolve(response),
-          onError: (error) => reject(new Error(error))
+          onComplete: (response) => {
+            clearTimeout(timeoutId);
+            resolve(response);
+          },
+          onError: (error) => {
+            clearTimeout(timeoutId);
+            // Try polling as fallback for errors
+            console.warn('Streaming error, falling back to polling:', error);
+            sendMessagePolling(params)
+              .then(resolve)
+              .catch(reject);
+          }
         });
       });
     } catch (error) {
-      console.warn('WebSocket unavailable, falling back to polling:', error);
+      console.warn('WebSocket error, falling back to polling:', error);
       return sendMessagePolling(params);
     }
   } else {
     // Use polling implementation
+    console.log('Using polling message mode');
     return sendMessagePolling(params);
   }
 }
