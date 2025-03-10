@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useMemo } from 'react';
 import parse from 'html-react-parser';
 import MathRenderer from '../education/MathRenderer';
 import CodeBlock from '../education/CodeBlock';
@@ -16,127 +16,51 @@ interface TextNode {
   data: string;
 }
 
-type DOMNode = HTMLElement | TextNode;
+interface MatchedElement {
+  start: number;
+  end: number;
+  content: ReactNode;
+}
 
 interface MessageParserProps {
   content: string;
 }
 
-const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
-  // Parse the legacy message content format with markdown-like syntax
-  const parseContent = (text: string): ReactNode[] => {
-    const elements: ReactNode[] = [];
-    let currentIndex = 0;
-    let key = 0;
-    
-    // Regular expressions for different content types
-    const codeBlockRegex = /```([\w-]+)?\n([\s\S]*?)```/g;
-    const inlineCodeRegex = /`([^`]+)`/g;
-    const displayMathRegex = /\$\$([\s\S]*?)\$\$/g;
-    const inlineMathRegex = /\$([^$]+)\$/g;
-    
-    // Store all matches with their positions
-    const allMatches: {start: number; end: number; content: ReactNode}[] = [];
-    
-    // Find code blocks
-    let codeMatch;
-    while ((codeMatch = codeBlockRegex.exec(text)) !== null) {
-      const language = codeMatch[1] || 'javascript';
-      const code = codeMatch[2];
-      allMatches.push({
-        start: codeMatch.index,
-        end: codeMatch.index + codeMatch[0].length,
-        content: <CodeBlock key={`code-${key++}`} code={code} language={language} className="my-2" />
-      });
-    }
-    
-    // Find inline code
-    let inlineCodeMatch;
-    while ((inlineCodeMatch = inlineCodeRegex.exec(text)) !== null) {
-      // Ignore matches that are inside code blocks
-      const insideCodeBlock = allMatches.some(
-        match => inlineCodeMatch!.index > match.start && inlineCodeMatch!.index < match.end
-      );
-      
-      if (!insideCodeBlock) {
-        allMatches.push({
-          start: inlineCodeMatch.index,
-          end: inlineCodeMatch.index + inlineCodeMatch[0].length,
-          content: (
-            <code key={`inline-code-${key++}`} className="px-1 py-0.5 rounded text-sm bg-gray-800 font-mono">
-              {inlineCodeMatch[1]}
-            </code>
-          )
-        });
-      }
-    }
-    
-    // Find display math
-    let displayMathMatch;
-    while ((displayMathMatch = displayMathRegex.exec(text)) !== null) {
-      // Ignore matches that are inside code blocks
-      const insideOtherBlock = allMatches.some(
-        match => displayMathMatch!.index > match.start && displayMathMatch!.index < match.end
-      );
-      
-      if (!insideOtherBlock) {
-        allMatches.push({
-          start: displayMathMatch.index,
-          end: displayMathMatch.index + displayMathMatch[0].length,
-          content: <MathRenderer key={`math-display-${key++}`} latex={displayMathMatch[1]} display={true} />
-        });
-      }
-    }
-    
-    // Find inline math
-    let inlineMathMatch;
-    while ((inlineMathMatch = inlineMathRegex.exec(text)) !== null) {
-      // Ignore matches that are inside other blocks
-      const insideOtherBlock = allMatches.some(
-        match => inlineMathMatch!.index > match.start && inlineMathMatch!.index < match.end
-      );
-      
-      if (!insideOtherBlock) {
-        allMatches.push({
-          start: inlineMathMatch.index,
-          end: inlineMathMatch.index + inlineMathMatch[0].length,
-          content: <MathRenderer key={`math-inline-${key++}`} latex={inlineMathMatch[1]} display={false} />
-        });
-      }
-    }
-    
-    // Sort matches by start position
-    allMatches.sort((a, b) => a.start - b.start);
-    
-    // Build the result by combining text and special elements
-    for (let i = 0; i < allMatches.length; i++) {
-      const match = allMatches[i];
-      
-      // Add text before the match
-      if (match.start > currentIndex) {
-        elements.push(text.substring(currentIndex, match.start));
-      }
-      
-      // Add the special element
-      elements.push(match.content);
-      
-      // Update the current index
-      currentIndex = match.end;
-    }
-    
-    // Add any remaining text
-    if (currentIndex < text.length) {
-      elements.push(text.substring(currentIndex));
-    }
-    
-    return elements;
-  };
-  
-  // Check if content is HTML or plain text
-  const isHTML = content.trim().startsWith('<') && content.trim().endsWith('>');
+// Maximum content size before chunking for performance
+const MAX_CONTENT_SIZE = 10000;
 
+const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
+  // Process content with memoization to prevent re-parsing on every render
+  const parsedContent = useMemo(() => {
+    // Check if content is HTML or plain text
+    const isHTML = content.trim().startsWith('<') && content.trim().endsWith('>');
+    
+    // For very large content, use simpler parsing to prevent freezing
+    if (content.length > MAX_CONTENT_SIZE) {
+      return parseAsPlainText(content);
+    }
+    
+    if (isHTML) {
+      try {
+        return parseAsHTML(content);
+      } catch (error) {
+        console.error('Error parsing HTML content:', error);
+        // Fallback to plain text parsing if HTML parsing fails
+        return parseAsPlainText(content);
+      }
+    }
+    
+    // For regular content, use the optimized parser
+    return parseAsPlainText(content);
+  }, [content]);
+
+  return <div className="message-content">{parsedContent}</div>;
+};
+
+// Parse content as HTML using html-react-parser
+function parseAsHTML(content: string): ReactNode {
   const parseOptions = {
-    replace: (domNode: DOMNode) => {
+    replace: (domNode: HTMLElement | TextNode) => {
       if (domNode.type !== 'tag') return undefined;
       
       const element = domNode as HTMLElement;
@@ -178,31 +102,106 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
       return undefined;
     }
   };
+
+  return parse(content, parseOptions);
+}
+
+// Parse markdown-like syntax in plain text
+function parseAsPlainText(text: string): ReactNode[] {
+  const elements: ReactNode[] = [];
+  let currentIndex = 0;
+  let key = 0;
+  const allMatches: MatchedElement[] = [];
   
-  if (isHTML) {
-    try {
-      return (
-        <div className="message-content">
-          {parse(content, parseOptions)}
-        </div>
-      );
-    } catch (error) {
-      console.error('Error parsing HTML content:', error);
-      // Fallback to plain text parsing if HTML parsing fails
-      return (
-        <div className="message-content">
-          {parseContent(content)}
-        </div>
-      );
+  // Find all special elements in a single pass
+  findSpecialElements(text, allMatches, key);
+  
+  // Sort matches by start position
+  allMatches.sort((a, b) => a.start - b.start);
+  
+  // Build the result by combining text and special elements
+  for (let i = 0; i < allMatches.length; i++) {
+    const match = allMatches[i];
+    
+    // Add text before the match
+    if (match.start > currentIndex) {
+      elements.push(text.substring(currentIndex, match.start));
     }
+    
+    // Add the special element
+    elements.push(match.content);
+    
+    // Update the current index
+    currentIndex = match.end;
   }
   
-  // For legacy plain text messages
-  return (
-    <div className="message-content">
-      {parseContent(content)}
-    </div>
-  );
-};
+  // Add any remaining text
+  if (currentIndex < text.length) {
+    elements.push(text.substring(currentIndex));
+  }
+  
+  return elements;
+}
 
-export default MessageParser;
+// Find all special elements in a single pass
+function findSpecialElements(text: string, matches: MatchedElement[], startKey: number): number {
+  let key = startKey;
+  
+  // Find code blocks (most specific first to avoid inner matching)
+  // Regex patterns
+  const patterns = [
+    {
+      regex: /```([\w-]+)?\n([\s\S]*?)```/g,
+      process: (match: RegExpExecArray) => {
+        const language = match[1] || 'text';
+        const code = match[2];
+        return <CodeBlock key={`code-${key++}`} code={code} language={language} className="my-2" />;
+      }
+    },
+    {
+      regex: /\$\$([\s\S]*?)\$\$/g,
+      process: (match: RegExpExecArray) => {
+        return <MathRenderer key={`math-display-${key++}`} latex={match[1]} display={true} />;
+      }
+    },
+    {
+      regex: /`([^`]+)`/g,
+      process: (match: RegExpExecArray) => {
+        return (
+          <code key={`inline-code-${key++}`} className="px-1 py-0.5 rounded text-sm bg-gray-800 font-mono">
+            {match[1]}
+          </code>
+        );
+      }
+    },
+    {
+      regex: /\$([^$]+)\$/g,
+      process: (match: RegExpExecArray) => {
+        return <MathRenderer key={`math-inline-${key++}`} latex={match[1]} display={false} />;
+      }
+    }
+  ];
+  
+  // Process each pattern independently to avoid nested regex complexity
+  patterns.forEach(({ regex, process }) => {
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      // Check if this match is inside any existing match
+      const isInsideExistingMatch = matches.some(
+        existing => match!.index > existing.start && match!.index < existing.end
+      );
+      
+      if (!isInsideExistingMatch) {
+        matches.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          content: process(match)
+        });
+      }
+    }
+  });
+  
+  return key;
+}
+
+export default React.memo(MessageParser);

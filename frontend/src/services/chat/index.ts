@@ -25,7 +25,9 @@ export {
   initializeWebSocket,
   closeWebSocket,
   registerMessageHandler,
-  isWebSocketConnected
+  isWebSocketConnected,
+  ensureWebSocketConnection,
+  addConnectionListener
 } from './websocketService';
 
 // Re-export conversation services

@@ -223,9 +223,23 @@ class RequestProcessor:
     async def _process_with_direct_api(self, request: QueuedRequest) -> Dict[str, Any]:
         """Process request using direct API call to Ollama"""
         
-        # Forward to Ollama
-        endpoint = request.endpoint.replace("/api", "")
-        url = f"{self.ollama_url}{endpoint}"
+        # Forward to Ollama - making sure we're using the correct Ollama API format
+        # The issue is that request.endpoint is in our API format (/api/chat/completions)
+        # but Ollama expects a different format (/api/generate or /api/chat)
+        
+        # Map our endpoints to Ollama endpoints
+        if "chat" in request.endpoint:
+            # Use the Ollama chat endpoint
+            url = f"{self.ollama_url}/api/chat"
+            logger.info(f"Using Ollama chat endpoint: {url}")
+        else:
+            # Use the Ollama completion endpoint
+            url = f"{self.ollama_url}/api/generate"
+            logger.info(f"Using Ollama generate endpoint: {url}")
+            
+        # Debug the URL and request body
+        logger.info(f"Sending request to: {url}")
+        logger.info(f"Request body: {json.dumps(request.body)[:200]}...")
         
         # Create a timeout task
         timeout_seconds = 120.0  # 2 minutes max processing time
@@ -343,8 +357,19 @@ class RequestProcessor:
             timeout_seconds = 600.0  # 10 minutes max for streaming
             
             try:
-                endpoint = request.endpoint.replace("/api", "")
-                url = f"{self.ollama_url}{endpoint}"
+                # Map our endpoints to Ollama endpoints
+                if "chat" in request.endpoint:
+                    # Use the Ollama chat endpoint
+                    url = f"{self.ollama_url}/api/chat"
+                    logger.info(f"Using Ollama chat endpoint for streaming: {url}")
+                else:
+                    # Use the Ollama completion endpoint
+                    url = f"{self.ollama_url}/api/generate"
+                    logger.info(f"Using Ollama generate endpoint for streaming: {url}")
+                
+                # Debug the URL and request body
+                logger.info(f"Sending streaming request to: {url}")
+                logger.info(f"Request body: {json.dumps(request.body)[:200]}...")
                 
                 # Use a manual timeout approach for streaming
                 start_time = asyncio.get_event_loop().time()

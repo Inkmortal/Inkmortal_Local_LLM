@@ -13,6 +13,7 @@ import {
 } from '../../../services/chat';
 import { Message, ChatRequestParams, Conversation } from '../types/chat';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
+import { TokenBufferManager } from './TokenBufferManager';
 
 // Token counting utility function (rough estimate)
 // This is a simplified version - a proper tokenizer would be more accurate
@@ -67,6 +68,9 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const codeInsertRef = useRef<((code: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((math: string) => void) | undefined>(undefined);
   
+  // Token buffer ref for optimized streaming
+  const tokenBufferRef = useRef<TokenBufferManager | null>(null);
+  
   // On mount, initialize WebSocket connection
   useEffect(() => {
     isMountedRef.current = true;
@@ -87,6 +91,13 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     // Cleanup on unmount
     return () => {
       isMountedRef.current = false;
+      
+      // Clean up token buffer if exists
+      if (tokenBufferRef.current) {
+        tokenBufferRef.current.dispose();
+        tokenBufferRef.current = null;
+      }
+      
       // Close WebSocket connection when component unmounts
       closeWebSocket();
       wsInitializedRef.current = false;
@@ -338,6 +349,41 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     // Add user message to the UI
     setMessages(prev => [...prev, userMessage]);
     
+    // Initialize token buffer for efficient streaming updates
+    if (tokenBufferRef.current) {
+      tokenBufferRef.current.dispose();
+    }
+    
+    tokenBufferRef.current = new TokenBufferManager((tokens) => {
+      if (!isMountedRef.current) return;
+      
+      // Optimized state update with batched tokens
+      setMessages(prev => {
+        const assistantMsg = prev.find(msg => 
+          msg.role === 'assistant' && 
+          msg.status === MessageStatus.STREAMING
+        );
+        
+        if (assistantMsg) {
+          return prev.map(msg => 
+            msg.id === assistantMsg.id 
+              ? { ...msg, content: msg.content + tokens }
+              : msg
+          );
+        } else {
+          // First token batch - create new message
+          const newAssistantMsg: Message = {
+            id: uuidv4(),
+            role: 'assistant',
+            content: tokens,
+            timestamp: new Date(),
+            status: MessageStatus.STREAMING
+          };
+          return [...prev, newAssistantMsg];
+        }
+      });
+    });
+    
     try {
       // Prepare request parameters
       const params: ChatRequestParams = {
@@ -390,37 +436,45 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         onToken: (token) => {
           if (!isMountedRef.current) return;
           
-          // For token streaming, we need to update the assistant message content
-          // Since we may not have received the full message yet, check if it exists
-          setMessages(prev => {
-            // Find assistant message if it exists
-            const assistantMsg = prev.find(msg => 
-              msg.role === 'assistant' && 
-              msg.status === MessageStatus.STREAMING
-            );
-            
-            if (assistantMsg) {
-              // Update existing assistant message
-              return prev.map(msg => 
-                msg.id === assistantMsg.id 
-                  ? { ...msg, content: msg.content + token } 
-                  : msg
+          // Add token to buffer for efficient batched updates
+          // This greatly reduces the number of state updates and re-renders
+          if (tokenBufferRef.current) {
+            tokenBufferRef.current.addTokens(token);
+          } else {
+            // Fallback to direct update if buffer is not initialized
+            setMessages(prev => {
+              const assistantMsg = prev.find(msg => 
+                msg.role === 'assistant' && 
+                msg.status === MessageStatus.STREAMING
               );
-            } else {
-              // Create new assistant message
-              const newAssistantMsg: Message = {
-                id: uuidv4(),
-                role: 'assistant',
-                content: token,
-                timestamp: new Date(),
-                status: MessageStatus.STREAMING
-              };
-              return [...prev, newAssistantMsg];
-            }
-          });
+              
+              if (assistantMsg) {
+                return prev.map(msg => 
+                  msg.id === assistantMsg.id 
+                    ? { ...msg, content: msg.content + token } 
+                    : msg
+                );
+              } else {
+                const newAssistantMsg: Message = {
+                  id: uuidv4(),
+                  role: 'assistant',
+                  content: token,
+                  timestamp: new Date(),
+                  status: MessageStatus.STREAMING
+                };
+                return [...prev, newAssistantMsg];
+              }
+            });
+          }
         },
         onComplete: (response) => {
           if (!isMountedRef.current) return;
+          
+          // Flush any remaining tokens in buffer
+          if (tokenBufferRef.current) {
+            tokenBufferRef.current.flush();
+            tokenBufferRef.current = null;
+          }
           
           // Create assistant message from response
           const assistantMessage: Message = {
@@ -477,6 +531,12 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         onError: (error) => {
           if (!isMountedRef.current) return;
           
+          // Clean up token buffer on error
+          if (tokenBufferRef.current) {
+            tokenBufferRef.current.dispose();
+            tokenBufferRef.current = null;
+          }
+          
           console.error('Error sending message:', error);
           
           // Update user message to show error
@@ -500,6 +560,12 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       });
     } catch (error) {
       if (!isMountedRef.current) return;
+      
+      // Clean up token buffer on error
+      if (tokenBufferRef.current) {
+        tokenBufferRef.current.dispose();
+        tokenBufferRef.current = null;
+      }
       
       console.error('Error sending message:', error);
       
