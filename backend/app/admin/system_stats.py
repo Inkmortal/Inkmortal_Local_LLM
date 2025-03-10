@@ -1,12 +1,13 @@
-"""
-System statistics endpoints for admin panel
-"""
-from fastapi import APIRouter, Depends, HTTPException, status, Body
-from typing import Dict, Any, Optional, List
-import logging
+from fastapi import APIRouter, Depends
 import time
-import requests
-from datetime import datetime
+import logging
+from typing import Dict, Any, Optional
+
+try:
+    import httpx
+except ImportError:
+    pass
+
 from sqlalchemy.orm import Session
 
 try:
@@ -107,12 +108,12 @@ def get_cpu_info() -> Dict[str, Any]:
             elif platform.system() == "Windows":
                 import subprocess
                 output = subprocess.check_output(["wmic", "cpu", "get", "name"]).decode().strip()
-                lines = output.split("\n")
-                if len(lines) > 1:
-                    cpu_model = lines[1].strip()
+                if output:
+                    lines = output.split('\n')
+                    if len(lines) > 1:
+                        cpu_model = lines[1].strip()
         except Exception as e:
             logger.error(f"Error getting CPU model: {e}")
-            cpu_model = "Unknown"
         
         return {
             "usage": cpu_percent,
@@ -129,17 +130,17 @@ def get_memory_info() -> Dict[str, Any]:
         return {"total": 0, "used": 0, "percentage": 0}
     
     try:
-        # Memory info
-        memory = psutil.virtual_memory()
+        # Memory usage
+        mem = psutil.virtual_memory()
         
         # Convert to GB
-        total_gb = memory.total / (1024**3)
-        used_gb = memory.used / (1024**3)
+        total_gb = mem.total / (1024**3)
+        used_gb = mem.used / (1024**3)
         
         return {
-            "total": round(total_gb),
+            "total": round(total_gb, 1),
             "used": round(used_gb, 1),
-            "percentage": memory.percent
+            "percentage": mem.percent
         }
     except Exception as e:
         logger.error(f"Error getting memory info: {e}")
@@ -168,7 +169,7 @@ def get_storage_info() -> Dict[str, Any]:
         return {"total": 0, "used": 0, "percentage": 0}
 
 def get_network_info() -> Dict[str, Any]:
-    """Get network information"""
+    """Get network information with improved error handling"""
     if not PSUTIL_AVAILABLE:
         return {"incoming": 0, "outgoing": 0, "connections": 0}
     
@@ -176,11 +177,22 @@ def get_network_info() -> Dict[str, Any]:
         # Network io counters
         net_io = psutil.net_io_counters()
         
-        # Network connections
-        connections = len(psutil.net_connections())
+        # Network connections with timeout and error handling
+        connections = 0
+        try:
+            # This is the call that often fails on WSL or with permission issues on Mac/Docker
+            # We'll wrap it in a separate try/except to prevent it from failing the whole function
+            connections = len(psutil.net_connections(kind='inet'))
+        except (PermissionError, OSError) as conn_err:
+            # Common errors on non-root, WSL, or container environments
+            logger.warning(f"Could not get network connections (permissions): {conn_err}")
+        except Exception as conn_err:
+            # Handle any other errors
+            logger.warning(f"Unexpected error getting network connections: {conn_err}")
+            
+        # Continue with other network stats even if connections fail
         
         # Estimate throughput (this is just an estimation)
-        # For real-time values, you would need to calculate deltas over time
         incoming = round(net_io.bytes_recv / 1024 / 1024, 1)  # Convert to MB
         outgoing = round(net_io.bytes_sent / 1024 / 1024, 1)  # Convert to MB
         
@@ -252,133 +264,3 @@ async def get_ollama_info(queue_manager: QueueManagerInterface) -> Dict[str, Any
             "requests": 0,
             "avgResponseTime": 0
         }
-
-async def get_available_models() -> List[Dict[str, Any]]:
-    """Get list of available models from Ollama"""
-    try:
-        # Call Ollama API to get available models
-        response = requests.get(f"{settings.ollama_api_url}/api/tags")
-        if response.status_code != 200:
-            logger.error(f"Failed to get models from Ollama: Status {response.status_code}")
-            return []
-        
-        models_data = response.json()
-        models = []
-        
-        # Process model data from Ollama response
-        for model in models_data.get("models", []):
-            model_name = model.get("name")
-            # Add only if model name exists
-            if model_name:
-                model_info = {
-                    "name": model_name,
-                    "size": model.get("size", 0),
-                    "modified_at": model.get("modified_at", ""),
-                    "is_active": model_name == settings.default_model
-                }
-                models.append(model_info)
-        
-        # Sort models by name
-        models.sort(key=lambda x: x["name"])
-        return models
-    except Exception as e:
-        logger.error(f"Error fetching available models: {e}")
-        return []
-        
-@router.get("/models")
-async def list_models(
-    current_user: User = Depends(get_current_admin_user)
-) -> Dict[str, Any]:
-    """List available models from Ollama (admin only)"""
-    try:
-        models = await get_available_models()
-        return {
-            "models": models,
-            "active_model": settings.default_model
-        }
-    except Exception as e:
-        logger.error(f"Error listing models: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list models: {str(e)}"
-        )
-
-@router.put("/model")
-async def set_active_model(
-    model_data: Dict[str, str] = Body(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
-) -> Dict[str, Any]:
-    """Set the active model with persistence (admin only)"""
-    model_name = model_data.get("model")
-    if not model_name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Model name is required"
-        )
-    
-    try:
-        # Verify model exists in Ollama
-        models = await get_available_models()
-        model_exists = any(model["name"] == model_name for model in models)
-        
-        if not model_exists:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Model '{model_name}' not found in Ollama"
-            )
-        
-        # Update the settings in memory
-        settings.default_model = model_name
-        
-        # Create or update the persistent setting in the database
-        try:
-            # Check if CONFIG table exists, if not create it
-            if not db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='config'").fetchone():
-                db.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
-                db.commit()
-                logger.info("Created config table for persistent settings")
-            
-            # Check if default_model setting exists
-            existing = db.execute("SELECT value FROM config WHERE key = 'default_model'").fetchone()
-            
-            if existing:
-                # Update existing setting
-                db.execute(
-                    "UPDATE config SET value = :value, updated_at = CURRENT_TIMESTAMP WHERE key = 'default_model'", 
-                    {"value": model_name}
-                )
-                logger.info(f"Updated default_model setting to {model_name}")
-            else:
-                # Insert new setting
-                db.execute(
-                    "INSERT INTO config (key, value) VALUES ('default_model', :value)",
-                    {"value": model_name}
-                )
-                logger.info(f"Created default_model setting with value {model_name}")
-            
-            db.commit()
-            
-            return {
-                "success": True,
-                "model": model_name,
-                "message": "Model updated successfully and saved to database"
-            }
-        except Exception as db_error:
-            logger.error(f"Database error saving model setting: {str(db_error)}")
-            
-            # We already updated the in-memory setting, so return partial success
-            return {
-                "success": True,
-                "model": model_name,
-                "message": "Model updated in memory, but failed to persist to database"
-            }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error setting active model: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to set active model: {str(e)}"
-        )

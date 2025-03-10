@@ -5,10 +5,11 @@
 import { MessageStatus, ChatResponse, WebSocketMessage } from './types';
 
 // Connection constants
-const MAX_RECONNECT_ATTEMPTS = 2; // Reduced to prevent excessive reconnection attempts
+const MAX_RECONNECT_ATTEMPTS = 5; // Increased to handle unstable connections better
 const BASE_RECONNECT_DELAY_MS = 1000;
 const CONNECTION_TIMEOUT_MS = 5000;
 const HEARTBEAT_INTERVAL_MS = 30000;
+const HEARTBEAT_TIMEOUT_MS = 5000; // How long to wait for heartbeat response
 const MESSAGE_HANDLER_LIMIT = 50; // Prevent unbounded growth of handlers
 
 // WebSocket connection manager - singleton pattern with improved resource management
@@ -16,6 +17,7 @@ class WebSocketManager {
   private static instance: WebSocketManager;
   private websocket: WebSocket | null = null;
   private heartbeatInterval: number | null = null;
+  private heartbeatTimeout: number | null = null; // New: timeout for heartbeat response
   private connectionTimeout: number | null = null;
   private reconnectTimeout: number | null = null;
   private isConnecting = false;
@@ -25,6 +27,7 @@ class WebSocketManager {
   private connectionListeners: Set<(connected: boolean) => void> = new Set();
   private connectionPromise: Promise<boolean> | null = null;
   private lastCleanupTime = 0;
+  private lastHeartbeatResponse = 0; // New: track last heartbeat response time
 
   // Private constructor enforces singleton pattern
   private constructor() {}
@@ -50,7 +53,7 @@ class WebSocketManager {
     return `${protocol}//${host}/api/chat/ws?token=${token}`;
   }
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection with improved error handling
   public connect(token: string): Promise<boolean> {
     this.authToken = token;
     
@@ -77,7 +80,7 @@ class WebSocketManager {
         this.isConnecting = false;
         this.connectionPromise = null;
         this.cleanupResources();
-        reject(new Error('Connection timeout'));
+        reject(new Error('Connection timeout - server may be unreachable'));
       }, CONNECTION_TIMEOUT_MS);
       
       try {
@@ -90,7 +93,7 @@ class WebSocketManager {
         // Setup event handlers with proper binding to prevent "this" context issues
         this.websocket.onopen = this.handleOpen.bind(this, resolve);
         this.websocket.onclose = this.handleClose.bind(this, reject);
-        this.websocket.onerror = this.handleError.bind(this);
+        this.websocket.onerror = this.handleError.bind(this, reject); // Added reject parameter
         this.websocket.onmessage = this.handleMessage.bind(this);
       } catch (error) {
         // Handle any synchronous errors during WebSocket creation
@@ -98,7 +101,7 @@ class WebSocketManager {
         this.cleanupTimeouts();
         this.isConnecting = false;
         this.connectionPromise = null;
-        reject(error);
+        reject(new Error(`Failed to create WebSocket connection: ${error instanceof Error ? error.message : String(error)}`));
       }
     });
     
@@ -111,12 +114,13 @@ class WebSocketManager {
     this.cleanupTimeouts();
     this.isConnecting = false;
     this.reconnectAttempts = 0;
+    this.lastHeartbeatResponse = Date.now(); // Initialize heartbeat timestamp
     this.startHeartbeat();
     this.notifyListeners(true);
     resolve(true);
   }
 
-  // Handle connection close
+  // Handle connection close with improved diagnostics
   private handleClose(reject: (reason: Error) => void, event: CloseEvent): void {
     console.log(`WebSocket closed with code ${event.code}: ${event.reason}`);
     this.cleanupTimeouts();
@@ -132,24 +136,49 @@ class WebSocketManager {
       // Reset state on expected closure
       this.websocket = null;
       this.connectionPromise = null;
-      reject(new Error(`Connection closed: ${event.reason}`));
+      
+      // Provide more context in the error message
+      let errorMessage = `Connection closed: ${event.reason || 'No reason provided'}`;
+      if (event.code === 1006) {
+        errorMessage = `Connection abnormally closed (code 1006) - server may be unreachable`;
+      } else if (event.code === 1008) {
+        errorMessage = `Connection closed due to policy violation (code 1008) - authentication may have failed`;
+      } else if (event.code === 1011) {
+        errorMessage = `Server encountered an error (code 1011)`;
+      }
+      
+      reject(new Error(errorMessage));
     }
   }
 
-  // Handle connection error
-  private handleError(event: Event): void {
+  // Handle connection error with improved error reporting
+  private handleError(reject: (reason: Error) => void, event: Event): void {
     console.error('WebSocket error:', event);
     this.cleanupTimeouts();
     this.isConnecting = false;
     this.notifyListeners(false);
+    
+    // Provide better context about the error
+    const errorMessage = 'WebSocket connection error - network may be unstable or server unreachable';
+    reject(new Error(errorMessage));
+    
     // Error is followed by a close event, which will handle reconnection
   }
 
-  // Handle incoming message
+  // Handle incoming message with improved heartbeat tracking
   private handleMessage(event: MessageEvent): void {
     try {
       // Periodically clean up old message handlers
       this.cleanupOldHandlers();
+      
+      // Update heartbeat timestamp for any message received
+      this.lastHeartbeatResponse = Date.now();
+      
+      // Clear any pending heartbeat timeout
+      if (this.heartbeatTimeout !== null) {
+        window.clearTimeout(this.heartbeatTimeout);
+        this.heartbeatTimeout = null;
+      }
       
       // Parse message
       const data = JSON.parse(event.data) as WebSocketMessage;
@@ -176,7 +205,7 @@ class WebSocketManager {
     }
   }
 
-  // Start heartbeat to keep connection alive
+  // Enhanced heartbeat with connection status check and auto-reconnect
   private startHeartbeat(): void {
     this.stopHeartbeat();
     
@@ -184,25 +213,82 @@ class WebSocketManager {
     
     console.log('Starting WebSocket heartbeat');
     this.heartbeatInterval = window.setInterval(() => {
-      if (this.websocket?.readyState === WebSocket.OPEN) {
-        try {
-          this.websocket.send('heartbeat');
-        } catch (error) {
-          console.error('Error sending heartbeat:', error);
-          this.stopHeartbeat();
-        }
-      } else {
-        console.log('WebSocket not open, stopping heartbeat');
+      // If connection is not open, don't try to send heartbeat
+      if (this.websocket?.readyState !== WebSocket.OPEN) {
+        console.log('WebSocket not open, stopping heartbeat and checking connection');
         this.stopHeartbeat();
+        
+        // Check if we should attempt reconnection
+        if (this.authToken && !this.isConnecting && !this.reconnectTimeout) {
+          console.log('Connection lost, initiating reconnect after heartbeat check');
+          this.attemptReconnect();
+        }
+        return;
+      }
+      
+      // Check if we haven't received a response for too long
+      const now = Date.now();
+      const sinceLastResponse = now - this.lastHeartbeatResponse;
+      
+      if (sinceLastResponse > HEARTBEAT_INTERVAL_MS * 2) {
+        console.warn(`No heartbeat response for ${sinceLastResponse}ms, connection may be dead`);
+        
+        // Force close and reconnect if connection appears dead
+        if (this.websocket) {
+          console.log('Connection appears dead, forcing close and reconnect');
+          this.stopHeartbeat();
+          
+          try {
+            this.websocket.close(4000, 'Connection appears dead (no heartbeat response)');
+          } catch (error) {
+            console.error('Error closing dead connection:', error);
+          }
+          
+          this.websocket = null;
+          
+          // Attempt to reconnect if we have an auth token
+          if (this.authToken && !this.isConnecting && !this.reconnectTimeout) {
+            this.attemptReconnect();
+          }
+        }
+        return;
+      }
+      
+      try {
+        // Send heartbeat and set up timeout for response
+        this.websocket.send(JSON.stringify({ type: 'heartbeat' }));
+        
+        // Set timeout to detect missing heartbeat response
+        if (this.heartbeatTimeout !== null) {
+          window.clearTimeout(this.heartbeatTimeout);
+        }
+        
+        this.heartbeatTimeout = window.setTimeout(() => {
+          console.warn('No heartbeat response received within timeout period');
+          this.heartbeatTimeout = null;
+        }, HEARTBEAT_TIMEOUT_MS);
+      } catch (error) {
+        console.error('Error sending heartbeat:', error);
+        this.stopHeartbeat();
+        
+        // Attempt to reconnect on heartbeat error
+        if (this.authToken && !this.isConnecting && !this.reconnectTimeout) {
+          this.attemptReconnect();
+        }
       }
     }, HEARTBEAT_INTERVAL_MS);
   }
 
-  // Stop heartbeat
+  // Enhanced heartbeat cleanup
   private stopHeartbeat(): void {
     if (this.heartbeatInterval !== null) {
       window.clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
+    }
+    
+    if (this.heartbeatTimeout !== null) {
+      window.clearTimeout(this.heartbeatTimeout);
+      this.heartbeatTimeout = null;
     }
   }
 
@@ -239,10 +325,10 @@ class WebSocketManager {
     }
   }
 
-  // Attempt reconnection with exponential backoff
+  // Enhanced reconnection with better error handling
   private attemptReconnect(): void {
     if (!this.authToken || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.log('Max reconnection attempts reached or no auth token - giving up');
+      console.log(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached or no auth token - giving up`);
       // Reset state when giving up to prevent stale connections
       this.websocket = null;
       this.connectionPromise = null;
@@ -270,6 +356,13 @@ class WebSocketManager {
         // Safely attempt reconnection with proper error handling
         this.connect(this.authToken).catch((error) => {
           console.error('Reconnection attempt failed:', error);
+          
+          // If this wasn't the last attempt, the reconnect will be triggered again by handleClose
+          if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            // Notify listeners that we've given up on reconnection
+            this.notifyListeners(false);
+            console.error('All reconnection attempts failed - connection permanently lost');
+          }
         });
       } else {
         console.log('Auth token no longer available, cancelling reconnection');
@@ -288,7 +381,7 @@ class WebSocketManager {
     });
   }
 
-  // Clean up all timeouts
+  // Clean up all timeouts with enhanced handling
   private cleanupTimeouts(): void {
     if (this.connectionTimeout !== null) {
       window.clearTimeout(this.connectionTimeout);
@@ -298,6 +391,11 @@ class WebSocketManager {
     if (this.reconnectTimeout !== null) {
       window.clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
+    }
+    
+    if (this.heartbeatTimeout !== null) {
+      window.clearTimeout(this.heartbeatTimeout);
+      this.heartbeatTimeout = null;
     }
     
     this.stopHeartbeat();
@@ -445,7 +543,8 @@ export async function ensureWebSocketConnection(token: string): Promise<boolean>
   try {
     return await initializeWebSocket(token);
   } catch (error) {
-    console.warn('WebSocket connection failed, falling back to polling');
+    console.warn('WebSocket connection failed, falling back to polling:', 
+      error instanceof Error ? error.message : 'Unknown error');
     return false;
   }
 }

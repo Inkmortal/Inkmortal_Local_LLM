@@ -9,7 +9,7 @@ export class TokenBufferManager {
   private flushDelay: number;
   private maxBufferSize: number;
   private totalProcessed: number = 0;
-  private isDisposed: boolean = false;
+  private isDisposedFlag: boolean = false;
   private lastFlushTime: number = 0;
   private creationTime: number = Date.now();
 
@@ -36,7 +36,7 @@ export class TokenBufferManager {
    */
   addTokens(tokens: string): void {
     // Safety check to avoid memory leaks
-    if (this.isDisposed) {
+    if (this.isDisposedFlag) {
       console.warn('Attempted to add tokens to disposed TokenBufferManager');
       return;
     }
@@ -69,7 +69,7 @@ export class TokenBufferManager {
       this.timeoutId = window.setTimeout(() => {
         // Execute flush in animation frame for smoother updates
         window.requestAnimationFrame(() => {
-          if (!this.isDisposed) {
+          if (!this.isDisposedFlag) {
             this.flush();
           }
         });
@@ -82,7 +82,7 @@ export class TokenBufferManager {
    * Calls the update callback with current buffer contents
    */
   flush(): void {
-    if (this.isDisposed) return;
+    if (this.isDisposedFlag) return;
     
     if (this.buffer.length > 0) {
       try {
@@ -112,14 +112,26 @@ export class TokenBufferManager {
    * Should be called when this manager is no longer needed
    */
   dispose(): void {
-    if (this.isDisposed) return;
+    if (this.isDisposedFlag) return;
     
     this.flush();
     this.clearTimeout();
-    this.isDisposed = true;
+    this.isDisposedFlag = true;
+    
+    // Clear buffer and callback references to help garbage collection
+    this.buffer = '';
+    this.updateCallback = () => {}; // Replace with no-op function
     
     // Log lifetime for monitoring
     const lifetime = Date.now() - this.creationTime;
     console.log(`TokenBufferManager disposed after ${lifetime}ms, processed ${this.totalProcessed} characters`);
+  }
+  
+  /**
+   * Check if the buffer manager has been disposed
+   * @returns boolean indicating if this instance is disposed
+   */
+  isDisposed(): boolean {
+    return this.isDisposedFlag;
   }
 }

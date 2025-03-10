@@ -290,9 +290,18 @@ class RabbitMQManager(QueueManagerInterface):
                     client.get(f"{self.ollama_url}/api/tags"),
                     timeout=2.0
                 )
+                # Only log error if connection actually failed
+                if response.status_code != 200:
+                    logger.error(f"Ollama connection check failed with status code: {response.status_code}")
                 return response.status_code == 200
+        except asyncio.TimeoutError:
+            logger.error("Ollama connection check timed out after 2 seconds")
+            return False
+        except httpx.RequestError as e:
+            logger.error(f"Ollama connection check failed with request error: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Ollama connection check failed: {e}")
+            logger.error(f"Ollama connection check failed with unexpected error: {e}")
             return False
     
     def get_history(self) -> List[Dict[str, Any]]:

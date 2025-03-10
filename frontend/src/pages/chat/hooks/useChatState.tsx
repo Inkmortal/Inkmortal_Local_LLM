@@ -9,7 +9,9 @@ import {
   ChatMode,
   sendMessageStreaming,
   initializeWebSocket,
-  closeWebSocket
+  closeWebSocket,
+  addConnectionListener,
+  isWebSocketConnected
 } from '../../../services/chat';
 import { Message, ChatRequestParams, Conversation } from '../types/chat';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
@@ -29,16 +31,9 @@ interface UseChatStateProps {
 }
 
 export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) => {
-  // Message state
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-      timestamp: new Date(),
-      status: MessageStatus.COMPLETE
-    }
-  ]);
+  // CHANGED: Empty initial message state (Claude/ChatGPT style)
+  // We'll show placeholder UI instead of an initial message
+  const [messages, setMessages] = useState<Message[]>([]);
 
   // Conversation state
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -54,6 +49,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<boolean>(false); // New: track connection status
   
   // Track if the component is mounted to avoid state updates after unmounting
   const isMountedRef = useRef(true);
@@ -71,36 +67,106 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   // Token buffer ref for optimized streaming
   const tokenBufferRef = useRef<TokenBufferManager | null>(null);
   
-  // On mount, initialize WebSocket connection
+  // On mount, initialize WebSocket connection with enhanced error handling and reconnection
   useEffect(() => {
+    // Track mounted state
     isMountedRef.current = true;
     
-    // Initialize WebSocket connection if authenticated
-    const authToken = localStorage.getItem('authToken');
-    if (authToken && !wsInitializedRef.current) {
-      initializeWebSocket(authToken)
-        .then(() => {
-          wsInitializedRef.current = true;
-          console.log('WebSocket connection established');
-        })
-        .catch(err => {
-          console.error('WebSocket initialization failed:', err);
-        });
-    }
+    // Track connection status handler removal function
+    let connectionStatusRemover: (() => void) | null = null;
     
-    // Cleanup on unmount
+    const initializeWebSocketConnection = async () => {
+      const authToken = localStorage.getItem('authToken');
+      
+      if (!authToken) {
+        console.warn('No auth token found - cannot initialize WebSocket');
+        return;
+      }
+      
+      try {
+        // Initialize WebSocket with proper error handling
+        const connected = await initializeWebSocket(authToken);
+        
+        if (!isMountedRef.current) return;
+        
+        if (connected) {
+          wsInitializedRef.current = true;
+          console.log('WebSocket connection established successfully');
+          
+          // Update connection status in UI
+          setConnectionStatus(true);
+          
+          // Register for connection status updates
+          connectionStatusRemover = addConnectionListener((isConnected) => {
+            if (!isMountedRef.current) return;
+            
+            // Update UI connection status
+            setConnectionStatus(isConnected);
+            
+            if (!isConnected && wsInitializedRef.current) {
+              console.warn('WebSocket connection lost - will attempt auto-reconnect');
+              // WebSocketManager handles reconnection internally
+            }
+          });
+        } else {
+          console.warn('WebSocket initialization returned false - fallback mode may be used');
+          setConnectionStatus(false);
+        }
+      } catch (error) {
+        if (!isMountedRef.current) return;
+        
+        console.error('WebSocket initialization failed:', 
+          error instanceof Error ? error.message : 'Unknown error');
+          
+        // Show error notification for WebSocket failures
+        showError(
+          'Chat connection failed. Some features may be limited.',
+          'Connection Error'
+        );
+        
+        setConnectionStatus(false);
+      }
+    };
+    
+    // Attempt WebSocket connection
+    initializeWebSocketConnection();
+    
+    // Set up auto-reconnect if connection is lost
+    const reconnectInterval = setInterval(() => {
+      if (!isMountedRef.current) return;
+      
+      // Only try to reconnect if we were previously connected but current status shows disconnected
+      if (wsInitializedRef.current && !isWebSocketConnected()) {
+        console.log('Attempting to re-establish WebSocket connection...');
+        initializeWebSocketConnection();
+      }
+    }, 30000); // Check every 30 seconds
+    
+    // Comprehensive cleanup function
     return () => {
+      // Mark component as unmounted first to prevent further state updates
       isMountedRef.current = false;
       
-      // Clean up token buffer if exists
+      // Clear auto-reconnect interval
+      clearInterval(reconnectInterval);
+      
+      // Remove connection status listener
+      if (connectionStatusRemover) {
+        connectionStatusRemover();
+      }
+      
+      // Clean up token buffer to prevent memory leaks
       if (tokenBufferRef.current) {
         tokenBufferRef.current.dispose();
         tokenBufferRef.current = null;
       }
       
       // Close WebSocket connection when component unmounts
-      closeWebSocket();
-      wsInitializedRef.current = false;
+      if (wsInitializedRef.current) {
+        console.log('Closing WebSocket connection on unmount');
+        closeWebSocket();
+        wsInitializedRef.current = false;
+      }
     };
   }, []);
   
@@ -163,7 +229,10 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
           // Only create a new conversation when component is mounted
           if (isMountedRef.current) {
             console.log("Conversation data is null, creating a new one");
-            createNewConversation();
+            // MODIFIED: Don't automatically create a new conversation
+            // Instead, show empty state and let user start a new chat
+            setConversationId(undefined);
+            setMessages([]);
           }
           return;
         }
@@ -187,8 +256,11 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
           console.log("Network or other error occurred, not creating a new conversation");
           // Only create a new conversation for 404 errors (conversation not found)
           if (error instanceof Error && error.message.includes("404")) {
-            console.log("Conversation not found (404), creating a new one");
-            createNewConversation();
+            console.log("Conversation not found (404), setting empty state");
+            // MODIFIED: Don't automatically create a new conversation
+            // Instead, show empty state and let user start a new chat
+            setConversationId(undefined);
+            setMessages([]);
           } else {
             // Show an error notification instead
             showError("Failed to load conversation. Please try again.", "Conversation Error");
@@ -203,7 +275,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     }
   }, [initialConversationId]);
   
-  // Run loadConversation when the component mounts
+  // CHANGED: Run loadConversation when the component mounts - now only loads existing conversations
   useEffect(() => {
     // Check if we have an auth token before attempting API calls
     const authToken = localStorage.getItem('authToken');
@@ -212,16 +284,18 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       return;
     }
     
-    // Load conversation list
+    // Load conversation list (but don't create a new one automatically)
     loadConversations();
     
+    // Only load conversation if an ID is provided - don't auto-create
     if (initialConversationId) {
       loadConversation();
-    } else if (!conversationId) {
-      // Create a new conversation if no ID is provided
-      createNewConversation();
     }
-  }, [initialConversationId, loadConversation, conversationId, loadConversations]);
+    
+    // Don't auto-create conversation when component mounts
+    // Instead, we'll create it when the user sends their first message
+    // This follows the ChatGPT/Claude approach where you start with an empty state
+  }, [initialConversationId, loadConversation, loadConversations]);
   
   // Function to create a new conversation
   const createNewConversation = async () => {
@@ -248,13 +322,8 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       if (response) {
         setConversationId(response.conversation_id);
         // Reset messages to just the welcome message
-        setMessages([{
-          id: 'welcome',
-          role: 'assistant',
-          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-          timestamp: new Date(),
-          status: MessageStatus.COMPLETE
-        }]);
+        // MODIFIED: Don't add welcome message here - it will be added by the server
+        setMessages([]);
         
         // Refresh conversation list
         setTimeout(() => {
@@ -262,21 +331,17 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
             loadConversations();
           }
         }, 500);
+        
+        return response.conversation_id;
       } else {
         console.error('Failed to create conversation - response was null');
         
         // Show error notification
         showError('Failed to create a new conversation. Using local mode instead.', 'Chat Error');
         
-        // Even if we failed to create a conversation, still show the welcome message
-        // so the user can still use the chat interface
-        setMessages([{
-          id: 'local-welcome',
-          role: 'assistant',
-          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-          timestamp: new Date(),
-          status: MessageStatus.COMPLETE
-        }]);
+        // Set empty messages so UI can show the empty state
+        setMessages([]);
+        return null;
       }
     } catch (error) {
       console.error('Error creating new conversation:', error);
@@ -287,16 +352,11 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
         'Chat Error'
       );
       
-      // Even on error, we still want to show a welcome message
+      // Set empty messages so UI can show the empty state
       if (isMountedRef.current) {
-        setMessages([{
-          id: 'error-welcome',
-          role: 'assistant',
-          content: 'Hello! I\'m your educational AI assistant. I can help with math problems, coding questions, and explain concepts from textbooks. How can I help you today?',
-          timestamp: new Date(),
-          status: MessageStatus.COMPLETE
-        }]);
+        setMessages([]);
       }
+      return null;
     } finally {
       if (isMountedRef.current) {
         setConversationLoading(false);
@@ -312,14 +372,14 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       return;
     }
     
-    // Check if conversation ID exists
-    if (!conversationId) {
+    // Check if conversation ID exists - if not, create one first
+    let activeConversationId = conversationId;
+    if (!activeConversationId) {
       console.log('No conversation ID - creating new conversation before sending message');
       try {
-        const response = await createConversation();
-        if (response) {
-          setConversationId(response.conversation_id);
-        } else {
+        // CHANGED: Create conversation on demand - this is the key change to avoid duplicate conversations
+        activeConversationId = await createNewConversation();
+        if (!activeConversationId) {
           showError('Failed to create a new conversation.', 'Chat Error');
           return;
         }
@@ -349,11 +409,13 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     // Add user message to the UI
     setMessages(prev => [...prev, userMessage]);
     
-    // Initialize token buffer for efficient streaming updates
+    // Clean up existing token buffer if it exists
     if (tokenBufferRef.current) {
       tokenBufferRef.current.dispose();
+      tokenBufferRef.current = null;
     }
     
+    // Initialize token buffer for efficient streaming updates
     tokenBufferRef.current = new TokenBufferManager((tokens) => {
       if (!isMountedRef.current) return;
       
@@ -388,7 +450,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
       // Prepare request parameters
       const params: ChatRequestParams = {
         message: messageText,
-        conversation_id: conversationId,
+        conversation_id: activeConversationId,
         file: file || selectedFile || undefined,
         mode: ChatMode.STREAMING // Use streaming mode (WebSockets)
       };
@@ -438,10 +500,10 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
           
           // Add token to buffer for efficient batched updates
           // This greatly reduces the number of state updates and re-renders
-          if (tokenBufferRef.current) {
+          if (tokenBufferRef.current && !tokenBufferRef.current.isDisposed()) {
             tokenBufferRef.current.addTokens(token);
           } else {
-            // Fallback to direct update if buffer is not initialized
+            // Fallback to direct update if buffer is not initialized or disposed
             setMessages(prev => {
               const assistantMsg = prev.find(msg => 
                 msg.role === 'assistant' && 
@@ -471,8 +533,13 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
           if (!isMountedRef.current) return;
           
           // Flush any remaining tokens in buffer
-          if (tokenBufferRef.current) {
+          if (tokenBufferRef.current && !tokenBufferRef.current.isDisposed()) {
             tokenBufferRef.current.flush();
+          }
+          
+          // Dispose token buffer
+          if (tokenBufferRef.current) {
+            tokenBufferRef.current.dispose();
             tokenBufferRef.current = null;
           }
           
@@ -650,6 +717,7 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     conversations,
     selectedFile,
     showFileUpload,
+    connectionStatus, // New: expose connection status to UI
     sendUserMessage,
     retryMessage,
     loadConversation,

@@ -15,7 +15,7 @@ import os
 import asyncio
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..db import get_db, Base
 from ..auth.utils import get_current_user, validate_api_key, get_current_admin_user
@@ -326,16 +326,33 @@ async def create_conversation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new conversation with proper transaction handling and error management"""
+    """Create a new conversation with improved transaction handling and concurrency control"""
     # Generate a new UUID for conversation ID
     conversation_id = str(uuid.uuid4())
     
-    # Start a new transaction
+    # Key for distributed locking - using user ID to scope it
+    lock_key = f"create_conversation:{current_user.id}"
+    
+    # Start a new transaction with serializable isolation for better concurrency control
     try:
-        # Begin transaction explicitly
+        # Check for recently created conversations to prevent duplicates
+        recent_time = datetime.now() - timedelta(seconds=5)
+        recent_conversation = db.query(Conversation).filter(
+            Conversation.user_id == current_user.id,
+            Conversation.created_at > recent_time
+        ).first()
+        
+        if recent_conversation:
+            # Return existing conversation instead of creating a new one
+            logger.info(f"Using recent conversation {recent_conversation.id} instead of creating new one")
+            return {"conversation_id": recent_conversation.id}
+        
+        # Begin transaction with serializable isolation level for stronger concurrency control
+        # This prevents phantom reads and non-repeatable reads
+        db.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
         transaction = db.begin_nested()
         
-        # Create conversation with explicit ID (avoids race conditions)
+        # Create conversation with explicit ID
         new_conversation = Conversation(
             id=conversation_id,
             user_id=current_user.id,
@@ -363,6 +380,9 @@ async def create_conversation(
         transaction.commit()
         db.commit()
         
+        # Reset transaction isolation level
+        db.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        
         # Log successful creation
         logger.info(f"Created conversation {conversation_id} for user {current_user.id}")
         
@@ -371,6 +391,12 @@ async def create_conversation(
     except sqlalchemy_exc.SQLAlchemyError as db_error:
         # Handle database-specific errors
         db.rollback()
+        # Reset transaction isolation level
+        try:
+            db.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        except:
+            pass
+            
         error_message = f"Database error creating conversation: {str(db_error)}"
         logger.error(error_message)
         raise HTTPException(
@@ -380,6 +406,12 @@ async def create_conversation(
     except Exception as e:
         # Handle any other unexpected errors
         db.rollback()
+        # Reset transaction isolation level
+        try:
+            db.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        except:
+            pass
+            
         error_message = f"Error creating conversation: {str(e)}"
         logger.error(error_message)
         raise HTTPException(
