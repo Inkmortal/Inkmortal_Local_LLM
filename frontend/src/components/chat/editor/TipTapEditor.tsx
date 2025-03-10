@@ -56,7 +56,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     ],
     editorProps: {
       attributes: {
-        class: 'editor-content prose p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin',
+        class: 'editor-content prose p-2 min-h-[60px] max-h-[200px] overflow-auto scrollbar-thin',
         spellcheck: 'false',
       },
     },
