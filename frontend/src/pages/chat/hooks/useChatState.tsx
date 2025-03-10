@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Message, MessageStatus, Conversation } from '../types/chat';
-import { sendMessage, listConversations, getConversationMessages } from '../../../services/chat/messageService';
+import { sendMessage } from '../../../services/chat/messageService';
+import { getConversation, listConversations } from '../../../services/chat/conversationService';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
 
 // Function to provide a rough estimate of token count to avoid overloading the API
@@ -180,13 +181,13 @@ export default function useChatState(): ChatState {
         setIsLoading(true);
       }
       
-      const result = await getConversationMessages(conversationId, abortControllerRef.current.signal);
+      const conversationData = await getConversation(conversationId);
       
       if (!isMountedRef.current) return;
       
-      if (result && Array.isArray(result)) {
+      if (conversationData && Array.isArray(conversationData.messages)) {
         // Map API messages to our Message format
-        const formattedMessages = result.map(apiMsg => ({
+        const formattedMessages = conversationData.messages.map(apiMsg => ({
           id: apiMsg.id,
           conversationId: apiMsg.conversation_id,
           role: apiMsg.role,
