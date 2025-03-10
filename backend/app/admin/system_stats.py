@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends
 import time
 import logging
 from typing import Dict, Any, Optional
-from sqlalchemy import text
+from sqlalchemy import text, Column, String, inspect
+from sqlalchemy.ext.declarative import declarative_base
 
 try:
     import httpx
@@ -17,7 +18,7 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-from ..db import get_db
+from ..db import get_db, Base
 from ..auth.utils import get_current_admin_user
 from ..auth.models import User
 from ..queue import get_queue_manager, QueueManagerInterface
@@ -26,8 +27,32 @@ from ..config import settings
 # Configure logging
 logger = logging.getLogger("admin.system_stats")
 
+# Create a Config model for storing system configuration
+class Config(Base):
+    """Database model for system configuration"""
+    __tablename__ = "config"
+    
+    key = Column(String(100), primary_key=True)
+    value = Column(String(255), nullable=True)
+
 # Create router
 router = APIRouter(prefix="/admin/system", tags=["admin", "system"])
+
+# Helper function to ensure config table exists
+def ensure_config_table_exists(db: Session):
+    """Ensure the config table exists in the database"""
+    try:
+        # Check if config table exists, create if not
+        inspector = inspect(db.bind)
+        if not inspector.has_table("config"):
+            logger.info("Creating config table")
+            Base.metadata.tables["config"].create(db.bind)
+            db.commit()
+            return True
+        return True
+    except Exception as e:
+        logger.error(f"Error ensuring config table exists: {e}")
+        return False
 
 @router.get("/models")
 async def get_models(
@@ -37,6 +62,9 @@ async def get_models(
 ) -> Dict[str, Any]:
     """Get available models from Ollama"""
     try:
+        # Ensure config table exists
+        ensure_config_table_exists(db)
+        
         # Check if Ollama is available
         status = await queue_manager.get_status()
         ollama_connected = status.get("ollama_connected", False)
@@ -121,6 +149,9 @@ async def set_active_model(
 ) -> Dict[str, Any]:
     """Set the active model for Ollama"""
     try:
+        # Ensure config table exists
+        ensure_config_table_exists(db)
+        
         # Extract model name from request
         model_name = model_data.get("model")
         if not model_name:

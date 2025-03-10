@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from .models import Conversation, Message
-from .utils import execute_with_safe_transaction, generate_id
+from .utils import generate_id
 
 # Set up logger
 logger = logging.getLogger("app.api.chat.conversation_service")
@@ -23,8 +23,7 @@ def create_conversation(
     conversation_id = generate_id()
     
     try:
-        # Set transaction isolation level
-        execute_with_safe_transaction(db, "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+        # Use basic transaction approach without isolation level changes
         transaction = db.begin_nested()
         
         try:
@@ -71,9 +70,6 @@ def create_conversation(
             transaction.commit()
             db.commit()
             
-            # Reset isolation level to default
-            execute_with_safe_transaction(db, "SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-            
             logger.info(f"Created new conversation {conversation_id} for user {user_id}")
             return {
                 "success": True,
@@ -97,12 +93,6 @@ def create_conversation(
         logger.error(f"Transaction error creating conversation: {str(e)}")
         try:
             db.rollback()
-        except:
-            pass
-            
-        # Reset isolation level to default
-        try:
-            execute_with_safe_transaction(db, "SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
         except:
             pass
             

@@ -7,6 +7,7 @@ import { Message } from '../../types/chat';
 import CodeEditor from '../../../../components/chat/editors/CodeEditor';
 import MathExpressionEditor from '../../../../components/chat/editors/MathExpressionEditor';
 import LanguageSelector from './languageSelector/LanguageSelector';
+import EmptyConversationView from '../EmptyConversationView';
 
 interface ChatContainerProps {
   messages: Message[];
@@ -48,175 +49,123 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   // Add state for modal visibility
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
+  const [languageSelectorOpen, setLanguageSelectorOpen] = useState(false);
   
-  // Direct handlers for action bar buttons
-  const handleOpenCodeEditor = () => {
-    console.log("Directly opening code editor from action bar");
-    setCodeEditorOpen(true);
-  };
-  
-  const handleOpenMathEditor = () => {
-    console.log("Directly opening math editor from action bar");
-    setMathEditorOpen(true);
-  };
-  
-  // This section has been simplified to prevent circular references
-
-  // Auto-scroll when messages change
+  // Scroll to bottom on new messages
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (messagesEndRef.current && messages.length > 0) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
   
-  // Override the handler functions to open modals directly
-  useEffect(() => {
-    // Create a simple wrapper function to directly open the code editor modal
-    const handleOpenCodeModal = (arg: string) => {
-      console.log("Code editor trigger called with:", arg);
-      if (arg === "OPEN_MODAL") {
-        console.log("Opening code editor modal directly!");
-        setCodeEditorOpen(true);
-        return;
-      }
-      
-      // If not opening the modal, insert the code
-      if (codeInsertRef.current) {
-        codeInsertRef.current(arg);
-      }
-    };
-    
-    // Create a simple wrapper function to directly open the math editor modal
-    const handleOpenMathModal = (arg: string) => {
-      console.log("Math editor trigger called with:", arg);
-      if (arg === "OPEN_MODAL") {
-        console.log("Opening math editor modal directly!");
-        setMathEditorOpen(true);
-        return;
-      }
-      
-      // If not opening the modal, insert the math
-      if (mathInsertRef.current) {
-        mathInsertRef.current(arg);
-      }
-    };
-    
-    // Register our handler functions with the parent components
-    handleInsertCode("REGISTER_HANDLER", undefined, handleOpenCodeModal);
-    handleInsertMath("REGISTER_HANDLER", undefined, handleOpenMathModal);
-  }, [handleInsertCode, handleInsertMath]);
-
+  const handleCodeSelected = (language: string, template?: string) => {
+    handleInsertCode(language, template);
+    setLanguageSelectorOpen(false);
+  };
+  
+  const handleCodeEditorSave = (code: string) => {
+    // Insert the code into the editor
+    if (codeInsertRef.current) {
+      codeInsertRef.current(code);
+    }
+    setCodeEditorOpen(false);
+  };
+  
+  const handleMathEditorSave = (mathExpression: string) => {
+    // Insert the math expression into the editor
+    if (mathInsertRef.current) {
+      mathInsertRef.current(mathExpression);
+    }
+    setMathEditorOpen(false);
+  };
+  
+  // Show empty state if no messages
+  const showEmptyState = messages.length === 0 && !loading;
+  
   return (
-    <div className="flex-grow flex flex-col overflow-hidden">
-      {/* Message area */}
-      <ChatWindow 
-        messages={messages} 
-        loading={loading}
-        onRegenerate={onRegenerate}
-        onStopGeneration={onStopGeneration}
-        isGenerating={isGenerating}
-      />
-    
-      {/* File upload area */}
-      <FileUploadArea
-        showFileUpload={showFileUpload}
-        onFileSelect={handleFileSelect}
-      />
-      
-      {/* Action bar with utility buttons */}
-      <ChatActionBar
-        showFileUpload={showFileUpload}
-        setShowFileUpload={setShowFileUpload}
-        selectedFile={selectedFile}
-        setSelectedFile={setSelectedFile}
-        handleInsertCode={(lang?: string) => {
-          if (lang === "OPEN_MODAL") {
-            handleOpenCodeEditor();
-          } else {
-            handleInsertCode(lang);
-          }
-        }}
-        handleInsertMath={(formula?: string) => {
-          if (formula === "OPEN_MODAL") {
-            handleOpenMathEditor();
-          } else {
-            handleInsertMath(formula);
-          }
-        }}
-      />
-      
-      {/* Chat input - styled with glass effect */}
-      <div className="px-4 py-3 relative">
-        <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
-          style={{
-            boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
-            border: `1px solid rgba(0, 0, 0, 0.1)`,
-          }}
-        >
-          <TipTapEditor
-            onSend={onSendMessage}
-            disabled={loading}
-            placeholder="Message Sea Dragon Inkmortal..."
-            isGenerating={isGenerating}
-            onInsertCode={(handler) => {
-              // Just store the handler function from TipTap
-              console.log("Registering code insertion handler from TipTap");
-              codeInsertRef.current = handler;
-            }}
-            onInsertMath={(handler) => {
-              // Just store the handler function from TipTap
-              console.log("Registering math insertion handler from TipTap");
-              mathInsertRef.current = handler;
-            }}
-          />
+    <div className="relative flex flex-col h-full flex-grow overflow-hidden">
+      {/* Content area */}
+      <div className="flex-grow flex flex-col overflow-hidden">
+        {showEmptyState ? (
+          <EmptyConversationView onSendMessage={onSendMessage} />
+        ) : (
+          <>
+            {/* Messages area */}
+            <div className="flex-grow overflow-hidden">
+              <ChatWindow 
+                messages={messages}
+                loading={loading}
+                onRegenerate={onRegenerate}
+                onStopGeneration={onStopGeneration}
+                isGenerating={isGenerating}
+              />
+              <div ref={messagesEndRef} />
+            </div>
+          </>
+        )}
+        
+        {/* Input area - always visible */}
+        <div className="w-full">
+          {showFileUpload && (
+            <FileUploadArea
+              onFileSelect={handleFileSelect}
+              selectedFile={selectedFile}
+              setSelectedFile={setSelectedFile}
+              setShowFileUpload={setShowFileUpload}
+            />
+          )}
+          
+          <div className="relative border-t border-gray-200 dark:border-gray-700">
+            <TipTapEditor 
+              onSendMessage={onSendMessage}
+              loading={loading || isGenerating}
+              codeInsertRef={codeInsertRef}
+              mathInsertRef={mathInsertRef}
+            />
+            
+            <ChatActionBar 
+              onInsertCode={() => setCodeEditorOpen(true)}
+              onInsertMath={() => setMathEditorOpen(true)}
+              onShowLanguageSelector={() => setLanguageSelectorOpen(true)}
+              onToggleFileUpload={() => setShowFileUpload(!showFileUpload)}
+              showFileUpload={showFileUpload}
+            />
+          </div>
         </div>
       </div>
       
-      <div ref={messagesEndRef} />
-      
-      {/* Render the modals conditionally */}
+      {/* Modals */}
       {codeEditorOpen && (
-        <CodeEditor
-          onInsert={(code, language) => {
-            console.log("Code editor submitted with:", code, language);
-            // Format the code with markdown code block syntax
-            const formattedCode = `\`\`\`${language}\n${code}\n\`\`\``;
-            
-            // Use the ref to insert into the editor
-            if (codeInsertRef.current) {
-              console.log("Inserting code via ref:", formattedCode.substring(0, 30) + "...");
-              codeInsertRef.current(formattedCode);
-            } else {
-              console.error("codeInsertRef.current is not defined!");
-            }
-            
-            // Close the modal
-            setCodeEditorOpen(false);
-          }}
-          onClose={() => setCodeEditorOpen(false)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-5xl h-5/6 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+            <CodeEditor 
+              onClose={() => setCodeEditorOpen(false)}
+              onSave={handleCodeEditorSave}
+            />
+          </div>
+        </div>
       )}
       
       {mathEditorOpen && (
-        <MathExpressionEditor
-          onInsert={(latex) => {
-            console.log("Math editor submitted with:", latex);
-            // Format the LaTeX with display math syntax
-            const formattedMath = `$$${latex}$$`;
-            
-            // Use the ref to insert into the editor
-            if (mathInsertRef.current) {
-              console.log("Inserting math via ref:", formattedMath.substring(0, 30) + "...");
-              mathInsertRef.current(formattedMath);
-            } else {
-              console.error("mathInsertRef.current is not defined!");
-            }
-            
-            // Close the modal
-            setMathEditorOpen(false);
-          }}
-          onClose={() => setMathEditorOpen(false)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-4xl h-5/6 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+            <MathExpressionEditor 
+              onClose={() => setMathEditorOpen(false)}
+              onSave={handleMathEditorSave}
+            />
+          </div>
+        </div>
+      )}
+      
+      {languageSelectorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+            <LanguageSelector 
+              onClose={() => setLanguageSelectorOpen(false)}
+              onSelect={handleCodeSelected}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
