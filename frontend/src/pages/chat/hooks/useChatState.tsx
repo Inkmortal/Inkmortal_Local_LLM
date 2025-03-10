@@ -56,10 +56,7 @@ export interface ChatState {
 }
 
 // How frequently to poll for message updates in ms
-const MESSAGE_POLL_INTERVAL = 2000;
-
-// How frequently to refresh conversations list in ms
-const CONVERSATIONS_REFRESH_INTERVAL = 30000;
+const MESSAGE_POLL_INTERVAL = 3000;
 
 interface UseChatStateOptions {
   initialConversationId?: string;
@@ -91,26 +88,22 @@ export default function useChatState(
   const isMountedRef = useRef(true);
   const lastApiCallRef = useRef<number>(0);
   const pollingTimerRef = useRef<number | null>(null);
-  const conversationsTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const initialLoadDoneRef = useRef(false);
   
   // Editor refs for code and math
   const codeInsertRef = useRef<((codeSnippet: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((mathSnippet: string) => void) | undefined>(undefined);
   
-  // Load initial conversations
+  // Load initial conversations just once when component mounts - no polling
   useEffect(() => {
     isMountedRef.current = true;
-    loadConversations();
     
-    // Set up interval to refresh conversations
-    conversationsTimerRef.current = window.setInterval(() => {
-      // Only refresh if there hasn't been a recent API call
-      const timeSinceLastApiCall = Date.now() - lastApiCallRef.current;
-      if (timeSinceLastApiCall > CONVERSATIONS_REFRESH_INTERVAL / 2) {
-        loadConversations();
-      }
-    }, CONVERSATIONS_REFRESH_INTERVAL);
+    // Only do the initial load once - never poll for conversations
+    if (!initialLoadDoneRef.current) {
+      loadConversations();
+      initialLoadDoneRef.current = true;
+    }
     
     return () => {
       isMountedRef.current = false;
@@ -118,10 +111,6 @@ export default function useChatState(
       // Clear intervals and abort any pending requests
       if (pollingTimerRef.current) {
         window.clearInterval(pollingTimerRef.current);
-      }
-      
-      if (conversationsTimerRef.current) {
-        window.clearInterval(conversationsTimerRef.current);
       }
       
       if (abortControllerRef.current) {
@@ -134,25 +123,30 @@ export default function useChatState(
   useEffect(() => {
     if (activeConversationId) {
       loadConversationMessages(activeConversationId);
-    } else {
-      setMessages([]);
-      setIsGenerating(false);
-    }
-    
-    // Setup polling for message updates
-    if (pollingTimerRef.current) {
-      window.clearInterval(pollingTimerRef.current);
-    }
-    
-    if (activeConversationId) {
+      
+      // Setup polling for message updates - but only when we have an active conversation
+      if (pollingTimerRef.current) {
+        window.clearInterval(pollingTimerRef.current);
+      }
+      
       pollingTimerRef.current = window.setInterval(() => {
-        if (activeConversationId) {
-          // Only poll if we're not already loading
+        if (activeConversationId && isGenerating) {
+          // Only poll if we're not already loading AND there's an ongoing generation
           if (!isLoading && !isNetworkLoading) {
             checkForMessageUpdates(activeConversationId);
           }
         }
       }, MESSAGE_POLL_INTERVAL);
+    } else {
+      // Clear the messages when no active conversation
+      setMessages([]);
+      setIsGenerating(false);
+      
+      // Clear polling timer when no active conversation
+      if (pollingTimerRef.current) {
+        window.clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
+      }
     }
     
     return () => {
@@ -161,7 +155,7 @@ export default function useChatState(
         pollingTimerRef.current = null;
       }
     };
-  }, [activeConversationId]);
+  }, [activeConversationId, isGenerating]);
   
   // Set Generating status based on message state
   useEffect(() => {
@@ -227,7 +221,6 @@ export default function useChatState(
         setIsLoading(true);
       }
       
-      console.log(`Loading messages for conversation: ${conversationId}`);
       const conversationData = await getConversation(conversationId);
       
       if (!isMountedRef.current) return;
@@ -245,7 +238,7 @@ export default function useChatState(
         
         setMessages(formattedMessages);
       } else {
-        console.log(`No messages found for conversation: ${conversationId}`);
+        // If conversation not found, just clear messages
         setMessages([]);
       }
     } catch (error) {
@@ -329,12 +322,10 @@ export default function useChatState(
       
       // If this is a new conversation, create it on the backend first
       if (needsConversationCreation) {
-        console.log('Creating new conversation on backend');
         try {
           const newConv = await createConversation();
           if (newConv && newConv.conversation_id) {
             conversationId = newConv.conversation_id;
-            console.log(`Created new conversation: ${conversationId}`);
             // Update active conversation ID
             setActiveConversationId(conversationId);
           } else {
@@ -347,7 +338,6 @@ export default function useChatState(
       }
       
       // Now send the message with the confirmed conversation ID
-      console.log(`Sending message to conversation: ${conversationId}`);
       const result = await sendMessage(content, conversationId, fileData);
       
       if (!isMountedRef.current) return;
@@ -377,8 +367,10 @@ export default function useChatState(
           })
         );
         
-        // Load conversations to get updated list
-        await loadConversations();
+        // Load conversations to get updated list, but only if we created a new one
+        if (needsConversationCreation) {
+          await loadConversations();
+        }
       } else {
         throw new Error(result.error || 'Unknown error');
       }
@@ -499,7 +491,6 @@ export default function useChatState(
 
   // File handling
   const handleFileSelect = (file: File) => {
-    console.log(`Selected file: ${file.name}`);
     setSelectedFile(file);
   };
 
