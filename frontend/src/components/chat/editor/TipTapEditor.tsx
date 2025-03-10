@@ -11,19 +11,25 @@ import CodeEditor from '../../chat/editors/CodeEditor';
 import MessageParser from '../../chat/MessageParser';
 
 interface TipTapEditorProps {
-  onSend: (html: string) => void;
+  onSendMessage: (html: string) => void;
   disabled?: boolean;
+  loading?: boolean;
   placeholder?: string;
   isGenerating?: boolean;
+  codeInsertRef?: React.MutableRefObject<((codeSnippet: string) => void) | undefined>;
+  mathInsertRef?: React.MutableRefObject<((mathSnippet: string) => void) | undefined>;
   onInsertCode?: (codeSnippet: string) => void;
   onInsertMath?: (mathSnippet: string) => void;
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = ({
-  onSend,
+  onSendMessage,
   disabled = false,
+  loading = false,
   placeholder = "Type a message...",
   isGenerating = false,
+  codeInsertRef,
+  mathInsertRef,
   onInsertCode,
   onInsertMath,
 }) => {
@@ -71,9 +77,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     if (!editor || editor.isEmpty || disabled) return;
     
     const content = editor.getHTML();
-    onSend(content);
+    onSendMessage(content);
     editor.commands.clearContent();
-  }, [editor, onSend, disabled]);
+  }, [editor, onSendMessage, disabled]);
   
   // Handle submit with Enter (not Shift+Enter)
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -88,280 +94,193 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   };
 
   // Handler to open the math editor modal
-  const handleInsertMath = useCallback(() => {
+  const openMathEditor = () => {
     setMathEditorOpen(true);
-  }, []);
+  };
 
   // Handler to open the code editor modal
-  const handleInsertCode = useCallback(() => {
+  const openCodeEditor = () => {
     setCodeEditorOpen(true);
-  }, []);
+  };
 
-  // Register handlers for external components to open these modals with proper cleanup
+  // Register handlers in refs for external access
   useEffect(() => {
-    // Skip this effect if editor isn't ready
-    if (!editor) return;
-    
-    // Create persistent handlers that don't change on each render
-    if (onInsertMath && !mathHandlerRef.current) {
-      mathHandlerRef.current = (input: string) => {
-        if (input === "OPEN_MODAL") {
-          setMathEditorOpen(true);
-          return;
-        }
+    // If custom handlers provided as props via refs
+    if (mathInsertRef) {
+      mathInsertRef.current = (mathSnippet: string) => {
+        if (!editor) return;
         
-        // Only try to insert if editor exists and is mounted
-        if (editor && editor.isEditable) {
-          try {
-            // Extract latex from $$ delimiters if present
-            const latex = input.replace(/\$\$/g, '').trim();
-            
-            editor
-              .chain()
-              .focus()
-              .insertContent({
-                type: 'mathBlock',
-                content: [{ type: 'text', text: latex }]
-              })
-              // Add a newline after the block
-              .insertContent({ type: 'paragraph' })
-              .run();
-          } catch (error) {
-            console.error("Failed to insert math block:", error);
-          }
-        }
+        // Insert math node
+        editor.commands.insertContent({
+          type: 'math',
+          attrs: { value: mathSnippet }
+        });
       };
-      
-      // Register the persistent handler
-      onInsertMath(mathHandlerRef.current);
     }
     
-    if (onInsertCode && !codeHandlerRef.current) {
-      codeHandlerRef.current = (input: string) => {
-        if (input === "OPEN_MODAL") {
-          setCodeEditorOpen(true);
-          return;
-        }
+    if (codeInsertRef) {
+      codeInsertRef.current = (codeSnippet: string) => {
+        if (!editor) return;
         
-        // Only try to insert if editor exists and is mounted
-        if (editor && editor.isEditable) {
-          try {
-            // Extract language and code from markdown code block syntax if present
-            let language = 'javascript';
-            let code = input;
-            
-            const codeBlockMatch = input.match(/```([a-zA-Z0-9_]+)?\s*([\s\S]*?)```/);
-            if (codeBlockMatch) {
-              if (codeBlockMatch[1]) language = codeBlockMatch[1];
-              code = codeBlockMatch[2].trim();
-            }
-            
-            editor
-              .chain()
-              .focus()
-              .insertContent({
-                type: 'customCodeBlock',
-                attrs: { language },
-                content: [{ type: 'text', text: code }]
-              })
-              // Add a newline after the block
-              .insertContent({ type: 'paragraph' })
-              .run();
-          } catch (error) {
-            console.error("Failed to insert code block:", error);
-          }
-        }
+        // Insert code block
+        editor.commands.insertContent({
+          type: 'codeBlock',
+          attrs: { language: 'javascript' },
+          content: [{ type: 'text', text: codeSnippet }]
+        });
       };
-      
-      // Register the persistent handler
-      onInsertCode(codeHandlerRef.current);
     }
     
-    // Cleanup function to prevent memory leaks
-    return () => {
-      mathHandlerRef.current = null;
-      codeHandlerRef.current = null;
+    // Also register local handlers
+    mathHandlerRef.current = (value: string) => {
+      if (!editor) return;
+      
+      editor.commands.insertContent({
+        type: 'math',
+        attrs: { value }
+      });
     };
-  }, [editor, onInsertMath, onInsertCode]);
-
-  // Cleanup on unmount
-  useEffect(() => {
+    
+    codeHandlerRef.current = (code: string) => {
+      if (!editor) return;
+      
+      editor.commands.insertContent({
+        type: 'codeBlock', 
+        attrs: { language: 'javascript' },
+        content: [{ type: 'text', text: code }]
+      });
+    };
+    
     return () => {
-      if (editor) {
-        editor.destroy();
+      // Clean up references on unmount
+      if (mathInsertRef) {
+        mathInsertRef.current = undefined;
+      }
+      if (codeInsertRef) {
+        codeInsertRef.current = undefined;
       }
     };
-  }, [editor]);
-
-  const handleMathSubmit = (latex: string) => {
-    if (!latex.trim() || !editor) return;
-
-    try {
-      // Safe approach with manual content insertion
-      editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: 'mathBlock',
-          content: [{ type: 'text', text: latex.trim() }]
-        })
-        // Add a newline after the block
-        .insertContent({ type: 'paragraph' })
-        .run();
-      
-      setMathEditorOpen(false);
-    } catch (error) {
-      console.error("Error inserting math block:", error);
-      setMathEditorOpen(false);
+  }, [editor, mathInsertRef, codeInsertRef]);
+  
+  // Handler for math editor save
+  const handleSaveMath = (value: string) => {
+    if (mathHandlerRef.current) {
+      mathHandlerRef.current(value);
     }
-  };
-
-  const handleCodeSubmit = (code: string, language: string) => {
-    if (!code.trim() || !editor) return;
-    
-    try {
-      // Safe approach with manual content insertion
-      editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: 'customCodeBlock',
-          attrs: { language },
-          content: [{ type: 'text', text: code.trim() }]
-        })
-        // Add a newline after the block
-        .insertContent({ type: 'paragraph' })
-        .run();
-      
-      setCodeEditorOpen(false);
-    } catch (error) {
-      console.error("Error inserting code block:", error);
-      setCodeEditorOpen(false);
-    }
+    setMathEditorOpen(false);
   };
   
-  // Toggle preview mode
-  const togglePreviewMode = useCallback(() => {
-    setPreviewMode(!previewMode);
-  }, [previewMode]);
+  // Handler for code editor save
+  const handleSaveCode = (code: string) => {
+    if (codeHandlerRef.current) {
+      codeHandlerRef.current(code);
+    }
+    setCodeEditorOpen(false);
+  };
+  
+  // Allow custom code/math insertion from parent
+  useEffect(() => {
+    if (onInsertCode && !codeInsertRef) {
+      codeHandlerRef.current = onInsertCode;
+    }
+    if (onInsertMath && !mathInsertRef) {
+      mathHandlerRef.current = onInsertMath;
+    }
+  }, [onInsertCode, onInsertMath, codeInsertRef, mathInsertRef]);
 
   return (
-    <div className="relative">
-      <div
-        className="relative rounded-2xl overflow-hidden transition-all duration-300"
+    <>
+      <div 
+        className="flex flex-col rounded-md backdrop-blur-sm overflow-hidden"
         style={{
-          backgroundColor: currentTheme.colors.bgSecondary,
-          boxShadow: `0 0 0 1px ${currentTheme.colors.borderColor}40, 0 4px 16px rgba(0,0,0,0.08)`,
+          borderRadius: '0.5rem',
+          backgroundColor: currentTheme.isDark 
+            ? `${currentTheme.colors.bgSecondary}80` 
+            : `${currentTheme.colors.bgSecondary}95`,
+          border: `1px solid ${currentTheme.colors.borderColor}40`,
         }}
       >
-        {/* Ambient gradient effects */}
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle at 20% 20%, ${currentTheme.colors.accentPrimary}30 0%, transparent 70%),
-              radial-gradient(circle at 80% 80%, ${currentTheme.colors.accentSecondary}30 0%, transparent 70%)
-            `,
-          }}
-        />
-        
-        {/* Top highlight bar */}
-        <div
-          className="absolute top-0 left-0 right-0 h-0.5"
-          style={{
-            background: `linear-gradient(to right, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary}, ${currentTheme.colors.accentPrimary})`,
-            backgroundSize: '200% 100%',
-            animation: 'gradientAnimation 6s ease infinite'
-          }}
-        />
-        
-        {/* Editor content or Preview depending on mode */}
-        <div className="relative z-10" ref={editorContentRef}>
-          {previewMode ? (
-            <div
-              className="p-3 min-h-[80px] max-h-[300px] overflow-auto scrollbar-thin whitespace-pre-wrap break-words"
-              style={{ color: currentTheme.colors.textPrimary }}
-            >
-              {editor && !editor.isEmpty ? (
-                <MessageParser content={editor.getHTML()} />
-              ) : (
-                <div className="text-gray-400 italic">Nothing to preview</div>
-              )}
-            </div>
-          ) : (
-            <EditorContent
-              editor={editor}
-              onKeyDown={handleKeyDown}
-            />
-          )}
-        </div>
-        
-        {/* Bottom toolbar */}
-        <div className="px-3 pb-2.5 pt-1 flex justify-between items-center border-t"
-          style={{ borderColor: `${currentTheme.colors.borderColor}30` }}
-        >
-          <EditorToolbar
+        {/* Toolbar - visible only when editor has content or is focused */}
+        {editor && (
+          <EditorToolbar 
             editor={editor}
-            previewMode={previewMode}
-            onTogglePreview={togglePreviewMode}
-            onInsertMath={handleInsertMath}
-            onInsertCode={handleInsertCode}
+            onMathClick={openMathEditor}
+            onCodeClick={openCodeEditor}
+            showPreview={previewMode}
+            onTogglePreview={() => setPreviewMode(!previewMode)}
           />
-          
-          <button
-            disabled={disabled || editor?.isEmpty}
-            className={`rounded-full py-2 px-4 transition-all ${
-              editor?.isEmpty || disabled ? 'opacity-50' : 'opacity-100 hover:scale-[1.03] hover:shadow-lg active:scale-[0.97]'
-            }`}
-            style={{ 
-              background: !editor?.isEmpty && !disabled
-                ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 
-                : `${currentTheme.colors.bgTertiary}`,
-              color: !editor?.isEmpty && !disabled ? '#fff' : currentTheme.colors.textMuted,
-              boxShadow: !editor?.isEmpty && !disabled ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
-            }}
-            onClick={handleSendClick}
+        )}
+        
+        {/* Preview mode - renders editor content as Markdown */}
+        {previewMode && editor ? (
+          <div className="p-3 min-h-[100px] max-h-[300px] overflow-auto scrollbar-thin prose prose-sm">
+            <MessageParser content={editor.getHTML()} />
+          </div>
+        ) : (
+          <div 
+            ref={editorContentRef}
+            className="transition-shadow duration-200 rounded-md"
+            onKeyDown={handleKeyDown}
           >
-            <div className="flex items-center text-sm font-medium">
-              {isGenerating ? (
-                <>
-                  <span className="mr-1.5">Generating</span>
-                  <div className="flex space-x-1 mt-0.5">
-                    <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s' }}></div>
-                    <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s', animationDelay: '0.15s' }}></div>
-                    <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s', animationDelay: '0.3s' }}></div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span>Send</span>
-                  <svg className="ml-1.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                </>
-              )}
-            </div>
+            {/* TipTap Editor */}
+            <EditorContent editor={editor} />
+          </div>
+        )}
+        
+        {/* Send button */}
+        <div className="flex justify-between items-center p-2 border-t" style={{ borderColor: `${currentTheme.colors.borderColor}30` }}>
+          <div className="text-xs opacity-60" style={{ color: currentTheme.colors.textMuted }}>
+            Press <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: `${currentTheme.colors.bgTertiary}80` }}>Enter</kbd> to send
+          </div>
+          <button
+            onClick={handleSendClick}
+            disabled={!editor || editor.isEmpty || disabled || loading || isGenerating}
+            className="px-3 py-1 rounded-md flex items-center justify-center transition-all duration-200"
+            style={{
+              backgroundColor: (!editor || editor.isEmpty || disabled || loading || isGenerating)
+                ? `${currentTheme.colors.borderColor}40`
+                : currentTheme.colors.accentPrimary,
+              color: (!editor || editor.isEmpty || disabled || loading || isGenerating)
+                ? currentTheme.colors.textMuted
+                : '#fff',
+              opacity: (!editor || editor.isEmpty || disabled || loading || isGenerating) ? 0.7 : 1,
+              cursor: (!editor || editor.isEmpty || disabled || loading || isGenerating) ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span className="mr-1">Send</span>
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M22 2L11 13" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         </div>
       </div>
       
-      {/* Math expression editor modal */}
+      {/* Math editor modal */}
       {mathEditorOpen && (
-        <MathExpressionEditor
-          onSubmit={handleMathSubmit}
-          onClose={() => setMathEditorOpen(false)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+            <MathExpressionEditor
+              onClose={() => setMathEditorOpen(false)}
+              onSave={handleSaveMath}
+            />
+          </div>
+        </div>
       )}
       
       {/* Code editor modal */}
       {codeEditorOpen && (
-        <CodeEditor
-          onSubmit={handleCodeSubmit}
-          onClose={() => setCodeEditorOpen(false)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-5xl h-5/6 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden">
+            <CodeEditor
+              onClose={() => setCodeEditorOpen(false)}
+              onSave={handleSaveCode}
+            />
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 };
 
-export default React.memo(TipTapEditor);
+export default TipTapEditor;
