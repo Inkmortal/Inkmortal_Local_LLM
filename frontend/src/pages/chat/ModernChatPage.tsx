@@ -60,10 +60,9 @@ const ModernChatPage: React.FC = () => {
     
     const initConversation = async () => {
       try {
-        // First, always load the conversation list
-        await chatState.loadConversations();
+        // Do NOT call loadConversations here - it's already handled in useChatState
         
-        // Then handle specific cases
+        // Handle specific cases based on URL/existing conversation
         if (conversationId) {
           // For existing conversation ID from URL, check if it exists in our list
           const conversationExists = chatState.conversations.some(
@@ -89,6 +88,7 @@ const ModernChatPage: React.FC = () => {
         
         hasInitializedRef.current = true;
       } catch (error) {
+        console.error('Error initializing conversation:', error);
         // In case of error, reset to empty state
         chatState.startNewConversation();
         hasInitializedRef.current = true;
@@ -98,7 +98,7 @@ const ModernChatPage: React.FC = () => {
     // Run initialization
     initConversation();
     
-  }, [isAuthenticated, conversationId, chatState, navigate]);
+  }, [isAuthenticated, conversationId, navigate]); // Removed chatState from dependencies
 
   // Handler for selecting a conversation
   const handleSelectConversation = (conversationId: string) => {

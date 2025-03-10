@@ -575,15 +575,18 @@ function checkMessageStatus(
 }
 
 /**
- * Main message sending function that chooses the appropriate implementation
- * @param params Request parameters including message and optional conversation ID and file
- * @returns Promise with the chat response
+ * Main message sending function with enhanced streaming support via WebSockets
+ * @param message The message content to send
+ * @param conversationId Optional conversation ID
+ * @param file Optional file data to include
+ * @param handlers Optional callback handlers for message events
+ * @returns Promise with the chat response or void if handlers are provided
  */
 export async function sendMessage(
   message: string, 
   conversationId?: string, 
   file?: any, 
-  options?: {mode?: ChatMode}
+  handlers?: Partial<MessageStreamHandlers>
 ): Promise<ChatResponse> {
   console.log(`MessageService: Sending message with conversation ID: ${conversationId}`);
   
@@ -591,75 +594,179 @@ export async function sendMessage(
   const params: ChatRequestParams = {
     message,
     conversation_id: conversationId,
-    file: file ? file : undefined,
-    mode: options?.mode || ChatMode.STREAMING
+    file: file ? file : undefined
   };
   
-  if (params.mode === ChatMode.STREAMING) {
-    try {
-      console.log('Attempting to use streaming mode');
+  try {
+    console.log('Establishing WebSocket connection for streaming');
+    
+    // Get auth token
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      console.error('No auth token found');
+      throw new Error('Authentication required');
+    }
+    
+    // Always try to ensure WebSocket connection is available
+    if (!webSocketAvailable) {
+      const connected = await ensureWebSocketConnection(token);
+      webSocketAvailable = connected;
       
-      // Get auth token
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        console.log('No auth token found, falling back to polling');
-        return sendMessagePolling(params);
+      if (!connected) {
+        console.error('WebSocket connection failed');
+        throw new Error('Failed to establish real-time connection');
       }
+    }
+    
+    // If we have handlers, use streaming mode with callbacks
+    if (handlers) {
+      // Create full handlers with defaults for any missing callbacks
+      const fullHandlers: MessageStreamHandlers = {
+        onStart: handlers.onStart || (() => {}),
+        onStatusUpdate: handlers.onStatusUpdate || (() => {}),
+        onToken: handlers.onToken || (() => {}),
+        onComplete: handlers.onComplete || (() => {}),
+        onError: handlers.onError || ((error) => console.error(error))
+      };
       
-      // Check if WebSocket is available or can be connected
-      if (!webSocketAvailable) {
-        const connected = await ensureWebSocketConnection(token);
-        webSocketAvailable = connected;
-        
-        if (!connected) {
-          console.log('WebSocket connection failed, falling back to polling');
-          return sendMessagePolling(params);
-        }
-      }
-      
-      // Use streaming implementation via Promise
-      return new Promise((resolve, reject) => {
-        // Set timeout to prevent hanging
-        const timeoutId = setTimeout(() => {
-          console.error('Streaming timed out, falling back to polling');
-          // Clear handlers to avoid double resolution
-          const originalHandlers = { ...handlers };
-          handlers.onComplete = undefined;
-          handlers.onError = undefined;
+      // Send initial message via API
+      const response = await executeServiceCall(
+        async () => {
+          // Notify start
+          fullHandlers.onStart();
           
-          // Fall back to polling
-          sendMessagePolling(params)
-            .then(resolve)
-            .catch(reject);
-        }, 30000); // 30 second timeout
+          // Prepare the request
+          const endpoint = '/api/chat/message';
+          let requestOptions: RequestInit;
+          
+          if (params.file) {
+            // Use FormData for file uploads
+            const formData = new FormData();
+            formData.append('message', params.message);
+            formData.append('file', params.file);
+            
+            if (params.conversation_id) {
+              formData.append('conversation_id', params.conversation_id);
+            }
+            
+            requestOptions = {
+              method: 'POST',
+              body: formData,
+            };
+          } else {
+            // Regular JSON request
+            requestOptions = {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: params.message,
+                conversation_id: params.conversation_id,
+              }),
+            };
+          }
+          
+          // Send the initial request
+          const response = await fetchApi<ChatResponse>(endpoint, requestOptions);
+          
+          // Handle API response
+          const result = handleApiResponse(response);
+          if (result.success && result.data) {
+            return result.data;
+          } else {
+            throw new Error(result.error || 'Failed to send message');
+          }
+        },
+        null
+      );
+      
+      if (!response) {
+        throw new Error('No response from message API');
+      }
+      
+      // Register for WebSocket updates for this message
+      const messageId = response.id;
+      
+      // Register handler for WebSocket updates
+      const unregisterHandler = registerMessageHandler(messageId, (update: MessageUpdateEvent) => {
+        // Convert status string to enum if needed
+        let status: MessageStatus;
+        if (update.status === 'QUEUED') status = MessageStatus.QUEUED;
+        else if (update.status === 'PROCESSING') status = MessageStatus.PROCESSING;
+        else if (update.status === 'STREAMING') status = MessageStatus.STREAMING;
+        else if (update.status === 'COMPLETE') status = MessageStatus.COMPLETE;
+        else if (update.status === 'ERROR') status = MessageStatus.ERROR;
+        else status = MessageStatus.SENDING;
         
-        // Define handlers
-        const handlers: MessageStreamHandlers = {
+        // Handle different statuses
+        if (status === MessageStatus.QUEUED || status === MessageStatus.PROCESSING) {
+          // Update queue position
+          fullHandlers.onStatusUpdate(status, update.queue_position);
+        }
+        else if (status === MessageStatus.STREAMING) {
+          // Start streaming mode
+          fullHandlers.onStatusUpdate(MessageStatus.STREAMING);
+          
+          // Handle streaming content with token batching
+          if (update.assistant_content && update.assistant_content.length > 0) {
+            fullHandlers.onToken(update.assistant_content);
+          }
+        }
+        else if (status === MessageStatus.COMPLETE && update.assistant_content) {
+          // Create complete response object
+          const completeResponse: ChatResponse = {
+            id: update.assistant_message_id || messageId,
+            conversation_id: update.conversation_id,
+            content: update.assistant_content,
+            created_at: new Date().toISOString(),
+            role: 'assistant',
+            status: MessageStatus.COMPLETE
+          };
+          
+          // Call complete handler with final content
+          fullHandlers.onComplete(completeResponse);
+          unregisterHandler();
+        }
+        else if (status === MessageStatus.ERROR) {
+          // Handle error
+          fullHandlers.onError(update.error || 'Unknown error');
+          unregisterHandler();
+        }
+      });
+      
+      // Return a placeholder response since handlers will be used
+      return {
+        id: response.id,
+        conversation_id: response.conversation_id,
+        content: '',
+        created_at: new Date().toISOString(),
+        role: 'assistant',
+        status: MessageStatus.PROCESSING
+      };
+    } else {
+      // If no handlers provided, use Promise-based approach
+      return new Promise((resolve, reject) => {
+        // Define handlers for promise-based usage
+        const promiseHandlers: MessageStreamHandlers = {
+          onStart: () => {},
+          onStatusUpdate: () => {},
+          onToken: () => {},
           onComplete: (response) => {
-            clearTimeout(timeoutId);
             resolve(response);
           },
           onError: (error) => {
-            clearTimeout(timeoutId);
-            console.warn('Streaming error, falling back to polling:', error);
-            
-            // Try polling as fallback for errors
-            sendMessagePolling(params)
-              .then(resolve)
-              .catch(reject);
+            reject(new Error(error));
           }
         };
         
-        // Start streaming
-        sendMessageStreaming(params, handlers);
+        // Call self with handlers
+        sendMessage(message, conversationId, file, promiseHandlers)
+          .catch(reject);
       });
-    } catch (error) {
-      console.warn('WebSocket error, falling back to polling:', error);
-      return sendMessagePolling(params);
     }
-  } else {
-    // Use polling implementation
-    console.log('Using polling message mode (explicitly requested)');
-    return sendMessagePolling(params);
+  } catch (error) {
+    console.error('Error in message send flow:', error);
+    throw error;
   }
 }

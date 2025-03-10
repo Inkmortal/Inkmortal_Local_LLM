@@ -5,6 +5,60 @@ import { sendMessage } from '../../../services/chat/messageService';
 import { getConversation, listConversations, createConversation } from '../../../services/chat/conversationService';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
 
+// Token Buffer Manager for efficient UI updates
+class TokenBufferManager {
+  private buffer: string = '';
+  private timeoutId: number | null = null;
+  private updateCallback: (tokens: string) => void;
+  private flushDelay: number;
+  private maxBufferSize: number;
+
+  constructor(
+    updateCallback: (tokens: string) => void,
+    options: { flushDelay?: number; maxBufferSize?: number } = {}
+  ) {
+    this.updateCallback = updateCallback;
+    this.flushDelay = options.flushDelay || 100; // ms
+    this.maxBufferSize = options.maxBufferSize || 50; // characters
+  }
+
+  // Add tokens to buffer
+  addTokens(tokens: string): void {
+    this.buffer += tokens;
+    
+    // Flush buffer if it exceeds max size
+    if (this.buffer.length >= this.maxBufferSize) {
+      this.flush();
+      return;
+    }
+    
+    // Schedule flush if not already scheduled
+    if (this.timeoutId === null) {
+      this.timeoutId = window.setTimeout(() => {
+        this.flush();
+      }, this.flushDelay);
+    }
+  }
+
+  // Force flush buffer immediately
+  flush(): void {
+    if (this.buffer.length > 0) {
+      this.updateCallback(this.buffer);
+      this.buffer = '';
+    }
+    
+    if (this.timeoutId !== null) {
+      window.clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+  }
+
+  // Clean up resources
+  dispose(): void {
+    this.flush();
+  }
+}
+
 export interface ChatState {
   messages: Message[];
   conversations: Conversation[];
@@ -48,9 +102,6 @@ export interface ChatState {
   queuePosition: number;
 }
 
-// How frequently to poll for message updates in ms
-const MESSAGE_POLL_INTERVAL = 3000;
-
 interface UseChatStateOptions {
   initialConversationId?: string;
 }
@@ -79,16 +130,15 @@ export default function useChatState(
   
   // Refs
   const isMountedRef = useRef(true);
-  const lastApiCallRef = useRef<number>(0);
-  const pollingTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const initialLoadDoneRef = useRef(false);
+  const tokenBufferRef = useRef<TokenBufferManager | null>(null);
   
   // Editor refs for code and math
   const codeInsertRef = useRef<((codeSnippet: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((mathSnippet: string) => void) | undefined>(undefined);
   
-  // Load initial conversations only once at startup - with explicit user control 
+  // Load initial conversations only once at startup 
   useEffect(() => {
     // Set isMountedRef 
     isMountedRef.current = true;
@@ -102,59 +152,36 @@ export default function useChatState(
     return () => {
       isMountedRef.current = false;
       
-      // Clear any polling timers
-      if (pollingTimerRef.current) {
-        window.clearInterval(pollingTimerRef.current);
-        pollingTimerRef.current = null;
-      }
-      
       // Abort any pending requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
+      }
+      
+      // Clean up token buffer
+      if (tokenBufferRef.current) {
+        tokenBufferRef.current.dispose();
+        tokenBufferRef.current = null;
       }
     };
   }, []);
   
   // Load messages when conversation changes
   useEffect(() => {
-    // Clear any existing polling timer
-    if (pollingTimerRef.current) {
-      window.clearInterval(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
-    
     if (activeConversationId) {
       // Load conversation messages
       loadConversationMessages(activeConversationId);
-      
-      // Only set up polling if we have an active generation
-      if (isGenerating) {
-        pollingTimerRef.current = window.setInterval(() => {
-          if (activeConversationId && isGenerating && !isLoading && !isNetworkLoading) {
-            checkForMessageUpdates(activeConversationId);
-          }
-        }, MESSAGE_POLL_INTERVAL);
-      }
     } else {
       // If no active conversation, clear messages
       setMessages([]);
     }
-    
-    // Cleanup on unmount or conversation change
-    return () => {
-      if (pollingTimerRef.current) {
-        window.clearInterval(pollingTimerRef.current);
-        pollingTimerRef.current = null;
-      }
-    };
-  }, [activeConversationId, isGenerating]);
+  }, [activeConversationId]);
   
   // Update isGenerating when messages change
   useEffect(() => {
     // Check if any messages are still being generated
     const hasGeneratingMessages = messages.some(
-      msg => msg.status === MessageStatus.QUEUED || msg.status === MessageStatus.PROCESSING
+      msg => msg.status === MessageStatus.QUEUED || msg.status === MessageStatus.PROCESSING || msg.status === MessageStatus.STREAMING
     );
     
     // Only set if it changed to prevent re-renders
@@ -168,9 +195,6 @@ export default function useChatState(
     if (isNetworkLoading) return; // Prevent concurrent calls
     
     try {
-      // Update last API call time
-      lastApiCallRef.current = Date.now();
-      
       if (isMountedRef.current) {
         setIsNetworkLoading(true);
       }
@@ -192,7 +216,7 @@ export default function useChatState(
     } catch (error) {
       console.error('Error loading conversations:', error);
       if (isMountedRef.current) {
-        // Keep existing conversations on error
+        showError('Failed to load conversations. Please refresh the page to try again.');
       }
     } finally {
       if (isMountedRef.current) {
@@ -212,9 +236,6 @@ export default function useChatState(
     abortControllerRef.current = new AbortController();
     
     try {
-      // Update last API call time
-      lastApiCallRef.current = Date.now();
-      
       if (isMountedRef.current) {
         setIsLoading(true);
       }
@@ -238,12 +259,13 @@ export default function useChatState(
       } else {
         // If conversation not found, just clear messages
         setMessages([]);
+        showError('Conversation could not be loaded');
       }
     } catch (error) {
       console.error('Error loading conversation messages:', error);
       if (isMountedRef.current) {
-        // Set empty messages on error
         setMessages([]);
+        showError('Failed to load conversation messages');
       }
     } finally {
       if (isMountedRef.current) {
@@ -252,24 +274,10 @@ export default function useChatState(
     }
   };
   
-  // Function to check for message updates - only called during active generation
-  const checkForMessageUpdates = async (conversationId: string) => {
-    // Skip if not generating or already loading
-    if (!isGenerating || isLoading || isNetworkLoading) return;
-    
-    // Check for in-progress messages
-    const inProgressMessages = messages.filter(
-      msg => msg.status !== MessageStatus.COMPLETE && msg.status !== MessageStatus.ERROR
-    );
-    
-    if (inProgressMessages.length === 0) return;
-    
-    // Update message statuses by reloading the conversation
-    await loadConversationMessages(conversationId);
-  };
-  
-  // Function to handle sending a new message
+  // Function to handle sending a new message with streaming support
   const handleSendMessage = async (content: string, file: File | null = null) => {
+    if (!content.trim() && !file) return; // Don't send empty messages
+    
     // Create a message ID for optimistic UI updates
     const messageId = uuidv4();
     const now = new Date();
@@ -324,6 +332,7 @@ export default function useChatState(
       // Create a new conversation first if needed
       if (needsConversationCreation) {
         try {
+          showInfo('Creating new conversation...');
           const newConv = await createConversation();
           if (newConv && newConv.conversation_id) {
             conversationId = newConv.conversation_id;
@@ -333,47 +342,145 @@ export default function useChatState(
           }
         } catch (error) {
           console.error('Error creating conversation:', error);
-          throw error;
+          throw new Error('Failed to create a new conversation. Please try again.');
         }
       }
       
-      // Send the message
-      const result = await sendMessage(content, conversationId, fileData);
-      
-      if (!isMountedRef.current) return;
-      
-      if (result.id) {
-        // Update messages with real IDs
-        setMessages(prevMessages => 
-          prevMessages.map(msg => {
-            if (msg.id === messageId) {
-              return { 
-                ...msg, 
-                id: result.id || msg.id, 
-                conversationId: conversationId || msg.conversationId, 
-                status: MessageStatus.COMPLETE 
-              };
-            }
-            if (msg.id === `assistant-${messageId}`) {
-              return { 
-                ...msg, 
-                conversationId: conversationId || msg.conversationId, 
-                status: MessageStatus.PROCESSING 
-              };
-            }
-            return msg;
-          })
-        );
+      // Initialize token buffer manager for this message
+      tokenBufferRef.current = new TokenBufferManager((tokens) => {
+        if (!isMountedRef.current) return;
         
-        // Load conversations list once if we created a new conversation
-        if (needsConversationCreation) {
-          await loadConversations();
+        setMessages(prev => {
+          const assistantMsg = prev.find(msg => 
+            msg.id === `assistant-${messageId}` && 
+            (msg.status === MessageStatus.STREAMING || msg.status === MessageStatus.PROCESSING)
+          );
+          
+          if (assistantMsg) {
+            return prev.map(msg => 
+              msg.id === assistantMsg.id 
+                ? { ...msg, content: msg.content + tokens } 
+                : msg
+            );
+          }
+          return prev;
+        });
+      }, { flushDelay: 100, maxBufferSize: 50 });
+      
+      // Send the message with streaming handlers
+      await sendMessage(
+        content, 
+        conversationId, 
+        fileData, 
+        {
+          onStart: () => {
+            if (!isMountedRef.current) return;
+            
+            // Update user message status
+            setMessages(prevMessages => 
+              prevMessages.map(msg => 
+                msg.id === messageId ? { ...msg, status: MessageStatus.COMPLETE } : msg
+              )
+            );
+          },
+          onStatusUpdate: (status, position) => {
+            if (!isMountedRef.current) return;
+            
+            // Update queue position if needed
+            if (position !== undefined) {
+              setQueuePosition(position);
+            }
+            
+            // Update UI state based on status
+            if (status === MessageStatus.QUEUED) {
+              setIsQueueLoading(true);
+              setIsProcessing(false);
+            } else if (status === MessageStatus.PROCESSING) {
+              setIsQueueLoading(false);
+              setIsProcessing(true);
+            } else if (status === MessageStatus.STREAMING) {
+              setIsQueueLoading(false);
+              setIsProcessing(false);
+            }
+            
+            // Update assistant message status
+            setMessages(prevMessages => 
+              prevMessages.map(msg => 
+                msg.id === `assistant-${messageId}` ? { ...msg, status } : msg
+              )
+            );
+          },
+          onToken: (token) => {
+            if (!isMountedRef.current) return;
+            
+            // Add tokens to buffer manager to optimize rendering
+            if (tokenBufferRef.current) {
+              tokenBufferRef.current.addTokens(token);
+            }
+          },
+          onComplete: (response) => {
+            if (!isMountedRef.current) return;
+            
+            // Flush any remaining tokens
+            if (tokenBufferRef.current) {
+              tokenBufferRef.current.flush();
+              tokenBufferRef.current = null;
+            }
+            
+            // Reset UI state
+            setIsQueueLoading(false);
+            setIsProcessing(false);
+            setQueuePosition(0);
+            
+            // Update messages with final content
+            setMessages(prevMessages => 
+              prevMessages.map(msg => {
+                if (msg.id === `assistant-${messageId}`) {
+                  return {
+                    ...msg,
+                    id: response.id || msg.id,
+                    content: response.content,
+                    status: MessageStatus.COMPLETE
+                  };
+                }
+                return msg;
+              })
+            );
+          },
+          onError: (error) => {
+            console.error('Error sending message:', error);
+            
+            if (isMountedRef.current) {
+              // Update messages to show error
+              setMessages(prevMessages =>
+                prevMessages.map(msg => {
+                  if (msg.id === messageId) {
+                    return { ...msg, status: MessageStatus.ERROR };
+                  }
+                  if (msg.id === `assistant-${messageId}`) {
+                    return { ...msg, status: MessageStatus.ERROR, content: 'Failed to generate response' };
+                  }
+                  return msg;
+                })
+              );
+              
+              // Reset UI state
+              setIsQueueLoading(false);
+              setIsProcessing(false);
+              setQueuePosition(0);
+              
+              showError('Failed to send message. Please try again.');
+            }
+          }
         }
-      } else {
-        throw new Error(result.error || 'Unknown error');
+      );
+      
+      // Load conversations list once if we created a new conversation
+      if (needsConversationCreation) {
+        await loadConversations();
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error in message send flow:', error);
       
       if (isMountedRef.current) {
         // Update messages to show error
@@ -396,13 +503,17 @@ export default function useChatState(
   
   // Function to regenerate the last assistant message
   const handleRegenerateLastMessage = async () => {
-    if (!activeConversationId) return;
+    if (!activeConversationId) {
+      showError('No active conversation to regenerate');
+      return;
+    }
     
     // Find the last user message
     const lastUserMessageIndex = [...messages].reverse().findIndex(msg => msg.role === 'user');
     
     if (lastUserMessageIndex === -1) {
-      return; // No user message found
+      showError('No user message found to regenerate from');
+      return;
     }
     
     // Get the actual index in the messages array
@@ -426,32 +537,12 @@ export default function useChatState(
     setMessages([...truncatedMessages, assistantMessage]);
     
     try {
-      // Send regeneration request
-      const result = await sendMessage(userMessage.content, activeConversationId, null, {
-        mode: 'regenerate',
-      });
-      
-      if (!isMountedRef.current) return;
-      
-      if (!result.id) {
-        throw new Error(result.error || 'Unknown error during regeneration');
-      }
-      
-      // Polling will update the messages
+      // Handle regeneration like a normal message
+      await handleSendMessage(userMessage.content, null);
     } catch (error) {
       console.error('Error regenerating response:', error);
       
       if (isMountedRef.current) {
-        // Update assistant message to show error
-        setMessages(prevMessages =>
-          prevMessages.map(msg => {
-            if (msg.id === assistantMessage.id) {
-              return { ...msg, status: MessageStatus.ERROR, content: 'Failed to regenerate response' };
-            }
-            return msg;
-          })
-        );
-        
         showError('Failed to regenerate response. Please try again.');
       }
     }
@@ -463,7 +554,9 @@ export default function useChatState(
       // Mark all in-progress messages as complete
       setMessages(prevMessages =>
         prevMessages.map(msg => {
-          if (msg.status === MessageStatus.PROCESSING || msg.status === MessageStatus.QUEUED) {
+          if (msg.status === MessageStatus.PROCESSING || 
+              msg.status === MessageStatus.QUEUED || 
+              msg.status === MessageStatus.STREAMING) {
             return { ...msg, status: MessageStatus.COMPLETE, content: msg.content + ' [Stopped]' };
           }
           return msg;
@@ -471,6 +564,14 @@ export default function useChatState(
       );
       
       setIsGenerating(false);
+      setIsQueueLoading(false);
+      setIsProcessing(false);
+      
+      // Clean up token buffer
+      if (tokenBufferRef.current) {
+        tokenBufferRef.current.dispose();
+        tokenBufferRef.current = null;
+      }
     }
   };
   
