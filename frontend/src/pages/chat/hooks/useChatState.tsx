@@ -63,6 +63,10 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
   // Track if WebSocket is initialized
   const wsInitializedRef = useRef(false);
   
+  // Add refs for code and math insertion
+  const codeInsertRef = useRef<((code: string) => void) | undefined>(undefined);
+  const mathInsertRef = useRef<((math: string) => void) | undefined>(undefined);
+  
   // On mount, initialize WebSocket connection
   useEffect(() => {
     isMountedRef.current = true;
@@ -552,6 +556,20 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     setSelectedFile(file);
   };
   
+  // Stub methods for code and math insertion
+  const handleInsertCode = (language?: string) => {
+    console.log("Insert code requested - stubbed implementation", language);
+  };
+  
+  const handleInsertMath = (formula?: string) => {
+    console.log("Insert math requested - stubbed implementation", formula);
+  };
+  
+  // Stub method for stopping generation
+  const handleStopGeneration = () => {
+    console.log("Stop generation requested - stubbed implementation");
+  };
+  
   // Return the hook API
   return {
     messages,
@@ -572,6 +590,23 @@ export const useChatState = ({ initialConversationId }: UseChatStateProps = {}) 
     loadConversations,
     createNewConversation,
     handleFileSelect,
-    setShowFileUpload
+    setShowFileUpload,
+    
+    // Add aliases for compatibility
+    handleSendMessage: sendUserMessage,
+    handleRegenerate: retryMessage,
+    handleStopGeneration,
+    switchConversation: loadConversation,
+    
+    // Expose refs for code and math editors
+    codeInsertRef,
+    mathInsertRef,
+    
+    // Expose stub methods
+    handleInsertCode,
+    handleInsertMath
   };
 };
+
+// Export the hook as default
+export default useChatState;

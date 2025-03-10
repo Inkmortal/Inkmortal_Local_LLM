@@ -116,6 +116,15 @@ class ConversationUpdate(BaseModel):
 # Create router
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+# Create a FastAPI dependency for the queue manager
+async def get_queue() -> QueueManagerInterface:
+    """Get the queue manager instance"""
+    queue_manager = get_queue_manager()
+    # Ensure the manager is connected if not in test mode
+    if not settings.is_testing:
+        await queue_manager.ensure_connected()
+    return queue_manager
+
 # WebSocket connection manager
 class ConnectionManager:
     def __init__(self):
@@ -308,14 +317,7 @@ async def get_message_status(
     }
 
 
-# Create a FastAPI dependency for the queue manager
-async def get_queue() -> QueueManagerInterface:
-    """Get the queue manager instance"""
-    queue_manager = get_queue_manager()
-    # Ensure the manager is connected if not in test mode
-    if not settings.is_testing:
-        await queue_manager.ensure_connected()
-    return queue_manager
+# Note: get_queue is defined at the top of the file
 
 
 @router.post("/conversation", response_model=Dict[str, str])
