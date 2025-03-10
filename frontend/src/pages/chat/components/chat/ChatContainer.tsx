@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ChatWindow from '../../../../components/chat/ChatWindow';
-import TipTapEditor from '../../../../components/chat/editor/TipTapEditor';
+import TipTapEditor
+import ChatInput from '../../../../components/chat/ChatInput'; from '../../../../components/chat/editor/TipTapEditor';
 import FileUploadArea from './FileUploadArea';
 import ChatActionBar from './ChatActionBar';
 import { Message } from '../../types/chat';
@@ -87,7 +88,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       {/* Content area */}
       <div className="flex-grow flex flex-col overflow-hidden">
         {showEmptyState ? (
-          <EmptyConversationView onSendMessage={onSendMessage} />
+          <EmptyConversationView onSend={onSendMessage} />
         ) : (
           <>
             {/* Messages area */}
@@ -117,7 +118,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           
           <div className="relative border-t border-gray-200 dark:border-gray-700">
             <TipTapEditor 
-              onSendMessage={onSendMessage}
+              onSend={onSendMessage}
               loading={loading || isGenerating}
               codeInsertRef={codeInsertRef}
               mathInsertRef={mathInsertRef}

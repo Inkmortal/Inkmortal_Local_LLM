@@ -11,7 +11,7 @@ import CodeEditor from '../../chat/editors/CodeEditor';
 import MessageParser from '../../chat/MessageParser';
 
 interface TipTapEditorProps {
-  onSendMessage: (html: string) => void;
+  onSend: (html: string) => void;
   disabled?: boolean;
   loading?: boolean;
   placeholder?: string;
@@ -23,7 +23,7 @@ interface TipTapEditorProps {
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = ({
-  onSendMessage,
+  onSend,
   disabled = false,
   loading = false,
   placeholder = "Type a message...",
@@ -77,9 +77,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     if (!editor || editor.isEmpty || disabled) return;
     
     const content = editor.getHTML();
-    onSendMessage(content);
+    onSend(content);
     editor.commands.clearContent();
-  }, [editor, onSendMessage, disabled]);
+  }, [editor, onSend, disabled]);
   
   // Handle submit with Enter (not Shift+Enter)
   const handleKeyDown = (e: React.KeyboardEvent) => {
