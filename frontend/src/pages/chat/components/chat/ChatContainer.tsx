@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ChatWindow from '../../../../components/chat/ChatWindow';
 import TipTapEditor from '../../../../components/chat/editor/TipTapEditor';
-import ChatInput from '../../../../components/chat/ChatInput';
 import FileUploadArea from './FileUploadArea';
 import ChatActionBar from './ChatActionBar';
 import { Message } from '../../types/chat';
@@ -53,66 +52,65 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Add state for modal visibility
+  // Modal states for editors and selectors
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
   const [languageSelectorOpen, setLanguageSelectorOpen] = useState(false);
   
-  // Scroll to bottom on new messages
+  // Auto-scroll when messages change
   useEffect(() => {
     if (messagesEndRef.current && messages.length > 0) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
   
+  // Handle code selection from language selector
   const handleCodeSelected = (language: string, template?: string) => {
     handleInsertCode(language, template);
     setLanguageSelectorOpen(false);
   };
   
+  // Handle code editor save
   const handleCodeEditorSave = (code: string) => {
-    // Insert the code into the editor
     if (codeInsertRef.current) {
       codeInsertRef.current(code);
     }
     setCodeEditorOpen(false);
   };
   
+  // Handle math editor save
   const handleMathEditorSave = (mathExpression: string) => {
-    // Insert the math expression into the editor
     if (mathInsertRef.current) {
       mathInsertRef.current(mathExpression);
     }
     setMathEditorOpen(false);
   };
   
-  // Show empty state if no messages
+  // Show empty conversation view if no messages
   const showEmptyState = messages.length === 0 && !loading;
   
   return (
     <div className="relative flex flex-col h-full flex-grow overflow-hidden">
-      {/* Content area */}
+      {/* Main Content Area */}
       <div className="flex-grow flex flex-col overflow-hidden">
         {showEmptyState ? (
           <EmptyConversationView onSendMessage={onSendMessage} />
         ) : (
-          <>
-            {/* Messages area */}
-            <div className="flex-grow overflow-hidden">
-              <ChatWindow 
-                messages={messages}
-                loading={loading}
-                onRegenerate={onRegenerate}
-                onStopGeneration={onStopGeneration}
-                isGenerating={isGenerating}
-              />
-              <div ref={messagesEndRef} />
-            </div>
-          </>
+          <div className="flex-grow overflow-hidden">
+            <ChatWindow 
+              messages={messages}
+              loading={loading}
+              onRegenerate={onRegenerate}
+              onStopGeneration={onStopGeneration}
+              isGenerating={isGenerating}
+            />
+            <div ref={messagesEndRef} />
+          </div>
         )}
         
-        {/* Input area - always visible */}
-        <div className="w-full">
+        {/* Input Area */}
+        <div className="w-full pb-2">
+          {/* File Upload Area - Shown conditionally */}
           {showFileUpload && (
             <FileUploadArea
               onFileSelect={handleFileSelect}
@@ -122,44 +120,49 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
             />
           )}
           
-          <div className="relative border-t border-gray-200 dark:border-gray-700">
-            {/* Use TipTapEditor for the rich editing experience */}
-            <div className="px-4 py-3 relative">
-              <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
-                style={{
-                  boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
-                  border: `1px solid rgba(0, 0, 0, 0.1)`,
-                }}
-              >
-                <TipTapEditor
-                  onSend={onSendMessage}
-                  disabled={loading || isGenerating}
-                  placeholder="Message Inkmortal..."
-                  isGenerating={isGenerating}
-                  onInsertCode={(handler) => {
-                    console.log("Registering code insertion handler from TipTap");
-                    codeInsertRef.current = handler;
-                  }}
-                  onInsertMath={(handler) => {
-                    console.log("Registering math insertion handler from TipTap");
-                    mathInsertRef.current = handler;
-                  }}
-                />
-              </div>
+          {/* Input Container with Action Bar */}
+          <div className="px-4 py-2 relative">
+            {/* Action Bar - Positioned on top */}
+            <div className="flex justify-end items-center mb-2 space-x-1 max-w-4xl mx-auto">
+              <ChatActionBar 
+                onInsertCode={() => setCodeEditorOpen(true)}
+                onInsertMath={() => setMathEditorOpen(true)}
+                onShowLanguageSelector={() => setLanguageSelectorOpen(true)}
+                onToggleFileUpload={() => setShowFileUpload(!showFileUpload)}
+                showFileUpload={showFileUpload}
+              />
             </div>
             
-            <ChatActionBar 
-              onInsertCode={() => setCodeEditorOpen(true)}
-              onInsertMath={() => setMathEditorOpen(true)}
-              onShowLanguageSelector={() => setLanguageSelectorOpen(true)}
-              onToggleFileUpload={() => setShowFileUpload(!showFileUpload)}
-              showFileUpload={showFileUpload}
-            />
+            {/* TipTap Editor */}
+            <div className="mx-auto max-w-4xl rounded-xl overflow-hidden transition-all"
+              style={{
+                boxShadow: `0 4px 15px rgba(0, 0, 0, 0.06)`,
+                border: `1px solid rgba(0, 0, 0, 0.1)`,
+              }}
+            >
+              <TipTapEditor
+                onSend={onSendMessage}
+                disabled={loading || isGenerating}
+                placeholder="Message Inkmortal..."
+                isGenerating={isGenerating}
+                onInsertCode={(handler) => {
+                  codeInsertRef.current = handler;
+                }}
+                onInsertMath={(handler) => {
+                  mathInsertRef.current = handler;
+                }}
+              />
+            </div>
+            
+            {/* Helper text for keyboard shortcuts */}
+            <div className="text-xs text-center mt-1.5 opacity-70 text-gray-500 dark:text-gray-400">
+              Press <kbd className="px-1.5 py-0.5 rounded text-[10px] mx-1 bg-gray-100 dark:bg-gray-800">Shift</kbd> + <kbd className="px-1.5 py-0.5 rounded text-[10px] mx-1 bg-gray-100 dark:bg-gray-800">Enter</kbd> for new line
+            </div>
           </div>
         </div>
       </div>
       
-      {/* Modals */}
+      {/* Modal Dialogs */}
       {codeEditorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="w-full max-w-5xl h-5/6 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden">
