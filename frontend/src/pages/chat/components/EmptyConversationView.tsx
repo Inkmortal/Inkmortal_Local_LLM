@@ -36,9 +36,16 @@ interface EmptyConversationViewProps {
 
 const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMessage }) => {
   const { currentTheme } = useTheme();
-  const isDark = currentTheme.includes('dark') || 
-                currentTheme.includes('night') || 
-                currentTheme.includes('dracula');
+  
+  // Safely check if theme is dark by first ensuring currentTheme is properly loaded
+  const isDark = currentTheme && (
+    (typeof currentTheme.isDark === 'boolean' && currentTheme.isDark) || 
+    (currentTheme.name && typeof currentTheme.name === 'string' && (
+      currentTheme.name.includes('dark') || 
+      currentTheme.name.includes('night') || 
+      currentTheme.name.includes('dracula')
+    ))
+  );
   
   const handlePromptClick = (prompt: string) => {
     onSendMessage(prompt);
