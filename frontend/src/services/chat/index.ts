@@ -47,8 +47,11 @@ export {
   RETRY_STATUS_CODES
 } from './errorHandling';
 
-// Export a singleton chat service for easy access
-import { sendMessageStreaming } from './messageService';
+// Import for the singleton chat service
+import { sendMessage, sendMessageStreaming } from './messageService';
+import { createConversation, getConversation, listConversations, deleteConversation, updateConversationTitle } from './conversationService';
+import { initializeWebSocket, closeWebSocket, isWebSocketConnected } from './websocketService';
+import { ChatMode } from './types';
 
 /**
  * Simplified chat service that provides all chat functionality in one place
