@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Message, MessageStatus, Conversation } from '../types/chat';
 import { sendMessage } from '../../../services/chat/messageService';
-import { getConversation, listConversations } from '../../../services/chat/conversationService';
+import { getConversation, listConversations, createConversation } from '../../../services/chat/conversationService';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
 
 // Function to provide a rough estimate of token count to avoid overloading the API
@@ -227,6 +227,7 @@ export default function useChatState(
         setIsLoading(true);
       }
       
+      console.log(`Loading messages for conversation: ${conversationId}`);
       const conversationData = await getConversation(conversationId);
       
       if (!isMountedRef.current) return;
@@ -244,6 +245,7 @@ export default function useChatState(
         
         setMessages(formattedMessages);
       } else {
+        console.log(`No messages found for conversation: ${conversationId}`);
         setMessages([]);
       }
     } catch (error) {
@@ -278,16 +280,55 @@ export default function useChatState(
     const messageId = uuidv4();
     const now = new Date();
     
-    // If activeConversationId is null, create a new one
-    const conversationId = activeConversationId || uuidv4();
-    console.log(`Sending message with conversation ID: ${conversationId} (${activeConversationId ? 'existing' : 'new'})`);
+    // Create or verify conversation exists first
+    let conversationId = activeConversationId;
     
-    // IMPORTANT: Set the active conversation ID BEFORE creating messages or making API calls
-    // This fixes issues with conversation not found errors on first message
-    if (!activeConversationId) {
-      console.log(`Setting new active conversation ID: ${conversationId}`);
-      setActiveConversationId(conversationId);
+    // For new conversations, create one on the backend first
+    if (!conversationId) {
+      try {
+        console.log('Creating new conversation on backend');
+        const newConv = await createConversation();
+        if (newConv && newConv.conversation_id) {
+          conversationId = newConv.conversation_id;
+          console.log(`Successfully created new conversation: ${conversationId}`);
+        } else {
+          // Fallback to generating a UUID locally
+          conversationId = uuidv4();
+          console.log(`Failed to create conversation on backend, using local ID: ${conversationId}`);
+        }
+        
+        // Update the active conversation ID right away
+        setActiveConversationId(conversationId);
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        // Fall back to a locally generated ID
+        conversationId = uuidv4();
+        console.log(`Error creating conversation, using local ID: ${conversationId}`);
+        setActiveConversationId(conversationId);
+      }
+    } else {
+      // For existing conversations, verify it exists
+      try {
+        const existingConv = await getConversation(conversationId);
+        if (!existingConv) {
+          console.log(`Existing conversation ${conversationId} not found, trying to create a new one`);
+          const newConv = await createConversation();
+          if (newConv && newConv.conversation_id) {
+            // Update to use the new conversation ID
+            conversationId = newConv.conversation_id;
+            setActiveConversationId(conversationId);
+            console.log(`Created new conversation: ${conversationId}`);
+          }
+        } else {
+          console.log(`Verified existing conversation: ${conversationId}`);
+        }
+      } catch (error) {
+        console.error(`Error verifying conversation ${conversationId}:`, error);
+        // Continue anyway, our improved getConversation will attempt to create if not found
+      }
     }
+    
+    console.log(`Sending message with conversation ID: ${conversationId}`);
     
     // Create temporary user message
     const userMessage: Message = {

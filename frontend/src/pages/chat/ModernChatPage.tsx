@@ -80,6 +80,19 @@ const ModernChatPage: React.FC = () => {
         if (conversationId) {
           // For existing conversation ID from URL
           console.log(`Loading existing conversation: ${conversationId}`);
+          
+          // First check if this conversation exists in our list
+          const conversationExists = chatState.conversations.some(
+            conv => conv.id === conversationId
+          );
+          
+          if (conversationExists) {
+            console.log(`Conversation ${conversationId} found in conversation list`);
+          } else {
+            console.log(`Conversation ${conversationId} not found in list, might need to be created`);
+          }
+          
+          // Use loadConversation which handles not-found gracefully
           await chatState.loadConversation(conversationId);
           hasInitializedRef.current = true;
         } 
@@ -97,6 +110,19 @@ const ModernChatPage: React.FC = () => {
       } catch (error) {
         console.error('Error initializing conversation:', error);
         // Don't reset hasInitializedRef on error to prevent endless retry loops
+        
+        // If the error was with a conversation from URL, start a new one
+        if (conversationId && initAttemptsRef.current >= 2) {
+          console.log('Error with URL conversation, starting new conversation instead');
+          try {
+            await chatState.startNewConversation();
+            // Update URL to remove the problematic conversation ID
+            navigate('/chat', { replace: true });
+            hasInitializedRef.current = true;
+          } catch (newError) {
+            console.error('Error creating new conversation after failed load:', newError);
+          }
+        }
       }
     };
     
@@ -108,7 +134,7 @@ const ModernChatPage: React.FC = () => {
       initAttemptsRef.current = 0;
     };
     
-  }, [isAuthenticated, conversationId, chatState.conversationId]);
+  }, [isAuthenticated, conversationId, chatState, navigate]);
 
   // Handler for selecting a conversation
   const handleSelectConversation = (conversationId: string) => {
