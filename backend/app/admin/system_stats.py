@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 import time
 import logging
 from typing import Dict, Any, Optional
+from sqlalchemy import text
 
 try:
     import httpx
@@ -63,7 +64,7 @@ async def get_models(
                 # Check if we need to set a default model
                 try:
                     # Check if we already have a default model set in DB
-                    cursor = db.execute("SELECT value FROM config WHERE key = 'default_model'")
+                    cursor = db.execute(text("SELECT value FROM config WHERE key = 'default_model'"))
                     model_from_db = cursor.fetchone()
                     
                     # If no model is set in DB and we have models available, set the first one
@@ -76,8 +77,10 @@ async def get_models(
                             
                             # Save to DB if needed
                             if not model_from_db:
-                                db.execute("INSERT INTO config (key, value) VALUES ('default_model', :value)",
-                                          {"value": first_model})
+                                db.execute(
+                                    text("INSERT INTO config (key, value) VALUES (:key, :value)"),
+                                    {"key": "default_model", "value": first_model}
+                                )
                                 db.commit()
                                 logger.info(f"Saved default model {first_model} to database")
                 except Exception as db_error:
@@ -135,15 +138,19 @@ async def set_active_model(
         
         # Also update the model in the database for persistence
         try:
-            cursor = db.execute("SELECT COUNT(*) FROM config WHERE key = 'default_model'")
+            cursor = db.execute(text("SELECT COUNT(*) FROM config WHERE key = 'default_model'"))
             exists = cursor.scalar() > 0
             
             if exists:
-                db.execute("UPDATE config SET value = :value WHERE key = 'default_model'", 
-                          {"value": model_name})
+                db.execute(
+                    text("UPDATE config SET value = :value WHERE key = 'default_model'"),
+                    {"value": model_name}
+                )
             else:
-                db.execute("INSERT INTO config (key, value) VALUES ('default_model', :value)", 
-                          {"value": model_name})
+                db.execute(
+                    text("INSERT INTO config (key, value) VALUES (:key, :value)"),
+                    {"key": "default_model", "value": model_name}
+                )
             
             db.commit()
         except Exception as db_error:

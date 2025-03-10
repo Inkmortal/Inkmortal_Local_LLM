@@ -630,8 +630,17 @@ async def send_message(
                 detail="Message is required"
             )
         
-        # Begin database transaction
-        transaction = db.begin_nested()
+        # Begin database transaction using SQLAlchemy text for compatibility
+        from sqlalchemy import text
+        try:
+            db.execute(text("SET TRANSACTION ISOLATION LEVEL READ COMMITTED"))
+            transaction = db.begin_nested()
+        except Exception as e:
+            logger.error(f"Database error starting transaction: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database error"
+            )
         
         # Create or get conversation
         if conversation_id:
@@ -885,7 +894,19 @@ async def send_message(
         raise
     except Exception as e:
         # Handle any other unexpected errors
-        db.rollback()
+        try:
+            # Try to rollback the transaction
+            if 'transaction' in locals():
+                transaction.rollback()
+            else:
+                db.rollback()
+                
+            # Reset isolation level
+            from sqlalchemy import text
+            db.execute(text("SET TRANSACTION ISOLATION LEVEL READ COMMITTED"))
+        except Exception as cleanup_error:
+            logger.error(f"Error during transaction cleanup: {cleanup_error}")
+            
         logger.error(f"Unexpected error in send_message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
