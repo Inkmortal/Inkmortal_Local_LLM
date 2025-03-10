@@ -276,64 +276,18 @@ export default function useChatState(
   
   // Function to handle sending a new message
   const handleSendMessage = async (content: string, file: File | null = null) => {
-    // Create a new message ID
+    // Create a new message ID for UI
     const messageId = uuidv4();
     const now = new Date();
     
-    // Create or verify conversation exists first
+    // Determine if we need to create a new conversation or use existing one
     let conversationId = activeConversationId;
-    
-    // For new conversations, create one on the backend first
-    if (!conversationId) {
-      try {
-        console.log('Creating new conversation on backend');
-        const newConv = await createConversation();
-        if (newConv && newConv.conversation_id) {
-          conversationId = newConv.conversation_id;
-          console.log(`Successfully created new conversation: ${conversationId}`);
-        } else {
-          // Fallback to generating a UUID locally
-          conversationId = uuidv4();
-          console.log(`Failed to create conversation on backend, using local ID: ${conversationId}`);
-        }
-        
-        // Update the active conversation ID right away
-        setActiveConversationId(conversationId);
-      } catch (error) {
-        console.error('Error creating conversation:', error);
-        // Fall back to a locally generated ID
-        conversationId = uuidv4();
-        console.log(`Error creating conversation, using local ID: ${conversationId}`);
-        setActiveConversationId(conversationId);
-      }
-    } else {
-      // For existing conversations, verify it exists
-      try {
-        const existingConv = await getConversation(conversationId);
-        if (!existingConv) {
-          console.log(`Existing conversation ${conversationId} not found, trying to create a new one`);
-          const newConv = await createConversation();
-          if (newConv && newConv.conversation_id) {
-            // Update to use the new conversation ID
-            conversationId = newConv.conversation_id;
-            setActiveConversationId(conversationId);
-            console.log(`Created new conversation: ${conversationId}`);
-          }
-        } else {
-          console.log(`Verified existing conversation: ${conversationId}`);
-        }
-      } catch (error) {
-        console.error(`Error verifying conversation ${conversationId}:`, error);
-        // Continue anyway, our improved getConversation will attempt to create if not found
-      }
-    }
-    
-    console.log(`Sending message with conversation ID: ${conversationId}`);
+    let needsConversationCreation = !conversationId;
     
     // Create temporary user message
     const userMessage: Message = {
       id: messageId,
-      conversationId,
+      conversationId: conversationId || 'temp-id', // Use temp ID if we don't have one yet
       role: 'user',
       content,
       status: MessageStatus.SENDING,
@@ -343,7 +297,7 @@ export default function useChatState(
     // Create a placeholder for the assistant's response
     const assistantMessage: Message = {
       id: `assistant-${messageId}`,
-      conversationId,
+      conversationId: conversationId || 'temp-id', // Use temp ID if we don't have one yet
       role: 'assistant',
       content: '',
       status: MessageStatus.QUEUED,
@@ -373,24 +327,55 @@ export default function useChatState(
         };
       }
       
-      // Send message to API
+      // If this is a new conversation, create it on the backend first
+      if (needsConversationCreation) {
+        console.log('Creating new conversation on backend');
+        try {
+          const newConv = await createConversation();
+          if (newConv && newConv.conversation_id) {
+            conversationId = newConv.conversation_id;
+            console.log(`Created new conversation: ${conversationId}`);
+            // Update active conversation ID
+            setActiveConversationId(conversationId);
+          } else {
+            throw new Error('Failed to create conversation');
+          }
+        } catch (error) {
+          console.error('Error creating conversation:', error);
+          throw error; // Re-throw to be caught by outer catch
+        }
+      }
+      
+      // Now send the message with the confirmed conversation ID
+      console.log(`Sending message to conversation: ${conversationId}`);
       const result = await sendMessage(content, conversationId, fileData);
       
       if (!isMountedRef.current) return;
       
       if (result.id) {
         // Update messages with real IDs from API
-        const updatedMessages = messages.map(msg => {
-          if (msg.id === messageId) {
-            return { ...msg, id: result.id || msg.id, status: MessageStatus.COMPLETE };
-          }
-          if (msg.id === `assistant-${messageId}`) {
-            return { ...msg, status: MessageStatus.PROCESSING };
-          }
-          return msg;
-        });
-        
-        setMessages(updatedMessages);
+        setMessages(prevMessages => 
+          prevMessages.map(msg => {
+            // Update the user message
+            if (msg.id === messageId) {
+              return { 
+                ...msg, 
+                id: result.id || msg.id, 
+                conversationId: conversationId || msg.conversationId, 
+                status: MessageStatus.COMPLETE 
+              };
+            }
+            // Update the assistant message
+            if (msg.id === `assistant-${messageId}`) {
+              return { 
+                ...msg, 
+                conversationId: conversationId || msg.conversationId, 
+                status: MessageStatus.PROCESSING 
+              };
+            }
+            return msg;
+          })
+        );
         
         // Load conversations to get updated list
         await loadConversations();

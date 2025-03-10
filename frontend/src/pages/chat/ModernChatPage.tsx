@@ -46,19 +46,11 @@ const ModernChatPage: React.FC = () => {
   
   // Using a ref to track initialization state to prevent multiple initializations
   const hasInitializedRef = useRef(false);
-  // Track initialization attempts to prevent infinite retries
-  const initAttemptsRef = useRef(0);
   
   // Initialize conversation only once when component mounts
   useEffect(() => {
     // Skip if not authenticated
     if (!isAuthenticated) {
-      return;
-    }
-    
-    // Limit initialization attempts to prevent infinite loops (max 3 attempts)
-    if (initAttemptsRef.current >= 3) {
-      console.warn('Maximum initialization attempts reached, giving up');
       return;
     }
     
@@ -69,70 +61,51 @@ const ModernChatPage: React.FC = () => {
     }
     
     const initConversation = async () => {
-      console.log(`Initializing conversation (attempt ${initAttemptsRef.current + 1})`);
-      initAttemptsRef.current += 1;
+      console.log('Initializing chat page');
       
       try {
         // First, always load the conversation list
         await chatState.loadConversations();
         
-        // Then handle specific cases
+        // Handle specific cases
         if (conversationId) {
-          // For existing conversation ID from URL
-          console.log(`Loading existing conversation: ${conversationId}`);
-          
-          // First check if this conversation exists in our list
+          // For existing conversation ID from URL, check if it exists in our list
           const conversationExists = chatState.conversations.some(
             conv => conv.id === conversationId
           );
           
           if (conversationExists) {
-            console.log(`Conversation ${conversationId} found in conversation list`);
+            console.log(`Loading existing conversation: ${conversationId}`);
+            await chatState.loadConversation(conversationId);
           } else {
-            console.log(`Conversation ${conversationId} not found in list, might need to be created`);
+            console.log(`Conversation ${conversationId} from URL not found, starting new chat`);
+            chatState.startNewConversation();
+            // Update URL to remove the invalid conversation ID
+            navigate('/chat', { replace: true });
           }
-          
-          // Use loadConversation which handles not-found gracefully
-          await chatState.loadConversation(conversationId);
-          hasInitializedRef.current = true;
         } 
-        else if (!chatState.conversationId) {
-          // No conversation, create a new one exactly once
-          console.log('No active conversation, creating a new one');
-          await chatState.startNewConversation();
-          hasInitializedRef.current = true;
+        else if (chatState.conversationId) {
+          // Already have an active conversation, no need to do anything
+          console.log(`Using existing conversation: ${chatState.conversationId}`);
         }
         else {
-          // We already have a conversation, no need to create a new one
-          console.log(`Using existing conversation: ${chatState.conversationId}`);
-          hasInitializedRef.current = true;
+          // No conversation ID in URL and no active conversation
+          // Just show empty chat interface, DON'T create a conversation yet
+          console.log('Starting with empty chat interface');
+          chatState.startNewConversation(); // This just resets UI state, doesn't create a backend conversation
         }
-      } catch (error) {
-        console.error('Error initializing conversation:', error);
-        // Don't reset hasInitializedRef on error to prevent endless retry loops
         
-        // If the error was with a conversation from URL, start a new one
-        if (conversationId && initAttemptsRef.current >= 2) {
-          console.log('Error with URL conversation, starting new conversation instead');
-          try {
-            await chatState.startNewConversation();
-            // Update URL to remove the problematic conversation ID
-            navigate('/chat', { replace: true });
-            hasInitializedRef.current = true;
-          } catch (newError) {
-            console.error('Error creating new conversation after failed load:', newError);
-          }
-        }
+        hasInitializedRef.current = true;
+      } catch (error) {
+        console.error('Error initializing chat page:', error);
+        // In case of error, reset to empty state
+        chatState.startNewConversation();
+        hasInitializedRef.current = true;
       }
     };
     
     // Run initialization
     initConversation();
-    
-    // Clean up on unmount by resetting initAttemptsRef
-    return () => {
-      initAttemptsRef.current = 0;
-    };
     
   }, [isAuthenticated, conversationId, chatState, navigate]);
 

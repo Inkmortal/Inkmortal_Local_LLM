@@ -44,50 +44,31 @@ export async function createConversation(title?: string): Promise<{ conversation
 export async function getConversation(conversationId: string): Promise<ConversationData | null> {
   return executeServiceCall(
     async () => {
-      try {
-        const response = await fetchApi<ConversationData>(`/api/chat/conversation/${conversationId}`, {
-          method: 'GET',
-        });
-        
-        // Use centralized error handling but don't show notifications for 404s
-        const result = handleApiResponse(response, {
-          title: 'Conversation Error',
-          notifyOnError: response.status !== 404
-        });
-        
-        if (!result.success) {
-          // If we got a 404, the conversation doesn't exist on the backend
-          if (response.status === 404) {
-            console.log(`Conversation ${conversationId} not found, creating it now`);
-            // Create the conversation with the same ID
-            const createdConv = await createConversation();
-            if (createdConv) {
-              console.log(`Successfully created conversation: ${createdConv.conversation_id}`);
-              // Return a minimal conversation object
-              return {
-                conversation_id: createdConv.conversation_id,
-                title: "New conversation",
-                created_at: new Date().toISOString(),
-                messages: []
-              };
-            }
-          }
-          return null;
-        }
-        
-        // Process messages to ensure they have the right format
-        if (result.data?.messages) {
-          result.data.messages = result.data.messages.map(message => ({
-            ...message,
-            status: MessageStatus.COMPLETE
-          }));
-        }
-        
-        return result.data;
-      } catch (error) {
-        console.error(`Error retrieving conversation ${conversationId}:`, error);
+      const response = await fetchApi<ConversationData>(`/api/chat/conversation/${conversationId}`, {
+        method: 'GET',
+      });
+      
+      // Use centralized error handling but don't show notifications for 404s
+      const result = handleApiResponse(response, {
+        title: 'Conversation Error',
+        notifyOnError: response.status !== 404
+      });
+      
+      if (!result.success) {
+        // Just return null for not found, don't create conversations here
+        // We'll create conversations explicitly when sending the first message
         return null;
       }
+      
+      // Process messages to ensure they have the right format
+      if (result.data?.messages) {
+        result.data.messages = result.data.messages.map(message => ({
+          ...message,
+          status: MessageStatus.COMPLETE
+        }));
+      }
+      
+      return result.data;
     },
     null
   );
