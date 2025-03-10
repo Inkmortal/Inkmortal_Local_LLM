@@ -91,17 +91,17 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
   ];
 
   return (
-    <div className="flex flex-col items-center w-full h-full max-w-6xl mx-auto px-4 py-12">
+    <div className="flex flex-col items-center w-full h-full max-w-chat mx-auto px-4 py-6">
       {/* Hero Section */}
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold mb-4">Inkmortal LLM</h1>
-        <p className="text-xl opacity-80 max-w-2xl">
+      <div className="text-center mb-8">
+        <h1 className="text-2xl font-bold mb-2">Inkmortal LLM</h1>
+        <p className="text-base opacity-80 max-w-2xl">
           Your personal AI assistant for education, programming, and more. Ask anything or try one of the suggestions below.
         </p>
       </div>
 
       {/* Capability Cards */}
-      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         {suggestions.map((suggestion, index) => (
           <Suggestion
             key={index}
@@ -114,14 +114,14 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
       </div>
 
       {/* Capabilities Section */}
-      <div className="w-full max-w-4xl rounded-lg p-6 border border-opacity-20 border-gray-400 dark:border-gray-600">
-        <h2 className="text-xl font-medium mb-4 flex items-center">
+      <div className="w-full max-w-3xl rounded-lg p-4 border border-opacity-20 border-gray-400 dark:border-gray-600">
+        <h2 className="text-lg font-medium mb-3 flex items-center">
           <span className="mr-2">💡</span> Capabilities & Limitations
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <h3 className="font-medium mb-2">Inkmortal LLM can:</h3>
-            <ul className="space-y-1 list-disc pl-5">
+            <ul className="space-y-1 list-disc pl-5 text-sm">
               <li>Answer questions about any knowledge domain</li>
               <li>Remember your earlier messages in the conversation</li>
               <li>Generate code and solve programming problems</li>
@@ -131,7 +131,7 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
           </div>
           <div>
             <h3 className="font-medium mb-2">Limitations:</h3>
-            <ul className="space-y-1 list-disc pl-5">
+            <ul className="space-y-1 list-disc pl-5 text-sm">
               <li>May occasionally generate incorrect information</li>
               <li>Has limited knowledge of world events after training data cutoff</li>
               <li>May not always understand complex or ambiguous questions</li>
@@ -143,8 +143,8 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
       </div>
 
       {/* Quick Tips */}
-      <div className="w-full max-w-4xl mt-8 text-center">
-        <p className="opacity-75 text-sm">
+      <div className="w-full max-w-3xl mt-6 text-center">
+        <p className="opacity-75 text-xs">
           💬 Type your message in the box below to start a conversation • 📁 You can also upload files for analysis • ✨ Be specific with your questions for better results
         </p>
       </div>
