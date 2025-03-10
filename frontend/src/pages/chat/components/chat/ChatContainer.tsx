@@ -123,13 +123,30 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           )}
           
           <div className="relative border-t border-gray-200 dark:border-gray-700">
-            <ChatInput 
-              onSend={onSendMessage}
-              disabled={loading || isGenerating}
-              isGenerating={isGenerating}
-              onInsertCode={(code) => codeInsertRef.current && codeInsertRef.current(code)}
-              onInsertMath={(math) => mathInsertRef.current && mathInsertRef.current(math)}
-            />
+            {/* Use TipTapEditor for the rich editing experience */}
+            <div className="px-4 py-3 relative">
+              <div className="mx-auto max-w-4xl rounded-2xl overflow-hidden"
+                style={{
+                  boxShadow: `0 4px 20px rgba(0, 0, 0, 0.08)`,
+                  border: `1px solid rgba(0, 0, 0, 0.1)`,
+                }}
+              >
+                <TipTapEditor
+                  onSend={onSendMessage}
+                  disabled={loading || isGenerating}
+                  placeholder="Message Inkmortal..."
+                  isGenerating={isGenerating}
+                  onInsertCode={(handler) => {
+                    console.log("Registering code insertion handler from TipTap");
+                    codeInsertRef.current = handler;
+                  }}
+                  onInsertMath={(handler) => {
+                    console.log("Registering math insertion handler from TipTap");
+                    mathInsertRef.current = handler;
+                  }}
+                />
+              </div>
+            </div>
             
             <ChatActionBar 
               onInsertCode={() => setCodeEditorOpen(true)}
