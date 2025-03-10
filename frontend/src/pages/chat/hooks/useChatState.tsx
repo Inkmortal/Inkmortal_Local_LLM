@@ -29,6 +29,30 @@ export interface ChatState {
   startNewConversation: () => void;
   loadConversations: () => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
+  
+  // Legacy support
+  handleSendMessage?: (content: string, file?: File | null) => Promise<void>;
+  handleRegenerate?: (messageId: string) => Promise<void>;
+  handleStopGeneration?: () => void;
+  switchConversation?: (id: string) => Promise<void>;
+  
+  // File handling
+  showFileUpload?: boolean;
+  setShowFileUpload?: (show: boolean) => void;
+  selectedFile?: File | null;
+  setSelectedFile?: (file: File | null) => void;
+  handleFileSelect?: (file: File) => void;
+  
+  // Editor refs
+  codeInsertRef?: React.MutableRefObject<((codeSnippet: string) => void) | undefined>;
+  mathInsertRef?: React.MutableRefObject<((mathSnippet: string) => void) | undefined>;
+  handleInsertCode?: (language?: string, template?: string) => void;
+  handleInsertMath?: (formula?: string) => void;
+  
+  // Queue properties
+  isQueueLoading?: boolean;
+  isProcessing?: boolean;
+  queuePosition?: number;
 }
 
 // How frequently to poll for message updates in ms
@@ -59,6 +83,10 @@ export default function useChatState(
   const pollingTimerRef = useRef<number | null>(null);
   const conversationsTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Editor refs
+  const codeInsertRef = useRef<((codeSnippet: string) => void) | undefined>(undefined);
+  const mathInsertRef = useRef<((mathSnippet: string) => void) | undefined>(undefined);
   
   // Load initial conversations
   useEffect(() => {
@@ -129,7 +157,7 @@ export default function useChatState(
   useEffect(() => {
     // Check if any messages are still being generated
     const hasGeneratingMessages = messages.some(
-      msg => msg.status === MessageStatus.Queued || msg.status === MessageStatus.Processing
+      msg => msg.status === MessageStatus.QUEUED || msg.status === MessageStatus.PROCESSING
     );
     setIsGenerating(hasGeneratingMessages);
   }, [messages]);
@@ -200,7 +228,7 @@ export default function useChatState(
           conversationId: apiMsg.conversation_id,
           role: apiMsg.role,
           content: apiMsg.content,
-          status: MessageStatus.Complete,
+          status: MessageStatus.COMPLETE,
           timestamp: new Date(apiMsg.created_at),
         }));
         
@@ -225,7 +253,7 @@ export default function useChatState(
   const checkForMessageUpdates = async (conversationId: string) => {
     // Only check messages that are still in-progress
     const inProgressMessages = messages.filter(
-      msg => msg.status !== MessageStatus.Complete && msg.status !== MessageStatus.Error
+      msg => msg.status !== MessageStatus.COMPLETE && msg.status !== MessageStatus.ERROR
     );
     
     if (inProgressMessages.length === 0) return;
@@ -249,7 +277,7 @@ export default function useChatState(
       conversationId,
       role: 'user',
       content,
-      status: MessageStatus.Sending,
+      status: MessageStatus.SENDING,
       timestamp: now,
     };
     
@@ -259,7 +287,7 @@ export default function useChatState(
       conversationId,
       role: 'assistant',
       content: '',
-      status: MessageStatus.Queued,
+      status: MessageStatus.QUEUED,
       timestamp: now,
     };
     
@@ -295,14 +323,14 @@ export default function useChatState(
       
       if (!isMountedRef.current) return;
       
-      if (result.success) {
+      if (result.id) {
         // Update messages with real IDs from API
         const updatedMessages = messages.map(msg => {
           if (msg.id === messageId) {
-            return { ...msg, id: result.message_id || msg.id, status: MessageStatus.Complete };
+            return { ...msg, id: result.id || msg.id, status: MessageStatus.COMPLETE };
           }
           if (msg.id === `assistant-${messageId}`) {
-            return { ...msg, status: MessageStatus.Processing };
+            return { ...msg, status: MessageStatus.PROCESSING };
           }
           return msg;
         });
@@ -312,7 +340,7 @@ export default function useChatState(
         // Load conversations to get updated list
         await loadConversations();
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Unknown error');
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -322,10 +350,10 @@ export default function useChatState(
         setMessages(prevMessages =>
           prevMessages.map(msg => {
             if (msg.id === messageId) {
-              return { ...msg, status: MessageStatus.Error };
+              return { ...msg, status: MessageStatus.ERROR };
             }
             if (msg.id === `assistant-${messageId}`) {
-              return { ...msg, status: MessageStatus.Error, content: 'Failed to generate response' };
+              return { ...msg, status: MessageStatus.ERROR, content: 'Failed to generate response' };
             }
             return msg;
           })
@@ -358,7 +386,7 @@ export default function useChatState(
       conversationId: activeConversationId,
       role: 'assistant',
       content: '',
-      status: MessageStatus.Queued,
+      status: MessageStatus.QUEUED,
       timestamp: new Date(),
     };
     
@@ -374,8 +402,8 @@ export default function useChatState(
       
       if (!isMountedRef.current) return;
       
-      if (!result.success) {
-        throw new Error(result.error);
+      if (!result.id) {
+        throw new Error(result.error || 'Unknown error during regeneration');
       }
       
       // We don't update any state here, as the polling will handle the updates
@@ -387,7 +415,7 @@ export default function useChatState(
         setMessages(prevMessages =>
           prevMessages.map(msg => {
             if (msg.id === assistantMessage.id) {
-              return { ...msg, status: MessageStatus.Error, content: 'Failed to regenerate response' };
+              return { ...msg, status: MessageStatus.ERROR, content: 'Failed to regenerate response' };
             }
             return msg;
           })
@@ -407,8 +435,8 @@ export default function useChatState(
       // Update messages that are in-progress
       setMessages(prevMessages =>
         prevMessages.map(msg => {
-          if (msg.status === MessageStatus.Processing || msg.status === MessageStatus.Queued) {
-            return { ...msg, status: MessageStatus.Complete, content: msg.content + ' [Stopped]' };
+          if (msg.status === MessageStatus.PROCESSING || msg.status === MessageStatus.QUEUED) {
+            return { ...msg, status: MessageStatus.COMPLETE, content: msg.content + ' [Stopped]' };
           }
           return msg;
         })
@@ -428,7 +456,7 @@ export default function useChatState(
     setActiveConversationId(null);
     setMessages([]);
   };
-  
+
   return {
     messages,
     conversations,
@@ -438,6 +466,7 @@ export default function useChatState(
     isNetworkLoading,
     isGenerating,
     
+    // Core actions
     sendMessage: handleSendMessage,
     regenerateLastMessage: handleRegenerateLastMessage,
     stopGeneration: handleStopGeneration,
@@ -445,5 +474,29 @@ export default function useChatState(
     startNewConversation: handleStartNewConversation,
     loadConversations,
     setActiveConversationId,
+    
+    // Legacy support with aliases
+    handleSendMessage,
+    handleRegenerate: (messageId: string) => handleRegenerateLastMessage(),
+    handleStopGeneration,
+    switchConversation: handleLoadConversation,
+    
+    // File handling stubs
+    showFileUpload: false,
+    setShowFileUpload: () => {},
+    selectedFile: null,
+    setSelectedFile: () => {},
+    handleFileSelect: () => {},
+    
+    // Editor refs and stubs
+    codeInsertRef,
+    mathInsertRef,
+    handleInsertCode: () => {},
+    handleInsertMath: () => {},
+    
+    // Queue stubs
+    isQueueLoading: false,
+    isProcessing: false,
+    queuePosition: 0,
   };
 }

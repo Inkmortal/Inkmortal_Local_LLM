@@ -576,11 +576,21 @@ function checkMessageStatus(
  * @param params Request parameters including message and optional conversation ID and file
  * @returns Promise with the chat response
  */
-export async function sendMessage(params: ChatRequestParams): Promise<ChatResponse> {
-  // Get user's preferred mode, defaulting to streaming if not specified
-  const mode = params.mode || ChatMode.STREAMING;
+export async function sendMessage(
+  message: string, 
+  conversationId?: string, 
+  file?: any, 
+  options?: {mode?: ChatMode}
+): Promise<ChatResponse> {
+  // Construct params object
+  const params: ChatRequestParams = {
+    message,
+    conversation_id: conversationId,
+    file: file ? file : undefined,
+    mode: options?.mode || ChatMode.STREAMING
+  };
   
-  if (mode === ChatMode.STREAMING) {
+  if (params.mode === ChatMode.STREAMING) {
     try {
       console.log('Attempting to use streaming mode');
       

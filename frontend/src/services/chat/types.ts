@@ -28,9 +28,9 @@ export enum ChatMode {
 export interface ChatRequestParams {
   message: string;             // The message content
   conversation_id?: string;    // Optional conversation ID
-  file?: File;                 // Optional file attachment (image or PDF)
+  file?: File | any;          // Optional file attachment (or processed file data)
   timeout?: number;            // Optional timeout in milliseconds
-  mode?: ChatMode;             // Communication mode (polling or streaming)
+  mode?: ChatMode | string;   // Communication mode (polling or streaming)
 }
 
 /**
@@ -45,6 +45,8 @@ export interface ChatResponse {
   status?: MessageStatus;      // Processing status (frontend only)
   error?: string;              // Error message if status is ERROR (frontend only)
   queue_position?: number;     // Position in queue (if available)
+  success?: boolean;           // Whether the operation was successful
+  message_id?: string;         // Optional message ID returned from backend
 }
 
 /**
