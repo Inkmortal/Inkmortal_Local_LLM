@@ -329,9 +329,8 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
           <div className="flex flex-col items-center justify-center h-40 px-4 text-center">
             {searchQuery ? (
               // No search results
-              <>
-                <svg 
-                  className="w-8 h-8 mb-3 opacity-60" 
+              <div>
+                <svg key="no-results-icon" className="w-8 h-8 mb-3 opacity-60" 
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24" 
@@ -340,22 +339,21 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
+                <p key="no-results-text" className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
                   No conversations matching "{searchQuery}"
                 </p>
                 <button 
-                  className="mt-3 text-xs font-medium"
+                  key="no-results-button" className="mt-3 text-xs font-medium"
                   style={{ color: currentTheme.colors.accentPrimary }}
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => setSearchQuery("")}
                 >
                   Clear search
                 </button>
-              </>
+              </div>
             ) : (
               // No conversations yet
-              <>
-                <svg 
-                  className="w-8 h-8 mb-3 opacity-60" 
+              <div>
+                <svg key="no-convs-icon" className="w-8 h-8 mb-3 opacity-60" 
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24" 
@@ -364,12 +362,12 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                <p className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
+                <p key="no-convs-text" className="text-sm" style={{ color: currentTheme.colors.textMuted }}>
                   No conversations yet
                 </p>
                 <button 
-                  className="mt-3 text-xs font-medium px-3 py-1 rounded-full"
-                  style={{ 
+                  key="no-convs-button" className="mt-3 text-xs font-medium px-3 py-1 rounded-full"
+                  style={{
                     color: currentTheme.colors.bgPrimary,
                     backgroundColor: currentTheme.colors.accentPrimary
                   }}
@@ -377,7 +375,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                 >
                   Start chatting
                 </button>
-              </>
+              </div>
             )}
           </div>
         ) : (
@@ -534,22 +532,22 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
         </h4>
         
         <div className="space-y-1.5 text-xs" style={{ color: currentTheme.colors.textSecondary }}>
-          <div className="flex items-center gap-1.5">
+          <div key="feature-math" className="flex items-center gap-1.5">
             <span 
               className="inline-block w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: currentTheme.colors.accentPrimary }}
             />
             <span>Math expressions</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span 
+          <div key="feature-code" className="flex items-center gap-1.5">
+            <span
               className="inline-block w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: currentTheme.colors.accentSecondary }}
             />
             <span>Code syntax highlighting</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span 
+          <div key="feature-docs" className="flex items-center gap-1.5">
+            <span
               className="inline-block w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: currentTheme.colors.accentTertiary }}
             />

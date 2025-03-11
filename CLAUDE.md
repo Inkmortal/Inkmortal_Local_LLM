@@ -45,21 +45,21 @@ pytest tests/test_auth.py::test_login_success  # Run single test
 - Use useCallback and useMemo to optimize renders
 - Prefer centralized state management with reducers
 - Ensure all WebSocket connections have proper cleanup
+- There is a theme system for styling components
 
 ## Working Guidelines
-- Keep code files manageable (max ~300 lines per file)
+- Keep code files manageable (max ~400 lines per file)
 - Always inspect code and related files before editing
 - Present a task plan before beginning any work
 - Ensure complete understanding of context before making changes
 - Split large components into smaller, focused ones
 - Maintain consistent error handling patterns
-- Ensure all asynchronous operations have proper cleanup
-- Use React.memo, useCallback, and useMemo for performance
 - Add comprehensive comments for complex logic
-
-## Recent Project Updates
-- Implemented new chat architecture with WebSocket integration
-- Added support for conversation history management
-- Enhanced message rendering with section support (thinking/response)
-- Improved error handling and reconnection logic
-- Added theme integration throughout all components
+- When fixing errors follow these guidelines: 
+	- Understand the problem, and present to me the problem, why its broken, and the solution. 
+	- When coding, do not exceed 400 lines of code per file, otherwise break it into smaller components.
+	- Always check relevant code files before editing, as well as checking what code files are available as we want to avoid overcomplicating things
+	- In addition, make sure frontend and backend are aligned. 
+	- We dont want messy complicated code. it should be elegant, and handle all cases. coding directly to handle edge cases is discouraged
+- Do not edit files by creating patches, only edit files directly or via tools
+- Do not search files via hex, it makes no sense
