@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import ChatInput from './ChatInput';
 
 interface ChatInputAdapterProps {
@@ -6,12 +6,8 @@ interface ChatInputAdapterProps {
   disabled?: boolean;
   placeholder?: string;
   isGenerating?: boolean;
-  showFileUpload?: boolean;
-  toggleFileUpload?: () => void;
   codeInsertRef?: React.MutableRefObject<((code: string) => void) | undefined>;
   mathInsertRef?: React.MutableRefObject<((math: string) => void) | undefined>;
-  handleInsertCode?: (language?: string, template?: string) => void;
-  handleInsertMath?: (formula?: string) => void;
 }
 
 /**
@@ -20,7 +16,6 @@ interface ChatInputAdapterProps {
  */
 const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
   onSendMessage,
-  disabled = false,
   placeholder = "Type a message...",
   isGenerating = false,
   codeInsertRef,
@@ -30,7 +25,6 @@ const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
     <div className="chat-input">
       <ChatInput
         onSend={onSendMessage}
-        disabled={false}
         placeholder={placeholder}
         isGenerating={isGenerating}
         codeInsertRef={codeInsertRef}

@@ -22,115 +22,89 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // User scroll state
-  const [scrolledUp, setScrolledUp] = useState(false);
-  const [newMessages, setNewMessages] = useState(false);
-  
-  // Animation frame and timeout refs for performance
-  const scrollTimeoutRef = useRef<number | null>(null);
+  // Animation frame ref for performance
   const scrollRAFRef = useRef<number | null>(null);
-  const lastScrollHeightRef = useRef<number>(0);
   
-  // Scroll to bottom with animation frame for better performance
+  // Track when user has manually scrolled up
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  
+  // More reliable scroll to bottom function using requestAnimationFrame
   const scrollToBottom = useCallback((force = false) => {
-    // Don't scroll if we're scrolled up and not forcing
-    if (!messagesEndRef.current || (scrolledUp && !force)) {
+    // Cancel any previous animation frame
+    if (scrollRAFRef.current) {
+      window.cancelAnimationFrame(scrollRAFRef.current);
+    }
+    
+    // If user has scrolled up and we're not forcing, show the button instead
+    if (userScrolledUp && !force) {
+      setShowScrollButton(true);
       return;
     }
     
-    // Cancel any pending animation frame
-    if (scrollRAFRef.current) {
-      window.cancelAnimationFrame(scrollRAFRef.current);
-      scrollRAFRef.current = null;
-    }
-    
-    // Create a new animation frame request
+    // Otherwise scroll to bottom
     scrollRAFRef.current = window.requestAnimationFrame(() => {
-      // Check if element still exists before scrolling
       if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth',
+          behavior: 'smooth', 
           block: 'end' 
         });
       }
-      
-      // Clear the animation frame reference
       scrollRAFRef.current = null;
       
-      // Clear new messages flag
-      if (newMessages) {
-        setNewMessages(false);
+      // Hide the scroll button since we've scrolled to bottom
+      if (showScrollButton) {
+        setShowScrollButton(false);
       }
     });
-  }, [scrolledUp, newMessages]);
+  }, [userScrolledUp, showScrollButton]);
   
-  // Debounced scroll handler with optimized performance
+  // Handle scrolling when messages change
+  useEffect(() => {
+    // If there are no messages, don't do anything
+    if (messages.length === 0) return;
+    
+    // Delay scrolling slightly to ensure DOM is updated
+    const timeoutId = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [messages, scrollToBottom]);
+  
+  // When new message starts generating, always scroll to it
+  useEffect(() => {
+    if (isGenerating) {
+      scrollToBottom(true);
+    }
+  }, [isGenerating, scrollToBottom]);
+  
+  // Monitor scroll position to detect when user scrolls up
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
     
-    // Clear existing timeout to debounce rapid scroll events
-    if (scrollTimeoutRef.current) {
-      window.clearTimeout(scrollTimeoutRef.current);
-    }
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    // Consider "scrolled up" when more than 100px from bottom
+    const isScrolledToBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 100;
     
-    // Debounce scroll events
-    scrollTimeoutRef.current = window.setTimeout(() => {
-      scrollRAFRef.current = window.requestAnimationFrame(() => {
-        if (!containerRef.current) return;
-        
-        const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-        const isScrolledToBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 50;
-        
-        setScrolledUp(!isScrolledToBottom);
-        scrollRAFRef.current = null;
-        scrollTimeoutRef.current = null;
-      });
-    }, 100);
+    setUserScrolledUp(!isScrolledToBottom);
+    
+    // Show scroll button if not at bottom
+    if (!isScrolledToBottom) {
+      setShowScrollButton(true);
+    } else {
+      setShowScrollButton(false);
+    }
   }, []);
   
-  // Scroll to bottom when messages array or content changes
+  // Clean up animation frame on unmount
   useEffect(() => {
-    if (!containerRef.current || messages.length === 0) return;
-    
-    // Compare current scroll height with previous
-    const currentScrollHeight = containerRef.current.scrollHeight;
-    const scrollHeightChanged = currentScrollHeight !== lastScrollHeightRef.current;
-    
-    // Only auto-scroll if content height changed
-    if (scrollHeightChanged) {
-      lastScrollHeightRef.current = currentScrollHeight;
-      
-      // Cancel previous scroll timeout if any
-      if (scrollTimeoutRef.current) {
-        window.clearTimeout(scrollTimeoutRef.current);
-      }
-      
-      // Delay scrolling slightly to ensure all DOM updates are processed
-      scrollTimeoutRef.current = window.setTimeout(() => {
-        scrollToBottom();
-        scrollTimeoutRef.current = null;
-      }, 100);
-    }
-    
-    // Clean up on unmount
     return () => {
-      if (scrollTimeoutRef.current) {
-        window.clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = null;
-      }
       if (scrollRAFRef.current) {
         window.cancelAnimationFrame(scrollRAFRef.current);
-        scrollRAFRef.current = null;
       }
     };
-  }, [messages, scrollToBottom]);
-  
-  // Set new messages flag when scrolled up and new messages arrive
-  useEffect(() => {
-    if (scrolledUp && messages.length > 0) {
-      setNewMessages(true);
-    }
-  }, [messages, scrolledUp]);
+  }, []);
   
   // Create background gradient with theme colors
   const backgroundGradients = useCallback(() => {
@@ -334,22 +308,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         <div ref={messagesEndRef} className="h-4" />
       </div>
       
-      {/* New messages indicator when scrolled up */}
-      {newMessages && scrolledUp && (
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
         <button
-          className="absolute bottom-4 right-4 z-10 py-2 px-4 rounded-full shadow-lg transition-all transform hover:scale-105 flex items-center animate-bounce"
+          className="fixed bottom-24 right-8 z-50 p-3 rounded-full shadow-lg transition-all transform hover:scale-105"
           style={{
             background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
             color: '#fff',
-            border: `1px solid ${currentTheme.colors.accentPrimary}80`,
             boxShadow: `0 4px 12px ${currentTheme.colors.accentPrimary}40`
           }}
           onClick={() => scrollToBottom(true)}
+          aria-label="Scroll to newest messages"
         >
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
-          <span className="text-sm font-medium">New messages</span>
         </button>
       )}
     </div>
