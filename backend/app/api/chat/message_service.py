@@ -276,14 +276,27 @@ async def process_message(
                             logger.error(f"Unexpected response type: {type(llm_response)}")
                             assistant_content = "Error: Unable to process response"
                         
-                        # Send streaming status to client
+                        # Send initial streaming status to client
                         await manager.send_update(user_id, {
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conversation_id,
                             "status": "STREAMING",
-                            "assistant_content": assistant_content[:10] + "..." # Preview
+                            "assistant_content": ""  # Start with empty content
                         })
+                        
+                        # Now let's use the actual content we already have
+                        # We'll send one message with the full content since we already have it
+                        await manager.send_update(user_id, {
+                            "type": "message_update",
+                            "message_id": message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": assistant_content,
+                            "is_complete": True  # Mark as complete since we have the full content
+                        })
+                        
+                        logger.info(f"Sent complete content with {len(assistant_content)} characters")
                         
                         # Create a new database session for the async operation
                         db = SessionLocal()
@@ -334,7 +347,8 @@ async def process_message(
                                 "conversation_id": conversation_id,
                                 "status": "COMPLETE",
                                 "assistant_message_id": assistant_message_id,
-                                "assistant_content": assistant_content
+                                "assistant_content": assistant_content,
+                                "is_complete": True
                             })
                             
                             # Clean up tracking

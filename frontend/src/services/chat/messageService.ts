@@ -709,8 +709,12 @@ export async function sendMessage(
           fullHandlers.onStatusUpdate(MessageStatus.STREAMING);
           
           // Handle streaming content with token batching
-          if (update.assistant_content && update.assistant_content.length > 0) {
+          if (update.assistant_content !== undefined) {
+            // Process tokens even if the content is empty (important for the initial message)
             fullHandlers.onToken(update.assistant_content);
+            
+            // Log for debugging
+            console.log(`Received streaming content chunk: ${update.assistant_content.length} chars, is_complete: ${update.is_complete || false}`);
           }
         }
         else if (status === MessageStatus.COMPLETE && update.assistant_content) {

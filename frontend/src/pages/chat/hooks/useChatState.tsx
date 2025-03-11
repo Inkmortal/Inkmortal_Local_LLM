@@ -4,60 +4,7 @@ import { Message, MessageStatus, Conversation } from '../types/chat';
 import { sendMessage } from '../../../services/chat/messageService';
 import { getConversation, listConversations, createConversation } from '../../../services/chat/conversationService';
 import { showError, showInfo, showSuccess } from '../../../utils/notifications';
-
-// Token Buffer Manager for efficient UI updates
-class TokenBufferManager {
-  private buffer: string = '';
-  private timeoutId: number | null = null;
-  private updateCallback: (tokens: string) => void;
-  private flushDelay: number;
-  private maxBufferSize: number;
-
-  constructor(
-    updateCallback: (tokens: string) => void,
-    options: { flushDelay?: number; maxBufferSize?: number } = {}
-  ) {
-    this.updateCallback = updateCallback;
-    this.flushDelay = options.flushDelay || 100; // ms
-    this.maxBufferSize = options.maxBufferSize || 50; // characters
-  }
-
-  // Add tokens to buffer
-  addTokens(tokens: string): void {
-    this.buffer += tokens;
-    
-    // Flush buffer if it exceeds max size
-    if (this.buffer.length >= this.maxBufferSize) {
-      this.flush();
-      return;
-    }
-    
-    // Schedule flush if not already scheduled
-    if (this.timeoutId === null) {
-      this.timeoutId = window.setTimeout(() => {
-        this.flush();
-      }, this.flushDelay);
-    }
-  }
-
-  // Force flush buffer immediately
-  flush(): void {
-    if (this.buffer.length > 0) {
-      this.updateCallback(this.buffer);
-      this.buffer = '';
-    }
-    
-    if (this.timeoutId !== null) {
-      window.clearTimeout(this.timeoutId);
-      this.timeoutId = null;
-    }
-  }
-
-  // Clean up resources
-  dispose(): void {
-    this.flush();
-  }
-}
+import { TokenBufferManager } from './TokenBufferManager';
 
 export interface ChatState {
   messages: Message[];
@@ -144,7 +91,7 @@ export default function useChatState(
     isMountedRef.current = true;
     
     // Only do the initial load once - if not already done
-    if (!initialLoadDoneRef.current) {
+    if (\!initialLoadDoneRef.current) {
       loadConversations();
       initialLoadDoneRef.current = true;
     }
@@ -185,7 +132,7 @@ export default function useChatState(
     );
     
     // Only set if it changed to prevent re-renders
-    if (hasGeneratingMessages !== isGenerating) {
+    if (hasGeneratingMessages \!== isGenerating) {
       setIsGenerating(hasGeneratingMessages);
     }
   }, [messages, isGenerating]);
@@ -201,7 +148,7 @@ export default function useChatState(
       
       const result = await listConversations();
       
-      if (!isMountedRef.current) return;
+      if (\!isMountedRef.current) return;
       
       // Format conversations
       const formattedConversations = Array.isArray(result) 
@@ -227,7 +174,7 @@ export default function useChatState(
   
   // Function to load messages for a specific conversation
   const loadConversationMessages = async (conversationId: string) => {
-    if (!conversationId || isLoading) return;
+    if (\!conversationId || isLoading) return;
     
     // Cancel any previous requests
     if (abortControllerRef.current) {
@@ -242,7 +189,7 @@ export default function useChatState(
       
       const conversationData = await getConversation(conversationId);
       
-      if (!isMountedRef.current) return;
+      if (\!isMountedRef.current) return;
       
       if (conversationData && Array.isArray(conversationData.messages)) {
         // Map API messages to our Message format
@@ -276,7 +223,7 @@ export default function useChatState(
   
   // Function to handle sending a new message with streaming support
   const handleSendMessage = async (content: string, file: File | null = null) => {
-    if (!content.trim() && !file) return; // Don't send empty messages
+    if (\!content.trim() && \!file) return; // Don't send empty messages
     
     // Create a message ID for optimistic UI updates
     const messageId = uuidv4();
@@ -284,7 +231,7 @@ export default function useChatState(
     
     // Check if we need a new conversation
     let conversationId = activeConversationId;
-    let needsConversationCreation = !conversationId;
+    let needsConversationCreation = \!conversationId;
     
     // Create temporary user message for immediate UI feedback
     const userMessage: Message = {
@@ -348,7 +295,7 @@ export default function useChatState(
       
       // Initialize token buffer manager for this message
       tokenBufferRef.current = new TokenBufferManager((tokens) => {
-        if (!isMountedRef.current) return;
+        if (\!isMountedRef.current) return;
         
         setMessages(prev => {
           const assistantMsg = prev.find(msg => 
@@ -359,7 +306,7 @@ export default function useChatState(
           if (assistantMsg) {
             return prev.map(msg => 
               msg.id === assistantMsg.id 
-                ? { ...msg, content: msg.content + tokens } 
+                ? { ...msg, content: tokens } // Replace with full tokens on each update
                 : msg
             );
           }
@@ -374,7 +321,7 @@ export default function useChatState(
         fileData, 
         {
           onStart: () => {
-            if (!isMountedRef.current) return;
+            if (\!isMountedRef.current) return;
             
             // Update user message status
             setMessages(prevMessages => 
@@ -384,10 +331,10 @@ export default function useChatState(
             );
           },
           onStatusUpdate: (status, position) => {
-            if (!isMountedRef.current) return;
+            if (\!isMountedRef.current) return;
             
             // Update queue position if needed
-            if (position !== undefined) {
+            if (position \!== undefined) {
               setQueuePosition(position);
             }
             
@@ -411,7 +358,7 @@ export default function useChatState(
             );
           },
           onToken: (token) => {
-            if (!isMountedRef.current) return;
+            if (\!isMountedRef.current) return;
             
             // Add tokens to buffer manager to optimize rendering
             if (tokenBufferRef.current) {
@@ -419,7 +366,7 @@ export default function useChatState(
             }
           },
           onComplete: (response) => {
-            if (!isMountedRef.current) return;
+            if (\!isMountedRef.current) return;
             
             // Flush any remaining tokens
             if (tokenBufferRef.current) {
@@ -503,7 +450,7 @@ export default function useChatState(
   
   // Function to regenerate the last assistant message
   const handleRegenerateLastMessage = async () => {
-    if (!activeConversationId) {
+    if (\!activeConversationId) {
       showError('No active conversation to regenerate');
       return;
     }
