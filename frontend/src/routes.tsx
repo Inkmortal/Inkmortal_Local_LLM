@@ -94,9 +94,13 @@ export const routes: AppRoutes = {
           ],
         },
         
-        // Protected Chat Route - direct render without nested layout
+        // Protected Chat Routes - direct render without nested layout
         { 
           path: 'chat', 
+          element: <RequireAuth><ChatPage /></RequireAuth>
+        },
+        { 
+          path: 'chat/:conversationId', 
           element: <RequireAuth><ChatPage /></RequireAuth>
         },
         

@@ -41,6 +41,10 @@ pytest tests/test_auth.py::test_login_success  # Run single test
 - Destructure props at component start
 - Type all props with interfaces
 - Use Tailwind for styling, custom CSS sparingly
+- Use React.memo() for performance-critical components
+- Use useCallback and useMemo to optimize renders
+- Prefer centralized state management with reducers
+- Ensure all WebSocket connections have proper cleanup
 
 ## Working Guidelines
 - Keep code files manageable (max ~300 lines per file)
@@ -48,3 +52,14 @@ pytest tests/test_auth.py::test_login_success  # Run single test
 - Present a task plan before beginning any work
 - Ensure complete understanding of context before making changes
 - Split large components into smaller, focused ones
+- Maintain consistent error handling patterns
+- Ensure all asynchronous operations have proper cleanup
+- Use React.memo, useCallback, and useMemo for performance
+- Add comprehensive comments for complex logic
+
+## Recent Project Updates
+- Implemented new chat architecture with WebSocket integration
+- Added support for conversation history management
+- Enhanced message rendering with section support (thinking/response)
+- Improved error handling and reconnection logic
+- Added theme integration throughout all components

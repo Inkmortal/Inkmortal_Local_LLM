@@ -12,6 +12,8 @@ interface ChatInputProps {
   onInsertCode?: (codeSnippet: string) => void;
   onInsertMath?: (mathSnippet: string) => void;
   isGenerating?: boolean;
+  codeInsertRef?: React.MutableRefObject<((code: string) => void) | undefined>;
+  mathInsertRef?: React.MutableRefObject<((math: string) => void) | undefined>;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
@@ -21,7 +23,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   isGenerating = false,
   inputRef,
   onInsertCode,
-  onInsertMath
+  onInsertMath,
+  codeInsertRef,
+  mathInsertRef
 }) => {
   const { currentTheme } = useTheme();
   const [message, setMessage] = useState('');
@@ -39,6 +43,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // Track if user is actively typing for advanced effects
   const [isTyping, setIsTyping] = useState(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Register insert handlers via refs if provided
+  useEffect(() => {
+    if (codeInsertRef) {
+      codeInsertRef.current = (code: string) => {
+        insertTextAtCursor(`\`\`\`\n${code}\n\`\`\``);
+      };
+    }
+    if (mathInsertRef) {
+      mathInsertRef.current = (math: string) => {
+        insertTextAtCursor(`$${math}$`);
+      };
+    }
+  }, [codeInsertRef, mathInsertRef]);
   
   // Focus management
   useEffect(() => {
@@ -146,12 +164,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const handleMathInsert = (latex: string) => {
     insertTextAtCursor(`$${latex}$`);
     setShowMathEditor(false);
+    
+    if (onInsertMath) {
+      onInsertMath(latex);
+    }
   };
 
   // Handle code insertion from modal
   const handleCodeInsert = (code: string, language: string) => {
     insertTextAtCursor(`\`\`\`${language}\n${code}\n\`\`\``);
     setShowCodeEditor(false);
+    
+    if (onInsertCode) {
+      onInsertCode(code);
+    }
   };
   
   // Convert selected text to math
@@ -338,23 +364,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                     </svg>
                     Code Block
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Handle file upload
-                      setShowFormatMenu(false);
-                    }}
-                    className="flex items-center px-3 py-2 hover:bg-opacity-10 rounded-md text-sm"
-                    style={{
-                      color: currentTheme.colors.textPrimary,
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Upload Image
                   </button>
                 </div>
               </div>

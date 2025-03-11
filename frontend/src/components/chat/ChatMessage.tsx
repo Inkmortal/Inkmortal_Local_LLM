@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import MessageParser from './MessageParser';
 import Button from '../ui/Button';
-import { MessageStatus } from '../../services/chat';
+import { MessageRole, MessageStatus, MessageSection } from '../../pages/chat/types/message';
 
 const LoadingDots = () => (
   <span className="loading-dots">
@@ -12,9 +12,8 @@ const LoadingDots = () => (
   </span>
 );
 
-const StatusIndicator = ({ status, queuePosition, error }: { 
+const StatusIndicator = ({ status, error }: { 
   status?: MessageStatus, 
-  queuePosition?: number | null,
   error?: string
 }) => {
   if (!status || status === MessageStatus.COMPLETE) return null;
@@ -23,15 +22,11 @@ const StatusIndicator = ({ status, queuePosition, error }: {
     case MessageStatus.SENDING:
       return <div className="text-xs text-blue-400 animate-pulse mt-1">Sending<LoadingDots /></div>;
     case MessageStatus.QUEUED:
-      return (
-        <div className="text-xs text-yellow-400 mt-1">
-          {queuePosition 
-            ? `In queue (position ${queuePosition})<LoadingDots />` 
-            : `Waiting in queue<LoadingDots />`}
-        </div>
-      );
+      return <div className="text-xs text-yellow-400 mt-1">Waiting in queue<LoadingDots /></div>;
     case MessageStatus.PROCESSING:
       return <div className="text-xs text-green-400 animate-pulse mt-1">Processing<LoadingDots /></div>;
+    case MessageStatus.STREAMING:
+      return <div className="text-xs text-green-400 animate-pulse mt-1">Generating<LoadingDots /></div>;
     case MessageStatus.ERROR:
       return <div className="text-xs text-red-400 mt-1">{error || 'Error processing message'}</div>;
     default:
@@ -42,17 +37,21 @@ const StatusIndicator = ({ status, queuePosition, error }: {
 export interface ChatMessageProps {
   message: {
     id: string;
-    role: 'user' | 'assistant' | 'system';
+    role: MessageRole;
     content: string;
-    timestamp: Date;
+    timestamp: number;
     status?: MessageStatus;
-    error?: string;
-    queue_position?: number;
+    sections?: {
+      response: MessageSection;
+      thinking?: MessageSection;
+    };
+    metadata?: Record<string, any>;
   };
-  onRegenerate?: (messageId: string) => void;
+  onRegenerate?: () => void;
   onStopGeneration?: () => void;
   isGenerating?: boolean;
   isLastMessage?: boolean;
+  showThinking?: boolean;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ 
@@ -60,28 +59,30 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   onRegenerate, 
   onStopGeneration,
   isGenerating,
-  isLastMessage
+  isLastMessage,
+  showThinking = true
 }) => {
   const { currentTheme } = useTheme();
   const messageRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const isAssistant = message.role === 'assistant';
-  const isSystem = message.role === 'system';
-  const isUser = message.role === 'user';
+  const [thinkingVisible, setThinkingVisible] = useState(showThinking);
+  
+  const isAssistant = message.role === MessageRole.ASSISTANT;
+  const isSystem = message.role === MessageRole.SYSTEM;
+  const isUser = message.role === MessageRole.USER;
   const hasError = message.status === MessageStatus.ERROR;
-  const isLoading = message.status === MessageStatus.SENDING || 
-                   message.status === MessageStatus.QUEUED ||
-                   message.status === MessageStatus.PROCESSING;
-                   
-  // Debug logging to see content updates in the component
-  console.log(`ChatMessage render - id: ${message.id}, role: ${message.role}, content length: ${message.content?.length || 0}, status: ${message.status}`);
-  if (message.content && message.content.length > 0 && message.content.length < 100) {
-    console.log(`ChatMessage content: "${message.content}"`);
-  }
+  const isLoading = message.status === MessageStatus.PENDING || 
+                 message.status === MessageStatus.SENDING ||
+                 message.status === MessageStatus.QUEUED ||
+                 message.status === MessageStatus.PROCESSING ||
+                 message.status === MessageStatus.STREAMING;
+                 
+  const hasThinking = isAssistant && 
+                      message.sections?.thinking && 
+                      message.sections.thinking.content.trim().length > 0;
   
   // Animate message entrance
   useEffect(() => {
-    // Wait a tiny bit to ensure DOM is ready
     const timer = setTimeout(() => {
       setIsVisible(true);
     }, 10);
@@ -89,121 +90,129 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     return () => clearTimeout(timer);
   }, []);
   
-  // Scroll into view if last message
+  // Scroll into view if last message when content changes
   useEffect(() => {
     if (isLastMessage && messageRef.current) {
       messageRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isLastMessage, message.content]);
   
-  // Determine message container classes
-  const getContainerClasses = () => {
-    let classes = 'p-4 rounded-lg max-w-3xl transition-all duration-300 mb-4 ';
-    
-    // Add animation class
-    classes += isVisible ? 'opacity-100 translate-y-0 ' : 'opacity-0 translate-y-4 ';
-    
-    // Add role-specific styling
-    if (isSystem) {
-      classes += 'bg-gray-700 text-gray-200 mx-auto text-center max-w-lg ';
-    } else if (isAssistant) {
-      classes += `bg-${currentTheme.name}-700 text-${currentTheme.name}-50 mr-auto `;
-    } else {
-      classes += `bg-${currentTheme.name}-600 text-white ml-auto `;
-    }
-    
-    // Add error state
-    if (hasError) {
-      classes += 'border-2 border-red-500 ';
-    }
-    
-    // Add loading state
-    if (isLoading) {
-      classes += 'pulse-subtle ';
-    }
-    
-    return classes.trim();
+  const toggleThinking = () => {
+    setThinkingVisible(!thinkingVisible);
   };
   
   return (
     <div 
       ref={messageRef}
-      className={getContainerClasses()}
+      className={`chat-message ${isAssistant ? 'chat-message-assistant' : 'chat-message-user'} ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
       data-role={message.role}
     >
-      {/* Message content */}
-      <div className="prose prose-invert max-w-none">
-        <MessageParser content={message.content || ""} />
-      </div>
-      
-      {/* Status indicator */}
-      <StatusIndicator 
-        status={message.status} 
-        queuePosition={message.queue_position} 
-        error={message.error} 
-      />
-      
-      {/* Action buttons */}
-      {isAssistant && isLastMessage && (
-        <div className="flex justify-end mt-3 space-x-2">
-          {isGenerating && onStopGeneration ? (
-            <Button 
-              onClick={onStopGeneration}
-              variant="danger"
-              size="sm"
+      <div className={`message-content ${isUser ? 'user-message-content' : 'assistant-message-content'} ${
+        hasError ? 'message-error' : ''
+      } ${isLoading ? `message-${message.status?.toLowerCase()}` : ''}`}>
+        {/* Main message content (or response section) */}
+        <div className="prose max-w-none">
+          <MessageParser 
+            content={
+              isAssistant && message.sections?.response 
+                ? message.sections.response.content 
+                : message.content
+            } 
+          />
+        </div>
+        
+        {/* Thinking section */}
+        {hasThinking && (
+          <div className="mt-2">
+            <div 
+              className="cursor-pointer flex items-center text-xs opacity-70 hover:opacity-100 mb-1"
+              onClick={toggleThinking}
             >
-              Stop generating
-            </Button>
-          ) : (
-            onRegenerate && (
+              <span className="mr-1">{thinkingVisible ? '▼' : '▶'}</span>
+              <span>Model thinking</span>
+            </div>
+            
+            {thinkingVisible && (
+              <div className="thinking-section">
+                <pre className="thinking-content overflow-auto">
+                  {message.sections?.thinking?.content.replace(/<think>|<\/think>/g, '')}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Status indicator */}
+        <StatusIndicator 
+          status={message.status} 
+          error={message.metadata?.error}
+        />
+        
+        {/* Action buttons */}
+        {isAssistant && isLastMessage && (
+          <div className="flex justify-end mt-3 space-x-2">
+            {isGenerating && onStopGeneration ? (
               <Button 
-                onClick={() => onRegenerate(message.id)}
-                variant="secondary"
+                onClick={onStopGeneration}
+                variant="danger"
                 size="sm"
-                disabled={isLoading}
               >
-                Regenerate
+                Stop
               </Button>
-            )
-          )}
-        </div>
-      )}
-      
-      {/* Error retry button */}
-      {hasError && isUser && onRegenerate && (
-        <div className="flex justify-end mt-3">
-          <Button 
-            onClick={() => onRegenerate(message.id)}
-            variant="danger"
-            size="sm"
-          >
-            Retry
-          </Button>
-        </div>
-      )}
+            ) : (
+              onRegenerate && message.status === MessageStatus.COMPLETE && (
+                <Button 
+                  onClick={onRegenerate}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Regenerate
+                </Button>
+              )
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-// Memoize the component to prevent unnecessary re-renders when props haven't changed
+// Memoize the component to prevent unnecessary re-renders
 export default memo(ChatMessage, (prevProps, nextProps) => {
-  // Custom comparison function that only re-renders when necessary
   // Return true if we should NOT re-render (props are equal)
   
-  // First check for message ID and React control props - these must always trigger re-render when changed
+  // Check IDs and control props
   if (prevProps.message.id !== nextProps.message.id) return false;
   if (prevProps.isGenerating !== nextProps.isGenerating) return false;
   if (prevProps.isLastMessage !== nextProps.isLastMessage) return false;
+  if (prevProps.showThinking !== nextProps.showThinking) return false;
   
-  // Next check message state - re-render when content or status changes
+  // Check message state
   if (prevProps.message.status !== nextProps.message.status) return false;
+  
+  // Check content
   if (prevProps.message.content !== nextProps.message.content) return false;
   
-  // Check for error message changes
-  if (prevProps.message.error !== nextProps.message.error) return false;
+  // Check sections
+  const prevHasThinking = !!prevProps.message.sections?.thinking?.content;
+  const nextHasThinking = !!nextProps.message.sections?.thinking?.content;
   
-  // Check for queue position changes
-  if (prevProps.message.queue_position !== nextProps.message.queue_position) return false;
+  if (prevHasThinking !== nextHasThinking) return false;
+  
+  if (prevHasThinking && nextHasThinking) {
+    if (prevProps.message.sections?.thinking?.content !== nextProps.message.sections?.thinking?.content) {
+      return false;
+    }
+    if (prevProps.message.sections?.thinking?.visible !== nextProps.message.sections?.thinking?.visible) {
+      return false;
+    }
+  }
+  
+  if (prevProps.message.sections?.response?.content !== nextProps.message.sections?.response?.content) {
+    return false;
+  }
   
   // All props that would trigger a re-render are equal
   return true;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../../context/ThemeContext';
 import { useAuth } from '../../../../context/AuthContext';
@@ -12,6 +12,12 @@ interface ChatHeaderProps {
   toggleHistorySidebar: () => void;
   toggleSidebar: () => void;
   showSidebar: boolean;
+  conversationTitle?: string;
+  onUpdateTitle?: (title: string) => Promise<void>;
+  canUpdateTitle?: boolean;
+  queuePosition?: number;
+  isQueueLoading?: boolean;
+  isProcessing?: boolean;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -19,33 +25,152 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   toggleHistorySidebar,
   toggleSidebar,
   showSidebar,
+  conversationTitle = 'New Conversation',
+  onUpdateTitle,
+  canUpdateTitle = false,
+  queuePosition = 0,
+  isQueueLoading = false,
+  isProcessing = false,
 }) => {
   const { currentTheme } = useTheme();
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
-  const [modelName, setModelName] = useState<string>('Loading...');
+  const [modelName, setModelName] = useState<string>('Local LLM');
+  const [systemStatus, setSystemStatus] = useState<'online' | 'offline' | 'unknown'>('unknown');
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [newTitle, setNewTitle] = useState(conversationTitle);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   
-  // Fetch current model name from system stats
+  // Update newTitle when conversationTitle changes (from parent)
+  useEffect(() => {
+    setNewTitle(conversationTitle);
+  }, [conversationTitle]);
+  
+  // Fetch current model name and system status from system stats
   useEffect(() => {
     const getModelInfo = async () => {
       try {
         const stats = await fetchSystemStats();
-        if (stats && stats.ollama && stats.ollama.model) {
-          setModelName(stats.ollama.model);
+        // Handle different potential data structures from backend
+        if (stats) {
+          // Set system status
+          if (stats.ollama && 'online' in stats.ollama) {
+            setSystemStatus(stats.ollama.online ? 'online' : 'offline');
+          } else if (stats.status === 'online' || stats.status === 'offline') {
+            setSystemStatus(stats.status);
+          } else if (stats.ollama_status === 'online' || stats.ollama_status === 'offline') {
+            setSystemStatus(stats.ollama_status);
+          } else {
+            setSystemStatus('online'); // Default to online if we can fetch stats at all
+          }
+
+          // Determine model name from various possible structures
+          if (stats.ollama && stats.ollama.model) {
+            setModelName(stats.ollama.model);
+          } else if (stats.model) {
+            setModelName(stats.model);
+          } else if (stats.models && stats.models.default) {
+            setModelName(stats.models.default);
+          } else if (stats.default_model) {
+            setModelName(stats.default_model);
+          } else if (stats.config && stats.config.model) {
+            setModelName(stats.config.model);
+          }
         }
       } catch (error) {
         console.error('Error fetching model info:', error);
-        setModelName('Unknown');
+        setSystemStatus('unknown');
       }
     };
     
     getModelInfo();
     
-    // Refresh every 5 minutes
-    const intervalId = setInterval(getModelInfo, 5 * 60 * 1000);
+    // Refresh every 2 minutes (more frequent to catch model changes)
+    const intervalId = setInterval(getModelInfo, 2 * 60 * 1000);
     
     return () => clearInterval(intervalId);
   }, []);
+  
+  // Handle title edit start
+  const handleTitleClick = () => {
+    if (canUpdateTitle && onUpdateTitle) {
+      setEditingTitle(true);
+      // Focus input after render
+      setTimeout(() => titleInputRef.current?.focus(), 10);
+    }
+  };
+  
+  // Handle title save
+  const handleTitleSave = async () => {
+    if (onUpdateTitle && newTitle.trim()) {
+      await onUpdateTitle(newTitle.trim());
+    }
+    setEditingTitle(false);
+  };
+  
+  // Handle title input key events
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setNewTitle(conversationTitle);
+      setEditingTitle(false);
+    }
+  };
+  
+  // Create a new conversation
+  const handleNewChat = () => {
+    navigate('/chat');
+    window.location.reload(); // Force reload to clear state
+  };
+
+  // Render status indicator
+  const renderStatusIndicator = () => {
+    if (isQueueLoading) {
+      return (
+        <div className="flex items-center ml-2 px-1.5 py-0.5 rounded-sm text-[10px] font-medium animate-pulse"
+          style={{ 
+            backgroundColor: `${currentTheme.colors.warning}20`, 
+            color: currentTheme.colors.warning
+          }}
+        >
+          <span className="mr-1">Queue: {queuePosition}</span>
+          <div className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: currentTheme.colors.warning }}
+          ></div>
+        </div>
+      );
+    } else if (isProcessing) {
+      return (
+        <div className="flex items-center ml-2 px-1.5 py-0.5 rounded-sm text-[10px] font-medium animate-pulse"
+          style={{ 
+            backgroundColor: `${currentTheme.colors.info}20`, 
+            color: currentTheme.colors.info
+          }}
+        >
+          <span className="mr-1">Processing</span>
+          <div className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: currentTheme.colors.info }}
+          ></div>
+        </div>
+      );
+    } else if (systemStatus === 'offline') {
+      return (
+        <div className="flex items-center ml-2 px-1.5 py-0.5 rounded-sm text-[10px] font-medium"
+          style={{ 
+            backgroundColor: `${currentTheme.colors.error}20`, 
+            color: currentTheme.colors.error
+          }}
+        >
+          <span className="mr-1">Offline</span>
+          <div className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: currentTheme.colors.error }}
+          ></div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <header 
@@ -108,17 +233,77 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
               Chat
             </span>
           </div>
-          <div className="text-xs font-light" style={{ color: currentTheme.colors.textMuted }}>
-            <span>Ancient Cultivation Wisdom</span>
-            <span className="ml-2 px-1.5 py-0.5 rounded-sm font-medium" 
-                  style={{ 
-                    backgroundColor: `${currentTheme.colors.accentPrimary}20`,
-                    color: currentTheme.colors.accentPrimary
-                  }}
+          
+          {/* Conversation title (editable) */}
+          {editingTitle ? (
+            <div className="flex items-center mt-1">
+              <input
+                ref={titleInputRef}
+                type="text"
+                className="text-xs py-1 px-2 rounded w-48"
+                style={{ 
+                  backgroundColor: `${currentTheme.colors.bgSecondary}`,
+                  color: currentTheme.colors.textPrimary,
+                  border: `1px solid ${currentTheme.colors.borderColor}`
+                }}
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleTitleSave}
+                maxLength={48}
+              />
+              <Button
+                size="xs"
+                variant="ghost"
+                className="ml-1 p-1"
+                onClick={handleTitleSave}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </Button>
+            </div>
+          ) : (
+            <div 
+              className={`text-xs font-medium flex items-center ${canUpdateTitle ? 'cursor-pointer group' : ''}`}
+              style={{ color: currentTheme.colors.textMuted }}
+              onClick={canUpdateTitle ? handleTitleClick : undefined}
             >
-              {modelName}
-            </span>
-          </div>
+              <span>{conversationTitle}</span>
+              {canUpdateTitle && (
+                <svg 
+                  className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-70 transition-opacity" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              )}
+              <span className="ml-2 px-1.5 py-0.5 rounded-sm text-[10px] font-medium flex items-center" 
+                style={{ 
+                  backgroundColor: `${currentTheme.colors.accentPrimary}20`,
+                  color: currentTheme.colors.accentPrimary
+                }}
+              >
+                <div 
+                  className="w-1.5 h-1.5 rounded-full mr-1"
+                  style={{ 
+                    backgroundColor: systemStatus === 'online' 
+                      ? currentTheme.colors.success 
+                      : systemStatus === 'offline'
+                        ? currentTheme.colors.error
+                        : currentTheme.colors.warning
+                  }}
+                ></div>
+                {modelName}
+              </span>
+              
+              {/* Status indicators (queue, processing, etc.) */}
+              {renderStatusIndicator()}
+            </div>
+          )}
         </div>
       </div>
       
@@ -136,6 +321,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             borderColor: 'transparent',
             boxShadow: `0 4px 12px ${currentTheme.colors.accentPrimary}40`,
           }}
+          onClick={handleNewChat}
         >
           <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

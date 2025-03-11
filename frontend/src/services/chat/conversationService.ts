@@ -148,13 +148,26 @@ export async function updateConversationTitle(
 }> {
   return executeServiceCall(
     async () => {
-      const response = await fetchApi<{ message: string }>(`/api/chat/conversation/${conversationId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ title }),
-      });
+      // Try PUT first (backend implementation), fall back to PATCH if that fails
+      let response;
+      try {
+        response = await fetchApi<{ message: string }>(`/api/chat/conversation/${conversationId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ title }),
+        });
+      } catch (error) {
+        // Fallback to PATCH if PUT fails
+        response = await fetchApi<{ message: string }>(`/api/chat/conversation/${conversationId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ title }),
+        });
+      }
       
       const result = handleApiResponse(response, { 
         title: 'Update Failed',

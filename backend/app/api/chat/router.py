@@ -22,7 +22,7 @@ from .conversation_service import (
 )
 from .utils import get_queue, generate_id, strip_editor_html
 from ...config import settings
-from .websocket import manager
+from .websocket import manager, APPEND, REPLACE
 
 from ...db import get_db, SessionLocal
 from ...auth.utils import get_current_user, get_current_admin_user, jwt, SECRET_KEY, ALGORITHM
@@ -416,16 +416,29 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Send to WebSocket clients with APPEND signal
-                        await manager.send_update(user.id, {
-                            "type": "message_update",
-                            "message_id": message_id,
-                            "conversation_id": conversation_id,
-                            "status": "STREAMING",
-                            "assistant_content": token,
-                            "content_update_type": "APPEND",  # Signal frontend to append tokens
-                            "is_complete": is_complete
-                        })
+                        # Detect if token contains thinking tags
+                        if "<think>" in token or "</think>" in token:
+                            # This is a thinking section token
+                            await manager.send_section_update(
+                                user_id=user.id,
+                                message_id=message_id,
+                                conversation_id=conversation_id,
+                                section="thinking",
+                                content=token,
+                                is_complete=is_complete,
+                                operation=APPEND
+                            )
+                        else:
+                            # Regular response token
+                            await manager.send_section_update(
+                                user_id=user.id,
+                                message_id=message_id,
+                                conversation_id=conversation_id,
+                                section="response",
+                                content=token,
+                                is_complete=is_complete,
+                                operation=APPEND
+                            )
                     except Exception as e:
                         # Not JSON, probably raw text
                         logger.info(f"Non-JSON response, treating as raw text: {e}")
@@ -443,16 +456,29 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Send to WebSocket clients with APPEND signal for raw text
-                        await manager.send_update(user.id, {
-                            "type": "message_update",
-                            "message_id": message_id,
-                            "conversation_id": conversation_id,
-                            "status": "STREAMING",
-                            "assistant_content": token,
-                            "content_update_type": "APPEND",  # Signal frontend to append tokens
-                            "is_complete": is_complete
-                        })
+                        # Detect if token contains thinking tags
+                        if "<think>" in token or "</think>" in token:
+                            # This is a thinking section token
+                            await manager.send_section_update(
+                                user_id=user.id,
+                                message_id=message_id,
+                                conversation_id=conversation_id,
+                                section="thinking",
+                                content=token,
+                                is_complete=is_complete,
+                                operation=APPEND
+                            )
+                        else:
+                            # Regular response token
+                            await manager.send_section_update(
+                                user_id=user.id,
+                                message_id=message_id,
+                                conversation_id=conversation_id,
+                                section="response",
+                                content=token,
+                                is_complete=is_complete,
+                                operation=APPEND
+                            )
                         
                         # No need to yield to HTTP client again, already done above
                 
