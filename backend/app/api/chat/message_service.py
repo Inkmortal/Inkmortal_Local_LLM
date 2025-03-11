@@ -16,6 +16,7 @@ from .utils import execute_with_safe_transaction, generate_id
 from ...queue import QueuedRequest, RequestPriority, QueueManagerInterface
 from ...auth.models import User
 from ...config import settings
+from ...db import SessionLocal  # Import SessionLocal for creating fresh sessions
 
 # Set up logger
 logger = logging.getLogger("app.api.chat.message_service")
@@ -159,13 +160,12 @@ async def send_message(
             # Queue the request
             await queue_manager.add_request(request_obj)
             
-            # Start async processing
+            # Start async processing (don't pass the DB session)
             asyncio.create_task(
                 process_message(
-                    db, 
-                    user, 
+                    user.id,
                     message_id, 
-                    conversation, 
+                    conversation.id, 
                     request_obj, 
                     queue_manager
                 )
@@ -206,10 +206,9 @@ async def send_message(
         }
 
 async def process_message(
-    db: Session,
-    user: User,
+    user_id: int,
     message_id: str,
-    conversation: Conversation,
+    conversation_id: str,
     request_obj: QueuedRequest,
     queue_manager: QueueManagerInterface
 ) -> None:
@@ -227,10 +226,10 @@ async def process_message(
             if position is not None and position >= 0:
                 # Send WebSocket update if position changed
                 if position != last_position:
-                    await manager.send_update(user.id, {
+                    await manager.send_update(user_id, {
                         "type": "message_update",
                         "message_id": message_id,
-                        "conversation_id": conversation.id,
+                        "conversation_id": conversation_id,
                         "status": "QUEUED",
                         "queue_position": position
                     })
@@ -244,10 +243,10 @@ async def process_message(
                     logger.info("Processing request now")
                     
                     # Send processing status update
-                    await manager.send_update(user.id, {
+                    await manager.send_update(user_id, {
                         "type": "message_update",
                         "message_id": message_id,
-                        "conversation_id": conversation.id,
+                        "conversation_id": conversation_id,
                         "status": "PROCESSING"
                     })
                     
@@ -265,29 +264,45 @@ async def process_message(
                             logger.error(f"Unexpected response type: {type(llm_response)}")
                             assistant_content = "Error: Unable to process response"
                         
-                        # Save assistant response in database
+                        # Send streaming status to client
+                        await manager.send_update(user_id, {
+                            "type": "message_update",
+                            "message_id": message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": assistant_content[:10] + "..." # Preview
+                        })
+                        
+                        # Create a new database session for the async operation
+                        db = SessionLocal()
                         try:
-                            # Begin new transaction
-                            db.begin_nested()
-                            
                             # Create assistant message
+                            assistant_message_id = generate_id()
                             assistant_message = Message(
-                                id=generate_id(),
-                                conversation_id=conversation.id,
+                                id=assistant_message_id,
+                                conversation_id=conversation_id,
                                 role="assistant",
                                 content=assistant_content
                             )
                             db.add(assistant_message)
                             
+                            # Load the conversation to update title
+                            conversation = db.query(Conversation).filter(
+                                Conversation.id == conversation_id
+                            ).first()
+                            
+                            if not conversation:
+                                raise ValueError(f"Conversation not found: {conversation_id}")
+                            
                             # Update conversation title if this is first exchange
                             message_count = db.query(Message).filter(
-                                Message.conversation_id == conversation.id
+                                Message.conversation_id == conversation_id
                             ).count()
                             
                             if message_count <= 2 and (not conversation.title or conversation.title.startswith("New Conversation")):
                                 # Generate title from first exchange (max 50 chars)
                                 first_msg = db.query(Message).filter(
-                                    Message.conversation_id == conversation.id,
+                                    Message.conversation_id == conversation_id,
                                     Message.role == "user"
                                 ).order_by(Message.created_at).first()
                                 
@@ -301,33 +316,35 @@ async def process_message(
                             db.commit()
                             
                             # Send WebSocket update
-                            await manager.send_update(user.id, {
+                            await manager.send_update(user_id, {
                                 "type": "message_update",
                                 "message_id": message_id,
-                                "conversation_id": conversation.id,
+                                "conversation_id": conversation_id,
                                 "status": "COMPLETE",
-                                "response": {
-                                    "id": assistant_message.id,
-                                    "content": assistant_content
-                                }
+                                "assistant_message_id": assistant_message_id,
+                                "assistant_content": assistant_content
                             })
                             
                             # Clean up tracking
                             manager.untrack_request(request_obj.timestamp)
                             
-                            logger.info(f"Completed processing for conversation {conversation.id}")
+                            logger.info(f"Completed processing for conversation {conversation_id}")
                             return
                             
                         except Exception as db_error:
                             # Handle DB error
-                            db.rollback()
+                            try:
+                                db.rollback()
+                            except:
+                                pass
+                                
                             logger.error(f"Database error saving assistant message: {str(db_error)}")
                             
                             # Send error through WebSocket
-                            await manager.send_update(user.id, {
+                            await manager.send_update(user_id, {
                                 "type": "message_update",
                                 "message_id": message_id,
-                                "conversation_id": conversation.id,
+                                "conversation_id": conversation_id,
                                 "status": "ERROR",
                                 "error": "Error saving assistant message"
                             })
@@ -335,6 +352,9 @@ async def process_message(
                             # Clean up tracking
                             manager.untrack_request(request_obj.timestamp)
                             return
+                        finally:
+                            # Always close the database session
+                            db.close()
                     
                     break
             
@@ -344,10 +364,10 @@ async def process_message(
         # Handle timeout if we reached here
         if asyncio.get_event_loop().time() - start_time >= timeout_seconds:
             # Send timeout error through WebSocket
-            await manager.send_update(user.id, {
+            await manager.send_update(user_id, {
                 "type": "message_update",
                 "message_id": message_id,
-                "conversation_id": conversation.id,
+                "conversation_id": conversation_id,
                 "status": "ERROR",
                 "error": "Request timed out waiting for LLM response"
             })
@@ -355,17 +375,17 @@ async def process_message(
             # Clean up tracking
             manager.untrack_request(request_obj.timestamp)
             
-            logger.warning(f"Request timed out for conversation {conversation.id}")
+            logger.warning(f"Request timed out for conversation {conversation_id}")
             
     except Exception as e:
         # Handle any unexpected errors
         logger.error(f"Error processing message: {str(e)}")
         
         # Send error through WebSocket
-        await manager.send_update(user.id, {
+        await manager.send_update(user_id, {
             "type": "message_update",
             "message_id": message_id,
-            "conversation_id": conversation.id,
+            "conversation_id": conversation_id,
             "status": "ERROR",
             "error": "Unexpected error occurred"
         })
