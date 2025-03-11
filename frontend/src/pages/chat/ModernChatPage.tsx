@@ -13,7 +13,7 @@ import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
 import ChatContainer from './components/chat/ChatContainer';
 import ChatWindow from '../../components/chat/ChatWindow';
 import ChatInputAdapter from '../../components/chat/ChatInputAdapter';
-import ChatHistorySidebarV2 from '../../components/chat/ChatHistorySidebarV2';
+import ChatHistorySidebar from '../../components/chat/ChatHistorySidebar';
 import ArtifactsSidebar, { Artifact, UploadedDocument } from '../../components/artifacts/ArtifactsSidebar';
 import ArtifactCanvas from '../../components/artifacts/ArtifactCanvas';
 import FileUploadArea from './components/chat/FileUploadArea';
@@ -136,7 +136,7 @@ const ModernChatPage: React.FC = () => {
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
       {/* Left Sidebar - Conversation History */}
-      <ChatHistorySidebarV2 
+      <ChatHistorySidebar 
         showSidebar={showHistorySidebar}
         toggleSidebar={toggleHistorySidebar}
         conversations={conversationList}
