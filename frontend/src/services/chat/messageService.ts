@@ -21,6 +21,7 @@ import {
   ensureWebSocketConnection,
   addConnectionListener
 } from './websocketService';
+import { fetchSSE } from '../../utils/sseUtils';
 
 // Track WebSocket availability
 let webSocketAvailable = false;
@@ -676,15 +677,103 @@ export async function sendMessage(
             };
           }
           
-          // Send the initial request
-          const response = await fetchApi<ChatResponse>(endpoint, requestOptions);
-          
-          // Handle API response
-          const result = handleApiResponse(response);
-          if (result.success && result.data) {
-            return result.data;
+          // Check if this is a streaming request
+          if (params.stream) {
+            // For streaming, use direct fetch without going through the standard API
+            // Using the full URL from API_BASE_URL defined in config
+            const { API_BASE_URL } = require('../../config/api');
+            const baseUrl = `${API_BASE_URL}${endpoint}`;
+            
+            // Get the auth token for headers
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+              throw new Error('Authentication required');
+            }
+            
+            // Prepare headers
+            const headers: HeadersInit = {
+              'Authorization': `Bearer ${token}`
+            };
+            
+            // Add headers for JSON requests
+            if (!params.file) {
+              headers['Content-Type'] = 'application/json';
+            }
+            
+            // Create a response promise
+            return new Promise<ChatResponse>((resolve, reject) => {
+              // Response data
+              let messageId: string | undefined;
+              let conversationId: string | undefined;
+              let isComplete = false;
+              let incomingContent = '';
+              
+              // Use SSE fetch
+              fetchSSE(
+                baseUrl,
+                {
+                  ...requestOptions,
+                  headers
+                },
+                (chunk) => {
+                  // Process each chunk
+                  console.log('SSE Chunk:', typeof chunk, chunk);
+                  
+                  if (typeof chunk === 'object' && chunk !== null) {
+                    // Extract message ID and conversation ID from first message if needed
+                    if (!messageId && chunk.message_id) {
+                      messageId = chunk.message_id;
+                    }
+                    if (!conversationId && chunk.conversation_id) {
+                      conversationId = chunk.conversation_id;
+                    }
+                    
+                    // Handle streamed token
+                    if (chunk.message && chunk.message.content) {
+                      const token = chunk.message.content;
+                      incomingContent += token;
+                      fullHandlers.onToken(token);
+                    }
+                    
+                    // Check if complete
+                    if (chunk.done === true || chunk.done_reason) {
+                      isComplete = true;
+                    }
+                  }
+                  
+                  // If complete, resolve the promise
+                  if (isComplete) {
+                    const response: ChatResponse = {
+                      id: messageId || 'unknown',
+                      conversation_id: conversationId || params.conversation_id || 'unknown',
+                      content: incomingContent,
+                      created_at: new Date().toISOString(),
+                      role: 'assistant',
+                      status: MessageStatus.COMPLETE
+                    };
+                    
+                    fullHandlers.onComplete(response);
+                    resolve(response);
+                  }
+                },
+                (error) => {
+                  console.error('SSE Error:', error);
+                  fullHandlers.onError(`Streaming error: ${error instanceof Error ? error.message : String(error)}`);
+                  reject(error);
+                }
+              );
+            });
           } else {
-            throw new Error(result.error || 'Failed to send message');
+            // For non-streaming requests, use the standard API
+            const response = await fetchApi<ChatResponse>(endpoint, requestOptions);
+            
+            // Handle API response
+            const result = handleApiResponse(response);
+            if (result.success && result.data) {
+              return result.data;
+            } else {
+              throw new Error(result.error || 'Failed to send message');
+            }
           }
         },
         null
@@ -695,7 +784,7 @@ export async function sendMessage(
       }
       
       // Register for WebSocket updates for this message
-      const messageId = response.id;
+      const messageId = response.id || 'unknown';
       
       // Register handler for WebSocket updates
       const unregisterHandler = registerMessageHandler(messageId, (update: MessageUpdateEvent) => {
