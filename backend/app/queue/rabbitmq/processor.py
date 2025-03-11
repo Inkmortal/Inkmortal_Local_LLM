@@ -126,7 +126,17 @@ class RequestProcessor:
             # Convert OpenAI-style messages to LangChain format
             langchain_messages = []
             
-            for msg in request.body.get("messages", []):
+            # Check if we have OpenAI-style messages array or single message format
+            messages_array = request.body.get("messages", [])
+            
+            # If no messages found but we have a message field, convert it
+            if not messages_array and "message" in request.body:
+                # Convert single message to array format
+                logger.info(f"Converting single message to messages array format")
+                messages_array = [{"role": "user", "content": request.body.get("message", "")}]
+            
+            # Process messages
+            for msg in messages_array:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 

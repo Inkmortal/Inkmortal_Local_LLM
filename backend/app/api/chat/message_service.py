@@ -146,7 +146,7 @@ async def send_message(
             priority=RequestPriority.WEB_INTERFACE,  # Use correct enum value
             endpoint="/api/llm/generate",  # Endpoint for LLM generation
             body={
-                "message": message_text,
+                "messages": [{"role": "user", "content": message_text}],
                 "conversation_id": conv_id,
                 "message_id": message_id
             },
@@ -244,11 +244,34 @@ async def process_message(
                     
                     # Handle the response if successful
                     if llm_response:
-                        # Get response content
+                        # Get response content with improved format detection
                         if isinstance(llm_response, str):
                             assistant_content = llm_response
                         elif isinstance(llm_response, Dict):
-                            assistant_content = llm_response.get("response", "")
+                            # Try different response formats - processor.py uses OpenAI format
+                            if "choices" in llm_response and len(llm_response["choices"]) > 0:
+                                # OpenAI-style response format from processor.py
+                                choice = llm_response["choices"][0]
+                                if "message" in choice and "content" in choice["message"]:
+                                    assistant_content = choice["message"]["content"]
+                                else:
+                                    assistant_content = str(choice)
+                            # Fallback to older formats
+                            elif "response" in llm_response:
+                                assistant_content = llm_response.get("response", "")
+                            else:
+                                # Try to find content in any format
+                                content_keys = ["content", "text", "message", "answer", "result"]
+                                for key in content_keys:
+                                    if key in llm_response:
+                                        assistant_content = llm_response[key]
+                                        break
+                                else:
+                                    # If we can't find a known key, just stringify the whole response
+                                    assistant_content = str(llm_response)
+                                    
+                            # Log what we found
+                            logger.info(f"Extracted response content: {assistant_content[:50]}...")
                         else:
                             logger.error(f"Unexpected response type: {type(llm_response)}")
                             assistant_content = "Error: Unable to process response"
