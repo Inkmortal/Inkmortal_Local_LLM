@@ -97,8 +97,17 @@ class RequestProcessor:
                     logger.info(f"Available models: {available_model_names}")
                     
                     if model_name not in available_model_names:
-                        logger.error(f"Model {model_name} not found in available models")
-                        raise Exception(f"Model '{model_name}' not available. Please select one of: {', '.join(available_model_names)}")
+                        logger.warning(f"Model {model_name} not found in available models")
+                        
+                        # Fall back to the first available model instead of raising an exception
+                        if available_model_names:
+                            fallback_model = available_model_names[0]
+                            logger.info(f"Falling back to first available model: {fallback_model}")
+                            model_name = fallback_model
+                        else:
+                            # Only raise an exception if no models are available
+                            logger.error("No fallback models available")
+                            raise Exception(f"Model '{model_name}' not available and no fallback models found.")
             except Exception as e:
                 logger.error(f"Error checking Ollama model availability: {e}")
                 raise Exception(f"Failed to validate model availability: {str(e)}")

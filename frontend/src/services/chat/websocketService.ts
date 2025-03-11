@@ -43,18 +43,19 @@ class WebSocketManager {
   // Get WebSocket URL based on current environment
   private getWebSocketUrl(token: string): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let host = window.location.host;
-    let port = window.location.port;
     
-    // Use dynamic port detection with fallback to 8000 for development
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      // If frontend is not on port 8000, assume backend is there
-      if (port !== '8000') {
-        host = `${window.location.hostname}:8000`;
-      }
+    // Production mode - use same host and protocol
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      // Use current host - the proxy should handle routing to backend
+      return `${protocol}//${window.location.host}/api/chat/ws?token=${token}`;
     }
     
-    return `${protocol}//${host}/api/chat/ws?token=${token}`;
+    // Development mode - use fixed backend port 8000
+    const backendPort = '8000'; // Hardcoded for simplicity
+    const backendHost = `${window.location.hostname}:${backendPort}`;
+    
+    console.log(`Using WebSocket backend at ${protocol}//${backendHost}/api/chat/ws`);
+    return `${protocol}//${backendHost}/api/chat/ws?token=${token}`;
   }
 
   // Initialize WebSocket connection with improved error handling
