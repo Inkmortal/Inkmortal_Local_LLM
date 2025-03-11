@@ -594,7 +594,8 @@ export async function sendMessage(
   const params: ChatRequestParams = {
     message,
     conversation_id: conversationId,
-    file: file ? file : undefined
+    file: file ? file : undefined,
+    stream: true  // Enable true streaming
   };
   
   try {
