@@ -142,10 +142,12 @@ export function useChat({
         const unsubscribe = addConnectionListener((isConnected) => {
           wsConnectedRef.current = isConnected;
           
-          // Handle reconnection events
+          // Handle reconnection events - but don't automatically reload conversation
+          // as this can cause excessive API calls
           if (isConnected && state.activeConversationId) {
-            // Refresh messages if reconnected during active conversation
-            loadConversation(state.activeConversationId);
+            console.log('WebSocket reconnected');
+            // Only mark the connection as established; don't reload
+            dispatch({ type: ChatActionType.SET_WEBSOCKET_CONNECTED, payload: true });
           }
         });
         
@@ -463,7 +465,8 @@ export function useChat({
       let unregisterHandler: (() => void) | null = null;
       if (wsConnectedRef.current) {
         unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
-          console.log('WebSocket update for message:', update);
+          // Log detailed message structure for debugging
+          console.log('WebSocket update for message:', JSON.stringify(update, null, 2));
           
           // Handle status updates
           if (update.status) {
@@ -490,16 +493,27 @@ export function useChat({
             });
           }
           
-          // Handle content updates
-          if (update.assistant_content) {
+          // Handle content updates with better debug info
+          console.log('Handling content update:', {
+            hasAssistantContent: !!update.assistant_content,
+            hasContent: !!update.content,
+            hasDelta: !!update.delta,
+            contentLength: update.content ? update.content.length : 0,
+            assistantContentLength: update.assistant_content ? update.assistant_content.length : 0
+          });
+          
+          // Process either assistant_content or content field - the backend may use either
+          const contentToProcess = update.assistant_content || update.content;
+          
+          if (contentToProcess) {
             // Check if the update contains section markers
-            const hasThinking = update.assistant_content.includes('<think>');
+            const hasThinking = contentToProcess.includes('<think>');
             
             if (hasThinking) {
               // Extract thinking and response content
-              const thinkingMatches = update.assistant_content.match(/<think>([\s\S]*?)<\/think>/g);
+              const thinkingMatches = contentToProcess.match(/<think>([\s\S]*?)<\/think>/g);
               let thinkingContent = '';
-              let responseContent = update.assistant_content;
+              let responseContent = contentToProcess;
               
               if (thinkingMatches) {
                 thinkingContent = thinkingMatches
@@ -507,7 +521,7 @@ export function useChat({
                   .join('\n');
                 
                 // Remove thinking sections from response content
-                responseContent = update.assistant_content.replace(/<think>[\s\S]*?<\/think>/g, '');
+                responseContent = contentToProcess.replace(/<think>[\s\S]*?<\/think>/g, '');
               }
               
               // Update thinking section
@@ -534,16 +548,55 @@ export function useChat({
                 }
               });
             } else {
-              // No sections, just update response content
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: assistantMessageId,
-                  content: update.assistant_content,
-                  section: 'response',
-                  contentUpdateMode: ContentUpdateMode.REPLACE
-                }
-              });
+              // For streaming, prioritize the content field - it's likely a token-by-token update
+              if (update.content && typeof update.content === 'string') {
+                // This is likely a streaming token update
+                console.log('Streaming token update:', {
+                  token: update.content,
+                  length: update.content.length
+                });
+                
+                dispatch({
+                  type: ChatActionType.UPDATE_MESSAGE,
+                  payload: {
+                    messageId: assistantMessageId,
+                    content: update.content,
+                    section: 'response',
+                    contentUpdateMode: ContentUpdateMode.APPEND
+                  }
+                });
+              } else if (update.delta && update.delta.content) {
+                // Delta update (streaming) - append new content
+                console.log('Delta update:', {
+                  token: update.delta.content,
+                  length: update.delta.content.length
+                });
+                
+                dispatch({
+                  type: ChatActionType.UPDATE_MESSAGE,
+                  payload: {
+                    messageId: assistantMessageId,
+                    content: update.delta.content,
+                    section: 'response',
+                    contentUpdateMode: ContentUpdateMode.APPEND
+                  }
+                });
+              } else {
+                // Full content update - replace content
+                console.log('Full content update:', {
+                  contentLength: contentToProcess.length
+                });
+                
+                dispatch({
+                  type: ChatActionType.UPDATE_MESSAGE,
+                  payload: {
+                    messageId: assistantMessageId,
+                    content: contentToProcess,
+                    section: 'response',
+                    contentUpdateMode: ContentUpdateMode.REPLACE
+                  }
+                });
+              }
             }
           }
           

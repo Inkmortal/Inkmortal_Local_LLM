@@ -13,6 +13,7 @@ export interface ChatState {
   isLoadingMessages: boolean;
   isLoadingConversations: boolean;
   error: Error | null;
+  isWebSocketConnected: boolean;
 }
 
 export enum ChatActionType {
@@ -26,7 +27,8 @@ export enum ChatActionType {
   SET_LOADING_MESSAGES = 'SET_LOADING_MESSAGES',
   SET_LOADING_CONVERSATIONS = 'SET_LOADING_CONVERSATIONS',
   SET_ERROR = 'SET_ERROR',
-  CLEAR_ERROR = 'CLEAR_ERROR'
+  CLEAR_ERROR = 'CLEAR_ERROR',
+  SET_WEBSOCKET_CONNECTED = 'SET_WEBSOCKET_CONNECTED'
 }
 
 export type ChatAction =
@@ -40,7 +42,8 @@ export type ChatAction =
   | { type: ChatActionType.SET_LOADING_MESSAGES; payload: boolean }
   | { type: ChatActionType.SET_LOADING_CONVERSATIONS; payload: boolean }
   | { type: ChatActionType.SET_ERROR; payload: Error }
-  | { type: ChatActionType.CLEAR_ERROR };
+  | { type: ChatActionType.CLEAR_ERROR }
+  | { type: ChatActionType.SET_WEBSOCKET_CONNECTED; payload: boolean };
 
 export const initialChatState: ChatState = {
   messages: {},
@@ -48,7 +51,8 @@ export const initialChatState: ChatState = {
   activeConversationId: null,
   isLoadingMessages: false,
   isLoadingConversations: false,
-  error: null
+  error: null,
+  isWebSocketConnected: false
 };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -233,6 +237,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         error: null
+      };
+    
+    case ChatActionType.SET_WEBSOCKET_CONNECTED:
+      return {
+        ...state,
+        isWebSocketConnected: action.payload
       };
       
     default:
