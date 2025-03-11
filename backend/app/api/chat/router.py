@@ -45,7 +45,11 @@ async def websocket_endpoint(
 ):
     """WebSocket endpoint for real-time message updates"""
     # Extract token from query parameters
+    client_info = f"{websocket.client.host}:{websocket.client.port}"
+    logger.info(f"WebSocket connection attempt from {client_info}")
+    
     if not token:
+        logger.warning(f"WebSocket connection rejected - missing token from {client_info}")
         await websocket.close(code=1008, reason="Missing authentication token")
         return
     
@@ -55,14 +59,18 @@ async def websocket_endpoint(
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
             if not username:
+                logger.warning(f"WebSocket connection rejected - token missing 'sub' claim from {client_info}")
                 await websocket.close(code=1008, reason="Invalid token")
                 return
             
             # Get user from database
             user = db.query(User).filter(User.username == username).first()
             if not user:
+                logger.warning(f"WebSocket connection rejected - user '{username}' not found in database from {client_info}")
                 await websocket.close(code=1008, reason="User not found")
                 return
+                
+            logger.info(f"WebSocket authentication successful for user {username} (ID: {user.id}) from {client_info}")
             
             # Establish connection
             await manager.connect(websocket, user.id)
@@ -157,6 +165,12 @@ async def list_conversations_endpoint(
 ):
     """List conversations for a user"""
     conversations = list_conversations(db, current_user.id, limit, offset)
+    
+    # Added debug logging to help diagnose history issues
+    logger.info(f"Fetched {len(conversations)} conversations for user {current_user.username}")
+    if conversations:
+        logger.info(f"First conversation: {conversations[0].get('id')} - {conversations[0].get('title')}")
+    
     return {"conversations": conversations}
 
 # Endpoint to update a conversation
@@ -204,12 +218,12 @@ async def send_message_endpoint(
     current_user: User = Depends(get_current_user),
     queue_manager = Depends(get_queue)
 ):
-    """Send a message to the LLM and store the conversation"""
+    """Send a message to the LLM and store the conversation - always uses streaming now"""
     content_type = request.headers.get("Content-Type", "")
     message_text = None
     conversation_id = None
     file_content = None
-    stream = False
+    # Always stream - removed stream flag
     
     try:
         # Parse request based on content type
@@ -218,9 +232,7 @@ async def send_message_endpoint(
             form = await request.form()
             message_text = form.get("message")
             conversation_id = form.get("conversation_id")
-            stream_param = form.get("stream")
-            if stream_param and stream_param.lower() in ("true", "1", "yes"):
-                stream = True
+            # Ignoring stream parameter - always stream now
             file = form.get("file")
             
             # Handle file upload if provided
@@ -237,7 +249,7 @@ async def send_message_endpoint(
             data = await request.json()
             message_text = data.get("message")
             conversation_id = data.get("conversation_id")
-            stream = data.get("stream", False)
+            # Ignoring stream parameter - always stream now
             
         # Validate message text
         if not message_text:
@@ -246,20 +258,8 @@ async def send_message_endpoint(
                 detail="Message is required"
             )
         
-        # Check if streaming is requested
-        if stream:
-            # Send message with streaming
-            return await stream_message(
-                db=db,
-                user=current_user,
-                message_text=message_text,
-                conversation_id=conversation_id,
-                file_content=file_content,
-                queue_manager=queue_manager
-            )
-            
-        # Send message using service (non-streaming)
-        result = await send_message(
+        # Always use streaming now - no more condition check
+        return await stream_message(
             db=db,
             user=current_user,
             message_text=message_text,
@@ -267,17 +267,6 @@ async def send_message_endpoint(
             file_content=file_content,
             queue_manager=queue_manager
         )
-        
-        if not result.get("success", False):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=result.get("error", "Error processing message")
-            )
-        
-        return {
-            "message_id": result["message_id"],
-            "conversation_id": result["conversation_id"]
-        }
         
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -427,13 +416,14 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Send to WebSocket clients
+                        # Send to WebSocket clients with APPEND signal
                         await manager.send_update(user.id, {
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conversation_id,
                             "status": "STREAMING",
                             "assistant_content": token,
+                            "content_update_type": "APPEND",  # Signal frontend to append tokens
                             "is_complete": is_complete
                         })
                     except Exception as e:
@@ -453,13 +443,14 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Send to WebSocket clients
+                        # Send to WebSocket clients with APPEND signal for raw text
                         await manager.send_update(user.id, {
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conversation_id,
                             "status": "STREAMING",
                             "assistant_content": token,
+                            "content_update_type": "APPEND",  # Signal frontend to append tokens
                             "is_complete": is_complete
                         })
                         
