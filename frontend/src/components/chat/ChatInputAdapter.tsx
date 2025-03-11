@@ -30,6 +30,23 @@ const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
   // Track previous generating state to detect when generation completes
   const wasGenerating = useRef(isGenerating);
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Get a ref to the actual textarea from the ChatInput
+  const setTextareaRef = (element: HTMLTextAreaElement | null) => {
+    textareaRef.current = element;
+  };
+  
+  // Clean up any pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+        focusTimeoutRef.current = null;
+      }
+    };
+  }, []);
   
   // When generation finishes, force focus on the input after a short delay
   useEffect(() => {
@@ -37,24 +54,46 @@ const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
     wasGenerating.current = isGenerating;
     
     if (generationJustCompleted) {
-      // First delay is to allow any pending operations to complete
-      setTimeout(() => {
-        console.log('Generation completed, attempting to re-enable input...');
+      // Clean up any existing timeout
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+      
+      // Set timeout to focus after generation completes
+      focusTimeoutRef.current = setTimeout(() => {
+        console.log('Generation completed, focusing input...');
         
-        // Second delay gives a bit more time for UI to stabilize
-        setTimeout(() => {
-          console.log('Focusing textarea now...');
-          // Find and focus the textarea
-          const textarea = document.querySelector('.chat-input textarea');
-          if (textarea) {
-            console.log('Textarea found, focusing now');
-            (textarea as HTMLTextAreaElement).click(); // First click to ensure the component is active
-            (textarea as HTMLTextAreaElement).focus(); // Then focus
-          } else {
-            console.warn('Textarea not found to focus');
+        // Try to focus the textarea directly using ref
+        if (textareaRef.current) {
+          try {
+            console.log('Focusing textarea using ref');
+            textareaRef.current.focus();
+            textareaRef.current.click(); // Sometimes click can help with focus issues
+            
+            // Put cursor at end of text
+            const length = textareaRef.current.value.length;
+            textareaRef.current.setSelectionRange(length, length);
+          } catch (e) {
+            console.error('Error focusing textarea:', e);
           }
-        }, 150);
-      }, 100);
+        } else {
+          console.warn('Textarea ref not available, trying DOM query');
+          
+          // Fallback to DOM query if ref not available
+          try {
+            const textarea = document.querySelector('.chat-input textarea');
+            if (textarea) {
+              (textarea as HTMLTextAreaElement).focus();
+            } else {
+              console.warn('Textarea not found by DOM query');
+            }
+          } catch (e) {
+            console.error('Error in DOM query fallback:', e);
+          }
+        }
+        
+        focusTimeoutRef.current = null;
+      }, 300); // Slightly longer delay for better reliability
     }
   }, [isGenerating]);
   
@@ -62,12 +101,13 @@ const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
     <div className="chat-input">
       <ChatInput
         onSend={onSendMessage}
-        disabled={disabled}
+        disabled={false} {/* Never disable the input field, only disable the send button */}
         placeholder={placeholder}
         isGenerating={isGenerating}
         codeInsertRef={codeInsertRef}
         mathInsertRef={mathInsertRef}
-        inputRef={inputRef}
+        inputRef={textareaRef}
+        forwardedRef={setTextareaRef}
       />
     </div>
   );
