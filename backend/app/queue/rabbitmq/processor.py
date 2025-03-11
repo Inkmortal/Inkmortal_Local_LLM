@@ -31,7 +31,7 @@ class RequestProcessor:
             self.langchain_client = None  # Will be initialized per request with model name
     
     async def process_request(self, request: QueuedRequest) -> Dict[str, Any]:
-        """Process a request synchronously with timeout handling"""
+        """Process a request using direct Ollama API"""
 
         async with self.processing_lock:  # Use the lock
             self.current_request = request
@@ -39,13 +39,8 @@ class RequestProcessor:
             self.current_request.processing_start = datetime.utcnow()
             
             try:
-                # Determine whether to use LangChain or direct API
-                if self.use_langchain:
-                    # Process with LangChain
-                    return await self._process_with_langchain(request)
-                else:
-                    # Process with direct API call
-                    return await self._process_with_direct_api(request)
+                # Always use direct API calls to Ollama
+                return await self._process_with_direct_api(request)
                 
             except Exception as e:
                 # Log the error

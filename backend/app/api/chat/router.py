@@ -348,9 +348,12 @@ async def stream_message(
                 "messages": [{"role": "user", "content": strip_editor_html(message_text)}],
                 "model": settings.default_model,  # Use the model configured in settings
                 "stream": True,
+                "temperature": settings.temperature,
                 "conversation_id": conversation_id,
                 "message_id": message_id,
-                "system": "You are a helpful AI assistant that answers questions accurately and concisely."
+                "system": "You are a helpful AI assistant that answers questions accurately and concisely.",
+                # Include tools if enabled in settings
+                **({"tools": []} if settings.tool_calling_enabled else {})
             },
             user_id=user.id
         )
@@ -402,6 +405,11 @@ async def stream_message(
                                 token = choice["message"]["content"]
                             
                             if "finish_reason" in choice and choice["finish_reason"] is not None:
+                                is_complete = True
+                        # Handle Ollama direct format (commonly used with Chinese models)
+                        elif "message" in data and "content" in data["message"]:
+                            token = data["message"]["content"]
+                            if "done" in data and data["done"] == True:
                                 is_complete = True
                         # Try other formats
                         elif "response" in data:
