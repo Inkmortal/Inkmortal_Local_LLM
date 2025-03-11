@@ -25,24 +25,21 @@ export class TokenBufferManager {
     this.maxBufferSize = options.maxBufferSize || 50; // characters
   }
 
-  // Add tokens to buffer with empty token support
+  // Add tokens to buffer with support for both incremental tokens and full content updates
   addTokens(tokens: string): void {
     // Track if this is an empty token message (important for streaming start)
     const isEmpty = tokens === '';
     
-    // For backend streaming, we receive full content each time, not incremental tokens
-    // So we REPLACE the buffer with the new tokens instead of appending
-    if (!isEmpty) {
-      this.buffer = tokens; // Replace instead of append
-    }
-    
-    // Always flush immediately for empty tokens
-    // This helps ensure the UI updates promptly at streaming start
+    // Always handle empty tokens immediately (common at stream start)
     if (isEmpty) {
       this.buffer = ''; // Clear buffer for empty tokens
       this.flush();
       return;
     }
+    
+    // APPEND the tokens to our buffer to accumulate them
+    // This is the correct behavior for actual token-by-token streaming
+    this.buffer += tokens;
     
     // Flush buffer if it exceeds max size
     if (this.buffer.length >= this.maxBufferSize) {

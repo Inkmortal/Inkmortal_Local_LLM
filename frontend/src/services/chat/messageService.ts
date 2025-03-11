@@ -135,6 +135,9 @@ export async function sendMessageStreaming(
             formData.append('conversation_id', params.conversation_id);
           }
           
+          // Add streaming parameter
+          formData.append('stream', 'true');
+          
           requestOptions = {
             method: 'POST',
             body: formData,
@@ -149,6 +152,7 @@ export async function sendMessageStreaming(
             body: JSON.stringify({
               message: params.message,
               conversation_id: params.conversation_id,
+              stream: true, // Enable streaming on the backend
             }),
           };
         }
@@ -650,6 +654,9 @@ export async function sendMessage(
               formData.append('conversation_id', params.conversation_id);
             }
             
+            // Add streaming parameter
+            formData.append('stream', 'true');
+            
             requestOptions = {
               method: 'POST',
               body: formData,
@@ -664,6 +671,7 @@ export async function sendMessage(
               body: JSON.stringify({
                 message: params.message,
                 conversation_id: params.conversation_id,
+                stream: true, // Enable streaming on the backend
               }),
             };
           }
@@ -716,6 +724,23 @@ export async function sendMessage(
             
             // Log for debugging
             console.log(`Received streaming content chunk: ${update.assistant_content.length} chars, is_complete: ${update.is_complete || false}`);
+            
+            // If token is marked as complete in this update, finalize the message
+            if (update.is_complete && update.assistant_message_id) {
+              // Create complete response object with the accumulated content
+              const completeResponse: ChatResponse = {
+                id: update.assistant_message_id,
+                conversation_id: update.conversation_id,
+                content: update.assistant_content,
+                created_at: new Date().toISOString(),
+                role: 'assistant',
+                status: MessageStatus.COMPLETE
+              };
+              
+              // Call complete handler 
+              fullHandlers.onComplete(completeResponse);
+              unregisterHandler();
+            }
           }
         }
         else if (status === MessageStatus.COMPLETE && update.assistant_content) {
