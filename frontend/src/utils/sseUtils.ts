@@ -10,7 +10,9 @@
 export function parseSSELine(line: string): string | null {
   // Check if it's a data line
   if (line.startsWith('data: ')) {
-    return line.substring(6); // Remove 'data: ' prefix
+    const content = line.substring(6); // Remove 'data: ' prefix
+    console.log("SSE line parsed:", content);
+    return content;
   }
   return null;
 }
@@ -71,6 +73,7 @@ export async function processSSEStream(
       
       // Decode the chunk and add to buffer
       const chunk = decoder.decode(value, { stream: true });
+      console.log("Raw chunk from stream:", chunk);
       buffer += chunk;
       
       // Process any complete events (ending with double newline)
@@ -87,11 +90,15 @@ export async function processSSEStream(
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.substring(6); // Remove 'data: ' prefix
+            console.log("Extracted data from SSE stream:", data);
             try {
               // Try to parse as JSON first
-              onChunk(JSON.parse(data));
+              const jsonData = JSON.parse(data);
+              console.log("Parsed JSON data:", jsonData);
+              onChunk(jsonData);
             } catch (e) {
               // If not valid JSON, send as text
+              console.log("Using as raw text (not JSON):", data);
               onChunk(data);
             }
           }
@@ -105,6 +112,7 @@ export async function processSSEStream(
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.substring(6);
+          console.log("Processing final buffer data:", data);
           try {
             onChunk(JSON.parse(data));
           } catch (e) {

@@ -716,27 +716,73 @@ export async function sendMessage(
                 },
                 (chunk) => {
                   // Process each chunk
-                  console.log('SSE Chunk:', typeof chunk, chunk);
+                  console.log('SSE Chunk received:', typeof chunk, chunk);
                   
                   if (typeof chunk === 'object' && chunk !== null) {
+                    console.log('Processing object chunk:', chunk);
                     // Extract message ID and conversation ID from first message if needed
                     if (!messageId && chunk.message_id) {
                       messageId = chunk.message_id;
+                      console.log('Extracted message_id:', messageId);
                     }
                     if (!conversationId && chunk.conversation_id) {
                       conversationId = chunk.conversation_id;
+                      console.log('Extracted conversation_id:', conversationId);
                     }
                     
                     // Handle streamed token
                     if (chunk.message && chunk.message.content) {
                       const token = chunk.message.content;
                       incomingContent += token;
+                      console.log('Token extracted from message.content:', token);
+                      fullHandlers.onToken(token);
+                    } else if (chunk.assistant_content) {
+                      // Direct content field from WebSocket format
+                      const token = chunk.assistant_content;
+                      incomingContent += token;
+                      console.log('Token extracted from assistant_content:', token);
                       fullHandlers.onToken(token);
                     }
                     
                     // Check if complete
-                    if (chunk.done === true || chunk.done_reason) {
+                    if (chunk.done === true || chunk.done_reason || chunk.is_complete === true) {
+                      console.log('Message complete signal received');
                       isComplete = true;
+                    }
+                  } else if (typeof chunk === 'string') {
+                    // Try to parse as JSON first
+                    try {
+                      const jsonData = JSON.parse(chunk);
+                      console.log('Parsed JSON from string chunk:', jsonData);
+                      
+                      // Extract token from parsed JSON if possible
+                      if (jsonData.message && jsonData.message.content) {
+                        const token = jsonData.message.content;
+                        incomingContent += token;
+                        console.log('Token extracted from parsed JSON:', token);
+                        fullHandlers.onToken(token);
+                      } else if (jsonData.assistant_content) {
+                        const token = jsonData.assistant_content;
+                        incomingContent += token;
+                        console.log('Token extracted from parsed JSON assistant_content:', token);
+                        fullHandlers.onToken(token);
+                      } else if (jsonData.content) {
+                        const token = jsonData.content;
+                        incomingContent += token;
+                        console.log('Token extracted from parsed JSON content:', token);
+                        fullHandlers.onToken(token);
+                      }
+                      
+                      // Check completion
+                      if (jsonData.done === true || jsonData.is_complete === true) {
+                        console.log('Completion signal in parsed JSON');
+                        isComplete = true;
+                      }
+                    } catch (e) {
+                      // Not JSON, use directly as token
+                      console.log('Using raw string as token:', chunk);
+                      incomingContent += chunk;
+                      fullHandlers.onToken(chunk);
                     }
                   }
                   

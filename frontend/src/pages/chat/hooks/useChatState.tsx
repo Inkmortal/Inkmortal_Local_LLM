@@ -255,6 +255,7 @@ export default function useChatState(
     
     // Add messages to state immediately for UI feedback
     if (isMountedRef.current) {
+      console.log("Adding messages to UI:", userMessage, assistantMessage);
       setMessages(prevMessages => [...prevMessages, userMessage, assistantMessage]);
     }
     

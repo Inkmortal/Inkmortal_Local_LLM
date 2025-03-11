@@ -85,6 +85,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
+    // Log messages for debugging
+    console.log("Messages array in ChatWindow:", messages);
+    
     if (messages.length > 0) {
       if (scrollTimeoutRef.current) {
         window.clearTimeout(scrollTimeoutRef.current);
@@ -259,22 +262,5 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   );
 };
 
-// Apply more strict memoization with custom comparison function to reduce re-renders
-export default React.memo(ChatWindow, (prevProps, nextProps) => {
-  // Only re-render when these specific props change
-  if (prevProps.messages.length !== nextProps.messages.length) return false;
-  if (prevProps.loading !== nextProps.loading) return false;
-  if (prevProps.isGenerating !== nextProps.isGenerating) return false;
-  
-  // For messages, only check the last message if length is the same (most common case during streaming)
-  if (prevProps.messages.length > 0 && nextProps.messages.length > 0) {
-    const prevLastMsg = prevProps.messages[prevProps.messages.length - 1];
-    const nextLastMsg = nextProps.messages[nextProps.messages.length - 1];
-    
-    if (prevLastMsg.id !== nextLastMsg.id) return false;
-    if (prevLastMsg.status !== nextLastMsg.status) return false;
-    if (prevLastMsg.content !== nextLastMsg.content) return false;
-  }
-  
-  return true;
-});
+// Export without memoization to ensure all updates render
+export default ChatWindow;
