@@ -1,7 +1,7 @@
 /**
  * Message services for chat functionality
  */
-import { fetchApi } from '../../config/api';
+import { fetchApi, API_BASE_URL } from '../../config/api';
 import { 
   ChatRequestParams, 
   ChatResponse, 
@@ -680,8 +680,7 @@ export async function sendMessage(
           // Check if this is a streaming request
           if (params.stream) {
             // For streaming, use direct fetch without going through the standard API
-            // Using the full URL from API_BASE_URL defined in config
-            const { API_BASE_URL } = require('../../config/api');
+            // Using the full URL from API_BASE_URL imported at the top of the file
             const baseUrl = `${API_BASE_URL}${endpoint}`;
             
             // Get the auth token for headers

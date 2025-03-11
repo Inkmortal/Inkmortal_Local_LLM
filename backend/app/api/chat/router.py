@@ -316,15 +316,17 @@ async def stream_message(
                     yield json.dumps({"error": "Conversation not found"}).encode('utf-8')
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
         else:
-            # Create new conversation
-            conversation_id = generate_id()
-            conversation = Conversation(
-                id=conversation_id,
-                user_id=user.id,
-                title=message_text[:50] if message_text else "New Conversation"
-            )
-            fresh_db.add(conversation)
-            fresh_db.flush()
+            # Create new conversation using the service which adds welcome message
+            result = create_conversation(fresh_db, user.id, message_text[:50] if message_text else "New Conversation")
+            if not result.get("success", False):
+                logger.error(f"Error creating conversation: {result.get('error')}")
+                async def error_stream():
+                    yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
+                return StreamingResponse(error_stream(), media_type="text/event-stream")
+            
+            # Use the conversation ID from the result
+            conversation_id = result["conversation_id"]
+            conversation = fresh_db.query(Conversation).filter(Conversation.id == conversation_id).first()
         
         # Save user message
         message_id = generate_id()
