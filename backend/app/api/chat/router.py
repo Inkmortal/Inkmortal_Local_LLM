@@ -20,7 +20,8 @@ from .conversation_service import (
     create_conversation, get_conversation, list_conversations,
     update_conversation, delete_conversation
 )
-from .utils import get_queue, generate_id
+from .utils import get_queue, generate_id, strip_editor_html
+from ...config import settings
 from .websocket import manager
 
 from ...db import get_db, SessionLocal
@@ -339,15 +340,17 @@ async def stream_message(
         conversation.updated_at = datetime.now()
         fresh_db.commit()
         
-        # Create request object
+        # Create request object with model name (required by Ollama)
         request_obj = QueuedRequest(
             priority=RequestPriority.WEB_INTERFACE,
             endpoint="/api/chat/completions",
             body={
-                "messages": [{"role": "user", "content": message_text}],
+                "messages": [{"role": "user", "content": strip_editor_html(message_text)}],
+                "model": settings.default_model,  # Use the model configured in settings
                 "stream": True,
                 "conversation_id": conversation_id,
-                "message_id": message_id
+                "message_id": message_id,
+                "system": "You are a helpful AI assistant that answers questions accurately and concisely."
             },
             user_id=user.id
         )
