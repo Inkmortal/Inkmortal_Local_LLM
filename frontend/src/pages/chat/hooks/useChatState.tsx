@@ -253,10 +253,28 @@ export default function useChatState(
       timestamp: now,
     };
     
+    console.log("Current activeConversationId:", activeConversationId, "needsConversationCreation:", needsConversationCreation);
+    
     // Add messages to state immediately for UI feedback
     if (isMountedRef.current) {
       console.log("Adding messages to UI:", userMessage, assistantMessage);
-      setMessages(prevMessages => [...prevMessages, userMessage, assistantMessage]);
+      setMessages(prevMessages => {
+        // Log previous state for debugging
+        console.log("Previous messages state:", prevMessages);
+        
+        // CRITICAL FIX: Make sure we force the ChatContainer to render with content
+        // by replacing empty messages array, not just appending
+        const hasExistingMessages = prevMessages.length > 0;
+        
+        if (hasExistingMessages) {
+          // Append to existing messages
+          return [...prevMessages, userMessage, assistantMessage];
+        } else {
+          // Replace empty state with new messages - forces a re-render from empty to chat view
+          console.log("Starting new conversation UI state with fresh messages");
+          return [userMessage, assistantMessage];
+        }
+      });
     }
     
     try {
@@ -375,27 +393,58 @@ export default function useChatState(
             
             console.log("Received token in onToken handler:", token);
             
-            // DIRECT UPDATE: Immediately update the message content for testing
-            // This bypasses the TokenBufferManager to ensure tokens get displayed
+            // First, make sure we update the message status to STREAMING
+            // This is critical to ensure the UI knows content is coming
             setMessages(prevMessages => {
-              const assistantMsg = prevMessages.find(msg => 
+              // Find the message that isn't in STREAMING state yet
+              const needsStatusUpdate = prevMessages.find(msg => 
                 msg.id === `assistant-${messageId}` && 
-                (msg.status === MessageStatus.STREAMING || msg.status === MessageStatus.PROCESSING)
+                msg.status !== MessageStatus.STREAMING
               );
               
-              if (assistantMsg) {
-                console.log("Directly updating assistant message with token:", token.substring(0, 20));
+              // If we found a message that needs status update, update all messages
+              if (needsStatusUpdate) {
+                console.log("Setting message status to STREAMING");
                 return prevMessages.map(msg => 
-                  msg.id === assistantMsg.id 
-                    ? { ...msg, 
-                        content: msg.content + token,  // APPEND the token to existing content
-                        status: MessageStatus.STREAMING 
-                      } 
+                  msg.id === `assistant-${messageId}`
+                    ? { ...msg, status: MessageStatus.STREAMING }
                     : msg
                 );
               }
+              
+              // Otherwise return the same messages
               return prevMessages;
             });
+            
+            // Short delay to ensure status update is processed first
+            setTimeout(() => {
+              // Now update the content with the new token
+              setMessages(prevMessages => {
+                const assistantMsg = prevMessages.find(msg => 
+                  msg.id === `assistant-${messageId}` && 
+                  (msg.status === MessageStatus.STREAMING || msg.status === MessageStatus.PROCESSING)
+                );
+                
+                if (assistantMsg) {
+                  console.log("Directly updating assistant message with token:", token.substring(0, 20));
+                  
+                  // Create a fully updated message with accumulated content
+                  const updatedMessage = { 
+                    ...assistantMsg,
+                    content: assistantMsg.content + token,  // APPEND the token
+                    status: MessageStatus.STREAMING  // Keep it in streaming mode
+                  };
+                  
+                  console.log("Updated content length:", updatedMessage.content.length);
+                  
+                  // Return a new array with the updated message
+                  return prevMessages.map(msg => 
+                    msg.id === assistantMsg.id ? updatedMessage : msg
+                  );
+                }
+                return prevMessages;
+              });
+            }, 10);
             
             // Also add to buffer manager as a backup
             if (tokenBufferRef.current) {
