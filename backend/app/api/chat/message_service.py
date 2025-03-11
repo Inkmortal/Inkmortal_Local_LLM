@@ -88,122 +88,111 @@ async def send_message(
     queue_manager: QueueManagerInterface = None
 ) -> Dict[str, Any]:
     """Send a message to the LLM and store the conversation with improved transaction handling"""
-    # Begin safe transaction
+    # Create a fresh database session specifically for this request
+    # to avoid transaction conflicts between sync and async code
+    fresh_db = SessionLocal()
     try:
-        # Set appropriate transaction isolation level
-        execute_with_safe_transaction(db, "SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        transaction = db.begin_nested()
-        
-        try:
-            # Create or get conversation
-            if conversation_id:
-                conversation = db.query(Conversation).filter(
-                    Conversation.id == conversation_id,
-                    Conversation.user_id == user.id
-                ).first()
-                
-                if not conversation:
-                    transaction.rollback()
-                    return {
-                        "success": False,
-                        "error": "Conversation not found",
-                        "message_id": None,
-                        "conversation_id": None
-                    }
-            else:
-                # Create new conversation with explicit ID
-                new_conversation_id = generate_id()
-                conversation = Conversation(
-                    id=new_conversation_id,
-                    user_id=user.id,
-                    title=message_text[:50] if message_text else "New Conversation"
-                )
-                db.add(conversation)
-                db.flush()
+        # Create or get conversation
+        if conversation_id:
+            conversation = fresh_db.query(Conversation).filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user.id
+            ).first()
             
-            # Handle file content if provided
-            if file_content:
-                message_text = f"{message_text}\n\n[Uploaded file: {file_content['filename']}, size: {file_content['size']} bytes]"
-            
-            # Create message with explicit ID
-            message_id = generate_id()
-            message = Message(
-                id=message_id,
-                conversation_id=conversation.id,
-                role="user",
-                content=message_text
-            )
-            db.add(message)
-            
-            # Update conversation timestamp
-            conversation.updated_at = datetime.now()
-            
-            # Commit transaction
-            transaction.commit()
-            db.commit()
-            
-            # Queue LLM request
-            request_obj = QueuedRequest(
-                timestamp=str(datetime.now().timestamp()),
-                user_id=user.id,
-                priority=RequestPriority.NORMAL,
-                body={
-                    "message": message_text,
-                    "conversation_id": conversation.id,
-                    "message_id": message_id
+            if not conversation:
+                return {
+                    "success": False,
+                    "error": "Conversation not found",
+                    "message_id": None,
+                    "conversation_id": None
                 }
+        else:
+            # Create new conversation with explicit ID
+            new_conversation_id = generate_id()
+            conversation = Conversation(
+                id=new_conversation_id,
+                user_id=user.id,
+                title=message_text[:50] if message_text else "New Conversation"
             )
-            
-            # Track this request for WebSocket updates
-            manager.track_request(request_obj.timestamp, user.id)
-            
-            # Queue the request
-            await queue_manager.add_request(request_obj)
-            
-            # Start async processing (don't pass the DB session)
-            asyncio.create_task(
-                process_message(
-                    user.id,
-                    message_id, 
-                    conversation.id, 
-                    request_obj, 
-                    queue_manager
-                )
+            fresh_db.add(conversation)
+            fresh_db.flush()
+        
+        # Handle file content if provided
+        if file_content:
+            message_text = f"{message_text}\n\n[Uploaded file: {file_content['filename']}, size: {file_content['size']} bytes]"
+        
+        # Create message with explicit ID
+        message_id = generate_id()
+        message = Message(
+            id=message_id,
+            conversation_id=conversation.id,
+            role="user",
+            content=message_text
+        )
+        fresh_db.add(message)
+        
+        # Update conversation timestamp
+        conversation.updated_at = datetime.now()
+        
+        # Commit database changes
+        fresh_db.commit()
+        
+        # Store necessary info before closing the session
+        conv_id = conversation.id
+        user_id = user.id
+        
+        # Queue LLM request
+        request_obj = QueuedRequest(
+            timestamp=str(datetime.now().timestamp()),
+            user_id=user_id,
+            priority=RequestPriority.NORMAL,
+            body={
+                "message": message_text,
+                "conversation_id": conv_id,
+                "message_id": message_id
+            }
+        )
+        
+        # Track this request for WebSocket updates
+        manager.track_request(request_obj.timestamp, user_id)
+        
+        # Queue the request
+        await queue_manager.add_request(request_obj)
+        
+        # Start async processing (don't pass the DB session)
+        asyncio.create_task(
+            process_message(
+                user_id,
+                message_id, 
+                conv_id, 
+                request_obj, 
+                queue_manager
             )
-            
-            return {
-                "success": True,
-                "message_id": message_id,
-                "conversation_id": conversation.id
-            }
-            
-        except Exception as inner_e:
-            # Rollback transaction in case of error
-            transaction.rollback()
-            db.rollback()
-            logger.error(f"Error processing message: {str(inner_e)}")
-            
-            return {
-                "success": False,
-                "error": str(inner_e),
-                "message_id": None,
-                "conversation_id": None
-            }
+        )
+        
+        return {
+            "success": True,
+            "message_id": message_id,
+            "conversation_id": conv_id
+        }
             
     except Exception as e:
-        # Handle outer transaction errors
+        # Rollback on any error
         try:
-            db.rollback()
+            fresh_db.rollback()
         except:
             pass
             
-        logger.error(f"Transaction error processing message: {str(e)}")
+        logger.error(f"Error in message handling: {str(e)}")
         return {
             "success": False,
-            "error": f"Database error: {str(e)}",
+            "error": f"Error processing message: {str(e)}",
             "message_id": None,
             "conversation_id": None
         }
+    finally:
+        # Always close the session
+        fresh_db.close()
 
 async def process_message(
     user_id: int,
