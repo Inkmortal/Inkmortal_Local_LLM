@@ -336,6 +336,19 @@ export function useChat({
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
     if (!content.trim() && !file) return;
     
+    // Check if any message is currently being generated
+    const currentlyGenerating = Object.values(state.messages).some(msg => 
+      msg.status === MessageStatus.STREAMING || 
+      msg.status === MessageStatus.PROCESSING || 
+      msg.status === MessageStatus.QUEUED
+    );
+    
+    // Prevent sending a new message while generating
+    if (currentlyGenerating) {
+      console.log('Message sending blocked: AI is currently generating a response');
+      return;
+    }
+    
     // Check WebSocket connection
     const needsWebSocketConnection = !wsConnectedRef.current;
     if (needsWebSocketConnection && tokenRef.current) {

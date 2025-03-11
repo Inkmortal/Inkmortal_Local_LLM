@@ -168,9 +168,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             };
           }
         } else {
-          // Update main content
+          // Update main content - append to the current content to properly build up streaming tokens
           updatedMessage.content = mode === ContentUpdateMode.APPEND
-            ? message.content + content
+            ? updatedMessage.content + content
             : content;
         }
       }

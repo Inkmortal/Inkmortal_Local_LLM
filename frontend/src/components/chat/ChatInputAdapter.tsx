@@ -6,6 +6,7 @@ interface ChatInputAdapterProps {
   disabled?: boolean;
   placeholder?: string;
   isGenerating?: boolean;
+  onStopGeneration?: () => void;
   codeInsertRef?: React.MutableRefObject<((code: string) => void) | undefined>;
   mathInsertRef?: React.MutableRefObject<((math: string) => void) | undefined>;
 }
@@ -18,6 +19,7 @@ const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
   onSendMessage,
   placeholder = "Type a message...",
   isGenerating = false,
+  onStopGeneration,
   codeInsertRef,
   mathInsertRef
 }) => {
@@ -27,6 +29,7 @@ const ChatInputAdapter: React.FC<ChatInputAdapterProps> = ({
         onSend={onSendMessage}
         placeholder={placeholder}
         isGenerating={isGenerating}
+        onStopGeneration={onStopGeneration}
         codeInsertRef={codeInsertRef}
         mathInsertRef={mathInsertRef}
       />
