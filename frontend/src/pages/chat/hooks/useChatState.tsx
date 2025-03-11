@@ -295,8 +295,16 @@ export default function useChatState(
       }
       
       // Initialize token buffer manager for this message
+      let accumulatedContent = '';  // Add this variable to store the full content
+      
       tokenBufferRef.current = new TokenBufferManager((tokens) => {
         if (!isMountedRef.current) return;
+        
+        console.log("TokenBufferManager updating with tokens:", tokens);
+        
+        // Accumulate the tokens
+        accumulatedContent += tokens;
+        console.log("Total accumulated content length:", accumulatedContent.length);
         
         setMessages(prev => {
           const assistantMsg = prev.find(msg => 
@@ -305,15 +313,19 @@ export default function useChatState(
           );
           
           if (assistantMsg) {
+            // Debug what's happening
+            console.log("Found assistant message to update:", assistantMsg.id, "Current content length:", 
+                        assistantMsg.content.length, "New accumulated content length:", accumulatedContent.length);
+            
             return prev.map(msg => 
               msg.id === assistantMsg.id 
-                ? { ...msg, content: tokens } // Replace with full tokens on each update
+                ? { ...msg, content: accumulatedContent } 
                 : msg
             );
           }
           return prev;
         });
-      }, { flushDelay: 100, maxBufferSize: 50 });
+      }, { flushDelay: 50, maxBufferSize: 20 }); // Make buffer parameters more aggressive for better responsiveness
       
       // Send the message with streaming handlers
       await sendMessage(
@@ -361,7 +373,31 @@ export default function useChatState(
           onToken: (token) => {
             if (!isMountedRef.current) return;
             
-            // Add tokens to buffer manager to optimize rendering
+            console.log("Received token in onToken handler:", token);
+            
+            // DIRECT UPDATE: Immediately update the message content for testing
+            // This bypasses the TokenBufferManager to ensure tokens get displayed
+            setMessages(prevMessages => {
+              const assistantMsg = prevMessages.find(msg => 
+                msg.id === `assistant-${messageId}` && 
+                (msg.status === MessageStatus.STREAMING || msg.status === MessageStatus.PROCESSING)
+              );
+              
+              if (assistantMsg) {
+                console.log("Directly updating assistant message with token:", token.substring(0, 20));
+                return prevMessages.map(msg => 
+                  msg.id === assistantMsg.id 
+                    ? { ...msg, 
+                        content: msg.content + token,  // APPEND the token to existing content
+                        status: MessageStatus.STREAMING 
+                      } 
+                    : msg
+                );
+              }
+              return prevMessages;
+            });
+            
+            // Also add to buffer manager as a backup
             if (tokenBufferRef.current) {
               tokenBufferRef.current.addTokens(token);
             }

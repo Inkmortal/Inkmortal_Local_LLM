@@ -72,6 +72,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const isLoading = message.status === MessageStatus.SENDING || 
                    message.status === MessageStatus.QUEUED ||
                    message.status === MessageStatus.PROCESSING;
+                   
+  // Debug logging to see content updates in the component
+  console.log(`ChatMessage render - id: ${message.id}, role: ${message.role}, content length: ${message.content?.length || 0}, status: ${message.status}`);
+  if (message.content && message.content.length > 0 && message.content.length < 100) {
+    console.log(`ChatMessage content: "${message.content}"`);
+  }
   
   // Animate message entrance
   useEffect(() => {
@@ -127,7 +133,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     >
       {/* Message content */}
       <div className="prose prose-invert max-w-none">
-        <MessageParser content={message.content} />
+        <MessageParser content={message.content || ""} />
       </div>
       
       {/* Status indicator */}

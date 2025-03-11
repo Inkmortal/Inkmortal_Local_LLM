@@ -23,6 +23,7 @@ export class TokenBufferManager {
     this.updateCallback = updateCallback;
     this.flushDelay = options.flushDelay || 100; // ms
     this.maxBufferSize = options.maxBufferSize || 50; // characters
+    console.log("TokenBufferManager created with delay:", this.flushDelay, "max size:", this.maxBufferSize);
   }
 
   // Add tokens to buffer with support for both incremental tokens and full content updates
@@ -30,19 +31,24 @@ export class TokenBufferManager {
     // Track if this is an empty token message (important for streaming start)
     const isEmpty = tokens === '';
     
+    // Log tokens being added
+    console.log("TokenBufferManager addTokens:", isEmpty ? "empty token" : tokens);
+    
     // Always handle empty tokens immediately (common at stream start)
     if (isEmpty) {
-      this.buffer = ''; // Clear buffer for empty tokens
-      this.flush();
+      // Just ignore empty tokens instead of clearing buffer
+      console.log("TokenBufferManager: Ignoring empty token");
       return;
     }
     
     // APPEND the tokens to our buffer to accumulate them
     // This is the correct behavior for actual token-by-token streaming
     this.buffer += tokens;
+    console.log("TokenBufferManager buffer now:", this.buffer.length, "chars");
     
     // Flush buffer if it exceeds max size
     if (this.buffer.length >= this.maxBufferSize) {
+      console.log("TokenBufferManager buffer full, flushing");
       this.flush();
       return;
     }
@@ -50,6 +56,7 @@ export class TokenBufferManager {
     // Schedule flush if not already scheduled
     if (this.timeoutId === null) {
       this.timeoutId = window.setTimeout(() => {
+        console.log("TokenBufferManager scheduled flush executing");
         this.flush();
       }, this.flushDelay);
     }
@@ -58,6 +65,7 @@ export class TokenBufferManager {
   // Force flush buffer immediately
   flush(): void {
     if (this.buffer.length > 0) {
+      console.log("TokenBufferManager flushing buffer of", this.buffer.length, "chars");
       this.updateCallback(this.buffer);
       this.buffer = '';
     }
@@ -70,6 +78,7 @@ export class TokenBufferManager {
 
   // Clean up resources
   dispose(): void {
+    console.log("TokenBufferManager being disposed");
     this.flush();
   }
 }
