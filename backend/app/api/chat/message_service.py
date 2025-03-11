@@ -141,20 +141,20 @@ async def send_message(
         conv_id = conversation.id
         user_id = user.id
         
-        # Queue LLM request
+        # Queue LLM request using correct parameter order
         request_obj = QueuedRequest(
-            timestamp=str(datetime.now().timestamp()),
-            user_id=user_id,
-            priority=RequestPriority.NORMAL,
+            priority=RequestPriority.WEB_INTERFACE,  # Use correct enum value
+            endpoint="/api/llm/generate",  # Endpoint for LLM generation
             body={
                 "message": message_text,
                 "conversation_id": conv_id,
                 "message_id": message_id
-            }
+            },
+            user_id=user_id
         )
         
         # Track this request for WebSocket updates
-        manager.track_request(request_obj.timestamp, user_id)
+        manager.track_request(request_obj.timestamp.timestamp(), user_id)
         
         # Queue the request
         await queue_manager.add_request(request_obj)
@@ -315,7 +315,7 @@ async def process_message(
                             })
                             
                             # Clean up tracking
-                            manager.untrack_request(request_obj.timestamp)
+                            manager.untrack_request(request_obj.timestamp.timestamp())
                             
                             logger.info(f"Completed processing for conversation {conversation_id}")
                             return
@@ -339,7 +339,7 @@ async def process_message(
                             })
                             
                             # Clean up tracking
-                            manager.untrack_request(request_obj.timestamp)
+                            manager.untrack_request(request_obj.timestamp.timestamp())
                             return
                         finally:
                             # Always close the database session
@@ -362,7 +362,7 @@ async def process_message(
             })
             
             # Clean up tracking
-            manager.untrack_request(request_obj.timestamp)
+            manager.untrack_request(request_obj.timestamp.timestamp())
             
             logger.warning(f"Request timed out for conversation {conversation_id}")
             
@@ -380,7 +380,7 @@ async def process_message(
         })
         
         # Clean up tracking
-        manager.untrack_request(request_obj.timestamp)
+        manager.untrack_request(request_obj.timestamp.timestamp())
         
         # Try to clean up the queue
         try:
