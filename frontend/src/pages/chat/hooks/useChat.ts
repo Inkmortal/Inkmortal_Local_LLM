@@ -466,7 +466,7 @@ export function useChat({
       if (wsConnectedRef.current) {
         unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
           // Log detailed message structure for debugging
-          console.log('WebSocket update for message:', JSON.stringify(update, null, 2));
+          // Removed excessive debug logging for better performance
           
           // Handle status updates
           if (update.status) {
@@ -493,14 +493,7 @@ export function useChat({
             });
           }
           
-          // Handle content updates with better debug info
-          console.log('Handling content update:', {
-            hasAssistantContent: !!update.assistant_content,
-            hasContent: !!update.content,
-            hasDelta: !!update.delta,
-            contentLength: update.content ? update.content.length : 0,
-            assistantContentLength: update.assistant_content ? update.assistant_content.length : 0
-          });
+          // Handle content updates (removed debug logging for better streaming performance)
           
           // Process either assistant_content or content field - the backend may use either
           const contentToProcess = update.assistant_content || update.content;
@@ -551,10 +544,7 @@ export function useChat({
               // For streaming, prioritize the content field - it's likely a token-by-token update
               if (update.content && typeof update.content === 'string') {
                 // This is likely a streaming token update
-                console.log('Streaming token update:', {
-                  token: update.content,
-                  length: update.content.length
-                });
+                // Removed debug logging for better performance during streaming
                 
                 dispatch({
                   type: ChatActionType.UPDATE_MESSAGE,
@@ -567,10 +557,7 @@ export function useChat({
                 });
               } else if (update.delta && update.delta.content) {
                 // Delta update (streaming) - append new content
-                console.log('Delta update:', {
-                  token: update.delta.content,
-                  length: update.delta.content.length
-                });
+                // Removed debug logging for better performance during streaming
                 
                 dispatch({
                   type: ChatActionType.UPDATE_MESSAGE,
@@ -583,9 +570,7 @@ export function useChat({
                 });
               } else {
                 // Full content update - replace content
-                console.log('Full content update:', {
-                  contentLength: contentToProcess.length
-                });
+                // Removed debug logging for better performance during content updates
                 
                 dispatch({
                   type: ChatActionType.UPDATE_MESSAGE,
