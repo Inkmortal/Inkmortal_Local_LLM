@@ -53,19 +53,31 @@
 -   [x] Basic UI implementation.
 -   [x] Math rendering (frontend).
 -   [x] Code highlighting (frontend).
--   [ ] Connect to backend API:
-    -   [ ] Replace mock chat service with actual API calls.
-    -   [ ] Implement streaming responses.
-    -   [ ] Add error handling for API failures.
-    -   [ ] Implement user session persistence.
-    -   [ ] Integrate backend artifact rendering.
+-   [x] Connect to backend API:
+    -   [x] Replace mock chat service with actual API calls.
+    -   [x] Implement streaming responses via WebSocket.
+    -   [x] Add error handling for API failures.
+    -   [x] Implement user session persistence.
+    -   [x] Integrate backend artifact rendering.
 -   [ ] Implement remaining features:
     -   [ ] Image upload for textbook questions.
 
+## Chat Backend Integration
+
+-   [x] Fixed "Transaction is closed" errors in message_service.py
+-   [x] Implemented proper session management for async functions
+-   [x] Added session creation in process_message for isolation
+-   [x] Ensured proper cleanup of database resources
+-   [x] Added WebSocket integration for real-time updates
+-   [x] Implemented token buffering for efficient UI updates
+-   [x] Added reconnection logic for dropped connections
+-   [x] Created fallback mechanisms for when WebSocket isn't available
+
 ## Conversation History and Context
 
--   [ ] Design data model for conversation history.
--   [ ] Implement mechanisms for retrieving and updating conversation history.
+-   [x] Implemented basic conversation history with backend storage.
+-   [x] Added conversation listing and selection in sidebar.
+-   [x] Implemented URL-based conversation tracking.
 -   [ ] Develop strategy for managing context windows:
     -   [ ] Conversation summarization.
     -   [ ] Backend RAG solution for important entities.
@@ -85,11 +97,16 @@
 
 ## Admin Panel
 - [x] Connect dashboard to real backend data
+- [ ] Fix queue monitoring display
+- [ ] Implement auto-refresh for system stats
 
 ## Testing
 
--   [ ] Test each component individually.
--   [ ] Test the system as an integrated whole.
+-   [x] Test conversation creation and management
+-   [x] Test message sending and receiving with WebSocket
+-   [x] Test error scenarios and recovery mechanisms
+-   [ ] Test file upload functionality
+-   [ ] Test the system as an integrated whole
 
 ## Deployment
 
@@ -100,7 +117,7 @@
 
 -   [ ] Implement system monitoring and logging.
 
-## Frontend
+## Frontend Routing
 
 - [ ] Address routing refactor issues
     -   [ ] Replace all uses of `window.navigateTo` with React Router's `useNavigate` hook

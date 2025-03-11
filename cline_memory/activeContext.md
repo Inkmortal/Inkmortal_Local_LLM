@@ -2,14 +2,15 @@
 
 ## Current Focus
 
--   Connecting the chat interface to the backend API, including integrating backend artifact rendering.
+-   Completing the chat interface integration with backend, fixing database transaction issues and optimizing WebSocket communication.
+-   Implementing file upload functionality for textbook questions and documents.
+-   Fixing admin dashboard queue monitoring and system stats display.
 -   Implementing conversation history and context window management for multi-user support.
 -   Investigating and enabling LLM tool use within the chat interface.
--   Ensuring the API is ready for LangChain integration (using existing API key and endpoint).
 
 ## Implementation Plan Rationale
 
-The implementation order prioritizes the chat interface and its core functionalities, as this is the primary way users will interact with the LLM. Authentication and the admin panel are considered largely complete.
+The implementation order prioritizes the chat interface and its core functionalities, as this is the primary way users will interact with the LLM. Recent fixes have addressed major issues with transaction handling and WebSocket communication.
 
 ## Code Organization Principles
 
@@ -17,36 +18,39 @@ The implementation order prioritizes the chat interface and its core functionali
 -   Large files should be refactored into smaller components
 -   Use modular architecture to maintain clarity and maintainability
 -   Delegate specific responsibilities to appropriate components
+-   Ensure proper resource cleanup to prevent memory leaks
+-   Maintain session isolation between synchronous and asynchronous code
 
 ## Immediate Next Steps
 
-1.  **Connect Chat Interface to Backend API:**
-    -   Replace mock chat service with actual API calls to `/api/chat/completions`.
-    -   Implement streaming responses for chat messages.
-    -   Add error handling for API failures.
-    -   Implement user session persistence (using JWT tokens).
-    -   Integrate backend artifact rendering for math and code blocks.
+1.  **Complete File Upload Functionality:**
+    -   Implement file upload UI components in the chat interface.
+    -   Add file preview and validation functionality.
+    -   Connect file upload to sendMessage method.
+    -   Test file uploads with different file types and sizes.
 
-2.  **Implement Conversation History and Context Windows:**
-    -   Design a data model for storing conversation history (likely in the database).
-    -   Implement mechanisms for retrieving and updating conversation history.
-    -   Develop a strategy for managing context windows (limiting the amount of past conversation sent to the LLM). Including conversation summarization, or even backend RAG solution for important entities (limited to within conversation) and uploaded documents. ability to update notes on important entities.
-    -   Ability to run embeddings, which hasnt been implemented yet. possibly with a model like nomic embed
+2.  **Fix Admin Dashboard Queue Monitoring:**
+    -   Debug and fix issues with queue information display.
+    -   Ensure queue cards update properly with real-time data.
+    -   Implement proper error handling for admin dashboard.
+    -   Add refresh controls for manual data updates.
 
-3.  **Investigate and Enable LLM Tool Use:**
+3.  **Implement Conversation History and Context Windows:**
+    -   Further enhance conversation history management.
+    -   Develop a strategy for managing context windows (limiting the amount of past conversation sent to the LLM).
+    -   Consider conversation summarization or backend RAG solution for important entities.
+    -   Implement ability to update notes on important entities.
+
+4.  **Investigate and Enable LLM Tool Use:**
     -   Research how to integrate tools with Ollama and the chosen LLM.
     -   Continue to implement the necessary API endpoints and backend logic for tool use.
-
-4.  **Ensure API Readiness for LangChain:**
-    -   Document the existing API endpoints (especially `/api/chat/completions`) and authentication methods (API key).
-    -   Provide clear instructions on how to use the API key and custom endpoint with LangChain.
 
 ## Web Interface Educational Focus
 
 The web interface should emphasize educational assistant capabilities:
 
--   Math problem solving with LaTeX rendering (Implemented, needs backend integration)
--   Code teaching and assistance with syntax highlighting (Implemented, needs backend integration)
+-   Math problem solving with LaTeX rendering (Implemented, connected to backend)
+-   Code teaching and assistance with syntax highlighting (Implemented, connected to backend)
 -   Textbook question support with image upload (Planned)
 -   User-friendly, beautiful, and functional design (In Progress)
 
@@ -56,34 +60,32 @@ The web interface should emphasize educational assistant capabilities:
 -   Implementing a priority-based queue system with request aging to prevent starvation (using RabbitMQ).
 -   Using FastAPI for the backend and React for the frontend.
 -   Using Ollama for LLM serving.
--   Using RabbitMQ for reliable queue management with a component-based architecture.
--   Using Cloudflare Tunnel for secure remote access.
--   Using a singleton pattern for the `RabbitMQManager`.
--   Employing an abstract base class (`QueueManagerInterface`) for queue manager implementations.
--   Prioritizing chat interface functionality and LLM tool use.
+-   Using WebSocket for real-time message updates with token buffering for efficiency.
+-   Creating separate database sessions for synchronous and asynchronous operations.
+-   Using proper session lifecycle management with try/except/finally blocks.
+-   Implementing token buffering for efficient UI updates.
 
 ## Recent Progress
 
--   **Admin Dashboard:** Completed and connected to the backend API.
--   **Authentication:** Admin and user authentication (login/register) are complete.
--   **Chat Interface:** Basic UI is implemented, including math rendering and code highlighting. Backend rendering for artifacts exists but is not yet connected.
--   **Theme Selector:** Implemented, with minor limitations on recent theme retrieval.
-- **Model Management:** Integrated into the System Stats dashboard.
-- **Code Cleanup:** Removed redundant and deprecated code.
-- **Routing Refactor:** Identified and documented remaining issues.
+-   **Chat Interface Integration:** Successfully connected the frontend chat interface to the backend API with WebSocket communication for real-time updates.
+-   **Transaction Handling:** Fixed "Transaction is closed" errors in message_service.py by implementing proper session management for async functions.
+-   **WebSocket Implementation:** Added token buffering for efficient UI updates and implemented reconnection logic for dropped connections.
+-   **QueuedRequest Fixing:** Corrected parameters for QueuedRequest constructor and fixed related issues.
+-   **Error Handling:** Improved error handling with better status updates and recovery options.
+-   **Performance Optimization:** Reduced unnecessary re-renders with token buffering and implemented proper resource cleanup.
 
 ## Current Challenges
 
--   Connecting the chat interface to the backend API and ensuring proper artifact rendering.
--   Implementing conversation history and context window management.
+-   Completing file upload functionality for the chat interface.
+-   Fixing admin dashboard queue monitoring issues.
+-   Implementing advanced conversation history and context management.
 -   Integrating LLM tool use.
--   Ensuring seamless LangChain integration.
 
 ## Open Questions
 
 -   What is the best data model for storing conversation history?
 -   What is the most effective strategy for managing context windows?
 -   What specific tools should be integrated with the LLM, and how should they be represented in the chat interface?
--   Are there any specific LangChain features or APIs that need to be considered for optimal integration?
-- How to best utilize the component-based RabbitMQ implementation for optimal performance and maintainability?
-- Are there any potential bottlenecks or areas for improvement in the current backend architecture?
+-   How to optimize file upload handling for different file types and sizes?
+-   What improvements can be made to the admin dashboard for better monitoring?
+-   Are there any remaining performance bottlenecks in the WebSocket implementation?
