@@ -404,68 +404,66 @@ async def stream_message(
                             data = json.loads(chunk)
                             token = ""
                             is_complete = False
-                        
-                        # Extract token from various formats
-                        if "choices" in data and len(data["choices"]) > 0:
-                            choice = data["choices"][0]
-                            if "delta" in choice and "content" in choice["delta"]:
-                                token = choice["delta"]["content"]
-                            elif "text" in choice:
-                                token = choice["text"]
-                            elif "message" in choice and "content" in choice["message"]:
-                                token = choice["message"]["content"]
                             
-                            if "finish_reason" in choice and choice["finish_reason"] is not None:
-                                is_complete = True
-                        # Handle Ollama direct format (commonly used with Chinese models)
-                        elif "message" in data and "content" in data["message"]:
-                            token = data["message"]["content"]
-                            if "done" in data and data["done"] == True:
-                                is_complete = True
-                        # Try other formats
-                        elif "response" in data:
-                            token = data["response"]
-                        elif "content" in data:
-                            token = data["content"]
-                        
-                        # If we couldn't find a token, use the entire chunk as fallback
-                        if not token and isinstance(data, dict):
-                            logger.warning(f"Couldn't extract token from data structure: {str(data)[:100]}")
-                            token = json.dumps(data)
-                        
-                        # Accumulate content
-                        assistant_content += token
-                        
-                        # Create a clean WebSocket message with the extracted token
-                        # Important: Use assistant_message_id instead of user message_id here
-                        websocket_message = {
-                            "type": "message_update",
-                            "message_id": assistant_message_id, # Use assistant ID for updates
-                            "conversation_id": conversation_id,
-                            "status": "STREAMING",
-                            "assistant_content": token,
-                            "is_complete": is_complete
-                        }
-                        
-                        # For Ollama format, include model info when available
-                        if "model" in data:
-                            websocket_message["model"] = data["model"]
-                        
-                        # For completeness detection
-                        if is_complete or (data.get("done") == True):
-                            websocket_message["is_complete"] = True
-                            websocket_message["status"] = "COMPLETE"
-                        
-                        # Send to WebSocket clients - no SSE formatting
-                        # Only send WebSocket updates for WebSocket transport mode
-                        if transport_mode == "websocket":
+                            # Extract token from various formats
+                            if "choices" in data and len(data["choices"]) > 0:
+                                choice = data["choices"][0]
+                                if "delta" in choice and "content" in choice["delta"]:
+                                    token = choice["delta"]["content"]
+                                elif "text" in choice:
+                                    token = choice["text"]
+                                elif "message" in choice and "content" in choice["message"]:
+                                    token = choice["message"]["content"]
+                                
+                                if "finish_reason" in choice and choice["finish_reason"] is not None:
+                                    is_complete = True
+                            # Handle Ollama direct format (commonly used with Chinese models)
+                            elif "message" in data and "content" in data["message"]:
+                                token = data["message"]["content"]
+                                if "done" in data and data["done"] == True:
+                                    is_complete = True
+                            # Try other formats
+                            elif "response" in data:
+                                token = data["response"]
+                            elif "content" in data:
+                                token = data["content"]
+                            
+                            # If we couldn't find a token, use the entire chunk as fallback
+                            if not token and isinstance(data, dict):
+                                logger.warning(f"Couldn't extract token from data structure: {str(data)[:100]}")
+                                token = json.dumps(data)
+                            
+                            # Accumulate content
+                            assistant_content += token
+                            
+                            # Create a clean WebSocket message with the extracted token
+                            # Important: Use assistant_message_id instead of user message_id here
+                            websocket_message = {
+                                "type": "message_update",
+                                "message_id": assistant_message_id, # Use assistant ID for updates
+                                "conversation_id": conversation_id,
+                                "status": "STREAMING",
+                                "assistant_content": token,
+                                "is_complete": is_complete
+                            }
+                            
+                            # For Ollama format, include model info when available
+                            if "model" in data:
+                                websocket_message["model"] = data["model"]
+                            
+                            # For completeness detection
+                            if is_complete or (data.get("done") == True):
+                                websocket_message["is_complete"] = True
+                                websocket_message["status"] = "COMPLETE"
+                            
+                            # Send to WebSocket clients - no SSE formatting
+                            # Only send WebSocket updates for WebSocket transport mode
                             await manager.send_update(user.id, websocket_message)
-                        
-                        # Also send section-specific updates if needed
-                        if "<think>" in token or "</think>" in token:
-                            # This is a thinking section token
-                            # Section updates only for WebSocket clients
-                            if transport_mode == "websocket":
+                            
+                            # Also send section-specific updates if needed
+                            if "<think>" in token or "</think>" in token:
+                                # This is a thinking section token
+                                # Section updates only for WebSocket clients
                                 await manager.send_section_update(
                                     user_id=user.id,
                                     message_id=assistant_message_id, # Use assistant ID consistently
@@ -475,25 +473,24 @@ async def stream_message(
                                     is_complete=is_complete,
                                     operation=APPEND
                                 )
-                    except Exception as e:
-                        # Not JSON, probably raw text
-                        logger.info(f"Non-JSON response, treating as raw text: {e}")
-                        
-                        # Use chunk as the token directly
-                        token = chunk
-                        is_complete = False
-                        
-                        # Check if this is the last chunk (some models signal this)
-                        if "[DONE]" in chunk or "<|endoftext|>" in chunk:
-                            is_complete = True
-                            # Remove marker from token
-                            token = token.replace("[DONE]", "").replace("<|endoftext|>", "")
-                        
-                        # Accumulate content
-                        assistant_content += token
-                        
-                        # Send a simplified message for non-JSON responses, but only for WebSocket clients
-                        if transport_mode == "websocket":
+                        except Exception as e:
+                            # Not JSON, probably raw text
+                            logger.info(f"Non-JSON response, treating as raw text: {e}")
+                            
+                            # Use chunk as the token directly
+                            token = chunk
+                            is_complete = False
+                            
+                            # Check if this is the last chunk (some models signal this)
+                            if "[DONE]" in chunk or "<|endoftext|>" in chunk:
+                                is_complete = True
+                                # Remove marker from token
+                                token = token.replace("[DONE]", "").replace("<|endoftext|>", "")
+                            
+                            # Accumulate content
+                            assistant_content += token
+                            
+                            # Send a simplified message for non-JSON responses, but only for WebSocket clients
                             await manager.send_update(user.id, {
                                 "type": "message_update",
                                 "message_id": assistant_message_id, # Use assistant ID consistently
