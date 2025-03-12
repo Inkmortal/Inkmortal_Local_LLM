@@ -15,7 +15,6 @@ from .schemas import (
     ConversationCreate, ConversationUpdate
 )
 from .models import Conversation, Message
-from .message_service import send_message, get_message_status
 from .conversation_service import (
     create_conversation, get_conversation, list_conversations,
     update_conversation, delete_conversation
@@ -97,24 +96,6 @@ async def websocket_endpoint(
         except:
             pass
 
-# Endpoint to check message status
-@router.get("/message/{message_id}/status")
-async def get_message_status_endpoint(
-    message_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    queue_manager = Depends(get_queue)
-):
-    """Get the current status of a message"""
-    result = await get_message_status(db, message_id, current_user.id, queue_manager)
-    
-    if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Message not found"
-        )
-        
-    return result
 
 # Endpoint to create a new conversation
 @router.post("/conversation", status_code=status.HTTP_201_CREATED)
@@ -259,13 +240,15 @@ async def send_message_endpoint(
             )
         
         # Always use streaming now - no more condition check
+        # Since queue_manager is from a dependency that returns an awaitable
+        queue_mgr = await queue_manager
         return await stream_message(
             db=db,
             user=current_user,
             message_text=message_text,
             conversation_id=conversation_id,
             file_content=file_content,
-            queue_manager=queue_manager
+            queue_manager=queue_mgr
         )
         
     except HTTPException:

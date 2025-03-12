@@ -58,12 +58,6 @@ class ConversationUpdate(BaseModel):
         return v
 
 
-class MessageStatusResponse(BaseModel):
-    """Schema for message status response"""
-    status: str
-    queue_position: Optional[int] = None
-
-
 # New schemas for CreateChatRequest and GetChatResponse
 class CreateChatRequest(BaseModel):
     """Schema for creating a new chat conversation"""
