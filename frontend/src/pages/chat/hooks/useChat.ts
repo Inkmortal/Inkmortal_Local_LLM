@@ -147,7 +147,7 @@ export const useChat = ({
       wsConnectedRef.current = false;
       return false;
     }
-  }, []); // Removed dispatch dependency to prevent potential re-render issues
+  }, []); // No dependencies needed
   
   // Load all conversations for the current user
   const loadConversations = useCallback(async () => {
