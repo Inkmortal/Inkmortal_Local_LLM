@@ -1,4 +1,4 @@
-import React, { ReactNode, useMemo } from 'react';
+import React, { ReactNode, useMemo, useEffect, useState, useRef } from 'react';
 import parse from 'html-react-parser';
 import MathRenderer from '../education/MathRenderer';
 import CodeBlock from '../education/CodeBlock';
@@ -24,12 +24,28 @@ interface MatchedElement {
 
 interface MessageParserProps {
   content: string;
+  isStreaming?: boolean;
 }
 
 // Maximum content size before chunking for performance
 const MAX_CONTENT_SIZE = 10000;
 
-const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
+const MessageParser: React.FC<MessageParserProps> = ({ content, isStreaming = false }) => {
+  // Track the previously rendered content to identify new tokens
+  const [previousContent, setPreviousContent] = useState("");
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Update previous content after rendering
+  useEffect(() => {
+    if (!isStreaming) {
+      // If not streaming, just set the entire content as previous
+      setPreviousContent(content);
+    } else if (content.length > previousContent.length) {
+      // Only update previous content if new content is longer (streaming is happening)
+      setPreviousContent(content);
+    }
+  }, [content, isStreaming, previousContent]);
+
   // Process content with memoization to prevent re-parsing on every render
   const parsedContent = useMemo(() => {
     // Check if content is HTML or plain text
@@ -37,7 +53,7 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
     
     // For very large content, use simpler parsing to prevent freezing
     if (content.length > MAX_CONTENT_SIZE) {
-      return parseAsPlainText(content);
+      return parseAsPlainText(content, isStreaming, previousContent);
     }
     
     if (isHTML) {
@@ -46,15 +62,32 @@ const MessageParser: React.FC<MessageParserProps> = ({ content }) => {
       } catch (error) {
         console.error('Error parsing HTML content:', error);
         // Fallback to plain text parsing if HTML parsing fails
-        return parseAsPlainText(content);
+        return parseAsPlainText(content, isStreaming, previousContent);
       }
     }
     
     // For regular content, use the optimized parser
-    return parseAsPlainText(content);
-  }, [content]);
+    return parseAsPlainText(content, isStreaming, previousContent);
+  }, [content, isStreaming, previousContent]);
 
-  return <div className="message-content">{parsedContent}</div>;
+  // Add a streaming cursor at the end if streaming
+  const renderContent = useMemo(() => {
+    if (isStreaming) {
+      return (
+        <div className="streaming-container">
+          {parsedContent}
+          <span className="streaming-cursor"></span>
+        </div>
+      );
+    }
+    return parsedContent;
+  }, [parsedContent, isStreaming]);
+
+  return (
+    <div className={"markdown-content " + (isStreaming ? "streaming-text" : "")} ref={contentRef}>
+      {renderContent}
+    </div>
+  );
 };
 
 // Parse content as HTML using html-react-parser
@@ -106,8 +139,8 @@ function parseAsHTML(content: string): ReactNode {
   return parse(content, parseOptions);
 }
 
-// Parse markdown-like syntax in plain text
-function parseAsPlainText(text: string): ReactNode[] {
+// Parse markdown-like syntax in plain text with streaming support
+function parseAsPlainText(text: string, isStreaming = false, previousText = ""): ReactNode[] {
   const elements: ReactNode[] = [];
   let currentIndex = 0;
   let key = 0;
@@ -125,7 +158,31 @@ function parseAsPlainText(text: string): ReactNode[] {
     
     // Add text before the match
     if (match.start > currentIndex) {
-      elements.push(text.substring(currentIndex, match.start));
+      const textBeforeMatch = text.substring(currentIndex, match.start);
+      
+      if (isStreaming && previousText.length < text.length) {
+        // For streaming, split the text to highlight new tokens
+        // Compare only the relevant portion of previous text starting from currentIndex
+        const previousTextSegment = previousText.substring(currentIndex);
+        const commonLength = Math.min(previousTextSegment.length, textBeforeMatch.length);
+        
+        if (commonLength > 0) {
+          // Add previously rendered text
+          elements.push(textBeforeMatch.substring(0, commonLength));
+        }
+        
+        if (commonLength < textBeforeMatch.length) {
+          // Add newly streamed text with highlight
+          elements.push(
+            <span key={`new-${match.start}`} className="new-token">
+              {textBeforeMatch.substring(commonLength)}
+            </span>
+          );
+        }
+      } else {
+        // Regular rendering without streaming effect
+        elements.push(textBeforeMatch);
+      }
     }
     
     // Add the special element
@@ -137,7 +194,31 @@ function parseAsPlainText(text: string): ReactNode[] {
   
   // Add any remaining text
   if (currentIndex < text.length) {
-    elements.push(text.substring(currentIndex));
+    const remainingText = text.substring(currentIndex);
+    
+    if (isStreaming && previousText.length < text.length) {
+      // For streaming, split the remaining text to highlight new tokens
+      // Compare only the relevant portion of previous text starting from currentIndex
+      const previousTextSegment = previousText.substring(currentIndex);
+      const commonLength = Math.min(previousTextSegment.length, remainingText.length);
+      
+      if (commonLength > 0 && commonLength <= remainingText.length) {
+        // Add previously rendered text
+        elements.push(remainingText.substring(0, commonLength));
+      }
+      
+      if (commonLength < remainingText.length) {
+        // Add newly streamed text with highlight
+        elements.push(
+          <span key="new-remaining" className="new-token">
+            {remainingText.substring(commonLength)}
+          </span>
+        );
+      }
+    } else {
+      // Regular rendering without streaming effect
+      elements.push(remainingText);
+    }
   }
   
   return elements;

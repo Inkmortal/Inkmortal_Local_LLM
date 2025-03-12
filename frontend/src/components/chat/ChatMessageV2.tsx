@@ -51,12 +51,18 @@ export const ChatMessageV2: React.FC<ChatMessageProps> = React.memo(
         content = message.content;
       }
       
+      // Determine if we should show streaming effect
+      const showStreaming = isStreaming && message.status === MessageStatus.STREAMING;
+      
       return (
-        <div className="message-content prose prose-invert max-w-none">
-          <MessageParser content={content || ""} />
+        <div className={`message-content prose prose-invert max-w-none ${showStreaming ? 'message-streaming' : ''}`}>
+          <MessageParser 
+            content={content || ""} 
+            isStreaming={showStreaming} 
+          />
         </div>
       );
-    }, [message.sections?.response?.content, message.content]);
+    }, [message.sections?.response?.content, message.content, message.status, isStreaming]);
     
     // Render loading indicator for appropriate states
     const renderLoadingIndicator = useMemo(() => {

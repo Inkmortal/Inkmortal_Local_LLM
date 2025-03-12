@@ -120,6 +120,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 ? message.sections.response.content 
                 : message.content
             } 
+            isStreaming={message.status === MessageStatus.STREAMING}
           />
         </div>
         

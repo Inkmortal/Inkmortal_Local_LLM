@@ -289,6 +289,72 @@
   }
 }
 
+/* Streaming text animations */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes text-fade-in {
+  from { 
+    opacity: 0.3; 
+    color: var(--accent-primary);
+    text-shadow: 0 0 3px rgba(var(--accent-primary-rgb), 0.5);
+  }
+  to { 
+    opacity: 1;
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+/* Streaming text styling */
+.streaming-text {
+  position: relative;
+}
+
+.streaming-text .new-token {
+  animation: text-fade-in 0.3s ease-in-out;
+  animation-fill-mode: forwards;
+  opacity: 1;
+  color: inherit;
+  display: inline-block;
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background-color: var(--accent-primary);
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: cursor-blink 0.8s infinite;
+  position: relative;
+  z-index: 5;
+}
+
+/* Container for streaming message to ensure proper formatting */
+.streaming-container {
+  display: inline;
+  white-space: pre-wrap;
+}
+
+/* Enhance message streaming visual indicators */
+.message-streaming .markdown-content p:last-child {
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-streaming .markdown-content p:last-child::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background-color: var(--accent-primary);
+  margin-left: 1px;
+  animation: cursor-blink 0.8s infinite;
+}
+
 /* Mobile responsive design */
 @media (max-width: 768px) {
   .chat-sidebar {
