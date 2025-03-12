@@ -96,6 +96,10 @@ export const useChat = ({
   const tokenRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   
+  // Refs for debouncing WebSocket updates
+  const contentBufferRef = useRef<Record<string, string>>({});
+  const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  
   // Setup effect: get token and connect
   useEffect(() => {
     // Get token from either token or authToken storage
@@ -123,6 +127,13 @@ export const useChat = ({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      
+      // Clean up any pending debounce timers
+      Object.keys(debounceTimersRef.current).forEach(key => {
+        clearTimeout(debounceTimersRef.current[key]);
+      });
+      debounceTimersRef.current = {};
+      contentBufferRef.current = {};
     };
   }, [autoConnect]);
   
@@ -723,7 +734,7 @@ export const useChat = ({
       
       // Helper function to process WebSocket updates for a specific message
       const handleWebSocketUpdate = (update: any, targetMessageId: string) => {
-        // STEP 1: Handle message status updates
+        // STEP 1: Handle message status updates - these can go through immediately
         if (update.status) {
           // Map status string directly to our enum values (case-insensitive)
           const statusStr = typeof update.status === 'string' ? update.status.toUpperCase() : update.status;
@@ -736,22 +747,25 @@ export const useChat = ({
             statusStr === "QUEUED" || statusStr === MessageStatus.QUEUED ? MessageStatus.QUEUED :
             MessageStatus.PENDING;
           
-          // Update message status - include conversation ID for possible message creation
-          dispatch({
-            type: ChatActionType.UPDATE_MESSAGE,
-            payload: {
-              messageId: targetMessageId,
-              status: messageStatus,
-              metadata: {
-                conversationId: update.conversation_id,
-                error: update.error,
-                model: update.model
+          // Only send status updates for non-streaming statuses to avoid render thrashing
+          // Always pass streaming statuses through completion detection below
+          if (messageStatus !== MessageStatus.STREAMING) {
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: targetMessageId,
+                status: messageStatus,
+                metadata: {
+                  conversationId: update.conversation_id,
+                  error: update.error,
+                  model: update.model
+                }
               }
-            }
-          });
+            });
+          }
         }
         
-        // STEP 2: Handle content updates
+        // STEP 2: Handle content updates - buffer these to prevent render thrashing
         const hasContent = 
           update.assistant_content !== undefined || 
           (update.message?.content !== undefined);
@@ -767,64 +781,72 @@ export const useChat = ({
           if (content) {
             console.log(`Received content token: "${content.substring(0, 25)}${content.length > 25 ? '...' : ''}"`);
             
-            // Set update mode based on content_update_type (default to APPEND)
-            const updateMode = update.content_update_type !== "REPLACE" 
-              ? ContentUpdateMode.APPEND 
-              : ContentUpdateMode.REPLACE;
+            // Add content to buffer
+            contentBufferRef.current[targetMessageId] = 
+              (contentBufferRef.current[targetMessageId] || '') + content;
+            
+            // Clear any existing timer for this message
+            if (debounceTimersRef.current[targetMessageId]) {
+              clearTimeout(debounceTimersRef.current[targetMessageId]);
+            }
+            
+            // Schedule a debounced update (100ms)
+            debounceTimersRef.current[targetMessageId] = setTimeout(() => {
+              // Check if we have content to update
+              const bufferedContent = contentBufferRef.current[targetMessageId];
+              if (!bufferedContent) return;
               
-            // Log message updates but rely on the reducer to handle missing messages
-            const existingMessage = state.messages[targetMessageId];
-            if (!existingMessage) {
-              console.log(`Update for message ${targetMessageId} not in state yet - reducer will create it`);
-            } else {
-              console.log(`Updating message ${targetMessageId} - current content length: ${existingMessage.content.length}, adding token length: ${content.length}`);
-            }
-            
-            // If we have a section field, use section-specific update
-            if (update.section) {
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: targetMessageId,
-                  content: content,
-                  section: update.section,
-                  contentUpdateMode: updateMode,
-                  metadata: {
-                    conversationId: update.conversation_id,  // Include for message creation
-                    model: update.model  // Pass model info if available
-                  }
-                }
-              });
-            } else {
-              // No section specified, update main content
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: targetMessageId,
-                  content: content,
-                  contentUpdateMode: updateMode,
-                  metadata: {
-                    conversationId: update.conversation_id,  // Include for message creation
-                    model: update.model  // Pass model info if available
-                  }
-                }
-              });
-            }
-            
-            // Set status to STREAMING while receiving content
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: targetMessageId,
-                status: MessageStatus.STREAMING,
-                metadata: {
-                  conversationId: update.conversation_id  // Include for message creation
-                }
+              // Log the buffered update
+              console.log(`Dispatching buffered update for ${targetMessageId} - content length: ${bufferedContent.length}`);
+              
+              // Get existing message if any
+              const existingMessage = state.messages[targetMessageId];
+              if (!existingMessage) {
+                console.log(`Update for message ${targetMessageId} not in state yet - reducer will create it`);
               }
-            });
+              
+              // Send the update with the buffered content
+              if (update.section) {
+                // Section-specific update
+                dispatch({
+                  type: ChatActionType.UPDATE_MESSAGE,
+                  payload: {
+                    messageId: targetMessageId,
+                    content: bufferedContent,
+                    section: update.section,
+                    // Always use REPLACE with buffered content
+                    contentUpdateMode: ContentUpdateMode.REPLACE,
+                    status: MessageStatus.STREAMING,
+                    metadata: {
+                      conversationId: update.conversation_id,
+                      model: update.model
+                    }
+                  }
+                });
+              } else {
+                // Main content update
+                dispatch({
+                  type: ChatActionType.UPDATE_MESSAGE,
+                  payload: {
+                    messageId: targetMessageId,
+                    content: bufferedContent,
+                    // Always use REPLACE with buffered content
+                    contentUpdateMode: ContentUpdateMode.REPLACE,
+                    status: MessageStatus.STREAMING,
+                    metadata: {
+                      conversationId: update.conversation_id,
+                      model: update.model
+                    }
+                  }
+                });
+              }
+              
+              // Clear the buffer after update
+              contentBufferRef.current[targetMessageId] = '';
+            }, 100);
           }
           
-          // Store model info in metadata if available
+          // Store model info in metadata if available - low frequency, so can go through
           if (update.model) {
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
@@ -836,7 +858,7 @@ export const useChat = ({
           }
         }
         
-        // STEP 3: Handle completion from various formats
+        // STEP 3: Handle completion - these should go through immediately
         const isComplete = 
           update.is_complete === true || 
           update.done === true || 
@@ -845,6 +867,34 @@ export const useChat = ({
           update.status === MessageStatus.COMPLETE;
         
         if (isComplete) {
+          // Clear any pending updates and timers
+          if (debounceTimersRef.current[targetMessageId]) {
+            clearTimeout(debounceTimersRef.current[targetMessageId]);
+            delete debounceTimersRef.current[targetMessageId];
+          }
+          
+          // Flush any remaining buffered content
+          const remainingContent = contentBufferRef.current[targetMessageId];
+          if (remainingContent) {
+            // Send the final content update
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: targetMessageId,
+                content: remainingContent,
+                contentUpdateMode: ContentUpdateMode.REPLACE,
+                metadata: {
+                  conversationId: update.conversation_id,
+                  model: update.model
+                }
+              }
+            });
+            
+            // Clear the buffer
+            delete contentBufferRef.current[targetMessageId];
+          }
+          
+          // Now mark as complete
           dispatch({
             type: ChatActionType.UPDATE_MESSAGE,
             payload: {
@@ -852,7 +902,7 @@ export const useChat = ({
               status: MessageStatus.COMPLETE,
               isComplete: true,
               metadata: {
-                conversationId: update.conversation_id,  // Include for message creation
+                conversationId: update.conversation_id,
                 model: update.model
               }
             }
