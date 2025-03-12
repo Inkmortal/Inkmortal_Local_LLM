@@ -17,13 +17,16 @@ from ...db import get_db
 logger = logging.getLogger("app.api.chat.utils")
 
 # Create a FastAPI dependency for the queue manager
-async def get_queue() -> QueueManagerInterface:
-    """Get the queue manager instance"""
-    queue_manager = get_queue_manager()
-    # Ensure the manager is connected if not in test mode
-    if not settings.is_testing:
-        await queue_manager.ensure_connected()
-    return queue_manager
+def get_queue() -> QueueManagerInterface:
+    """
+    Get the queue manager instance (synchronous version)
+    
+    The connection is established at application startup in main.py,
+    so we don't need to ensure connection here.
+    For endpoints that need to ensure fresh connection, they should
+    explicitly call await queue_manager.ensure_connected()
+    """
+    return get_queue_manager()
 
 def generate_id() -> str:
     """Generate a UUID string for database entities"""

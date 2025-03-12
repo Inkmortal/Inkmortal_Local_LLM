@@ -240,15 +240,14 @@ async def send_message_endpoint(
             )
         
         # Always use streaming now - no more condition check
-        # Since queue_manager is from a dependency that returns an awaitable
-        queue_mgr = await queue_manager
+        # Using the synchronous queue_manager dependency (no need to await)
         return await stream_message(
             db=db,
             user=current_user,
             message_text=message_text,
             conversation_id=conversation_id,
             file_content=file_content,
-            queue_manager=queue_mgr
+            queue_manager=queue_manager
         )
         
     except HTTPException:

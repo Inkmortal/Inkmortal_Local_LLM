@@ -16,12 +16,9 @@ from .stats import get_dashboard_stats
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # Create a FastAPI dependency for the queue manager
-async def get_queue() -> QueueManagerInterface:
-    """Get the queue manager instance"""
-    queue_manager = get_queue_manager()
-    if not settings.is_testing:
-        await queue_manager.ensure_connected()
-    return queue_manager
+def get_queue() -> QueueManagerInterface:
+    """Get the queue manager instance (synchronous version)"""
+    return get_queue_manager()
 
 @router.get("/dashboard")
 async def admin_dashboard(
@@ -30,6 +27,9 @@ async def admin_dashboard(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """Get statistics for the admin dashboard"""
+    # Ensure connection before using
+    if not settings.is_testing:
+        await queue_manager.ensure_connected()
     return await get_dashboard_stats(db, queue_manager, current_user)
 
 # IP whitelist endpoints moved to admin/ip_whitelist.py

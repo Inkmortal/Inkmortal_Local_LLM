@@ -28,13 +28,9 @@ OLLAMA_API_URL = settings.ollama_api_url
 router = APIRouter(prefix="/api", tags=["api"])
 
 # Create a FastAPI dependency for the queue manager
-async def get_queue() -> QueueManagerInterface:
-    """Get the queue manager instance"""
-    queue_manager = get_queue_manager()
-    # Ensure the manager is connected if not in test mode
-    if not settings.is_testing:
-        await queue_manager.ensure_connected()
-    return queue_manager
+def get_queue() -> QueueManagerInterface:
+    """Get the queue manager instance (synchronous version)"""
+    return get_queue_manager()
 
 # Helper function to determine request priority
 async def get_request_priority(
@@ -107,6 +103,9 @@ async def chat_completions(
     Proxy endpoint for Ollama chat completions API
     Compatible with OpenAI API format
     """
+    # Ensure connection before using queue manager
+    if not settings.is_testing:
+        await queue_manager.ensure_connected()
     # Get request body
     body = await request.json()
     
@@ -178,6 +177,9 @@ async def completions(
     Proxy endpoint for Ollama completions API
     Compatible with OpenAI API format
     """
+    # Ensure connection before using queue manager
+    if not settings.is_testing:
+        await queue_manager.ensure_connected()
     # Get request body
     body = await request.json()
     
@@ -288,6 +290,9 @@ async def queue_status(
     queue_manager: QueueManagerInterface = Depends(get_queue)
 ):
     """Get current queue status (authenticated users only)"""
+    # Ensure connection before using queue manager
+    if not settings.is_testing:
+        await queue_manager.ensure_connected()
     status = await queue_manager.get_status()
     return status
 
@@ -298,6 +303,9 @@ async def clear_queue(
     queue_manager: QueueManagerInterface = Depends(get_queue)
 ):
     """Clear the queue (admin only)"""
+    # Ensure connection before using queue manager
+    if not settings.is_testing:
+        await queue_manager.ensure_connected()
     await queue_manager.clear_queue()
     return {"message": "Queue cleared successfully"}
 
@@ -315,6 +323,9 @@ async def api_health(queue_manager: QueueManagerInterface = Depends(get_queue)):
     
     # Check RabbitMQ connection
     try:
+        # Ensure connection before using queue manager
+        if not settings.is_testing:
+            await queue_manager.ensure_connected()
         status = await queue_manager.get_status()
         rabbitmq_status = status["rabbitmq_connected"]
     except:
