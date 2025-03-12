@@ -106,18 +106,29 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       // If message doesn't exist yet, create a placeholder
       if (!message) {
         console.log(`Creating placeholder for missing message ${messageId} in reducer`);
+        
+        // Create a basic message with only required properties
         message = {
           id: messageId,
           conversationId: metadata?.conversationId || 'temp-id',
           role: MessageRole.ASSISTANT,
           content: '',
           status: status || MessageStatus.STREAMING,
-          timestamp: Date.now(),
-          sections: {
-            response: { content: '', visible: true },
-            thinking: { content: '', visible: true }
-          }
+          timestamp: Date.now()
+          // No sections included by default - strictly follow Message interface
         };
+        
+        // Only add sections if specifically needed (based on section parameter)
+        if (section) {
+          message.sections = {
+            response: { content: '', visible: true }
+          };
+          
+          // Only add thinking section if specifically requested
+          if (section === 'thinking') {
+            message.sections.thinking = { content: '', visible: true };
+          }
+        }
       }
       
       const updatedMessage = { ...message };
