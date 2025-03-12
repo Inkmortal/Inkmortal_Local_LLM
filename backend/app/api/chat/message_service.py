@@ -4,6 +4,7 @@ Message handling service layer for chat functionality.
 import asyncio
 import logging
 import uuid
+import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy import text
@@ -250,8 +251,81 @@ async def process_message(
                         "status": "PROCESSING"
                     })
                     
-                    # Get request from queue and process it
-                    llm_response = await queue_manager.process_request(request_obj)
+                    # Check if we should use streaming
+                    if request_obj.body.get("stream", False):
+                        # Process with streaming
+                        logger.info("Using streaming mode for LLM request")
+                        
+                        # Send initial streaming status
+                        await manager.send_update(user_id, {
+                            "type": "message_update",
+                            "message_id": message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": ""
+                        })
+                        
+                        # Collect full content as we stream
+                        assistant_content = ""
+                        
+                        # Stream chunks as they come
+                        try:
+                            async for chunk in queue_manager.process_streaming_request(request_obj):
+                                # Try to parse as JSON
+                                try:
+                                    chunk_data = json.loads(chunk)
+                                    # Extract content based on format
+                                    content = None
+                                    if "delta" in chunk_data and "content" in chunk_data["delta"]:
+                                        content = chunk_data["delta"]["content"]
+                                    elif "response" in chunk_data:
+                                        content = chunk_data["response"]
+                                    elif "content" in chunk_data:
+                                        content = chunk_data["content"]
+                                    
+                                    if content:
+                                        # Send chunk to client
+                                        await manager.send_update(user_id, {
+                                            "type": "message_update",
+                                            "message_id": message_id,
+                                            "conversation_id": conversation_id,
+                                            "status": "STREAMING",
+                                            "assistant_content": content,
+                                            "content_update_type": "APPEND",
+                                            "is_complete": False
+                                        })
+                                        assistant_content += content
+                                except json.JSONDecodeError:
+                                    # Raw text chunk
+                                    await manager.send_update(user_id, {
+                                        "type": "message_update",
+                                        "message_id": message_id,
+                                        "conversation_id": conversation_id,
+                                        "status": "STREAMING",
+                                        "assistant_content": chunk,
+                                        "content_update_type": "APPEND",
+                                        "is_complete": False
+                                    })
+                                    assistant_content += chunk
+                                except Exception as e:
+                                    logger.error(f"Error processing streaming chunk: {str(e)}")
+                        except Exception as streaming_error:
+                            logger.error(f"Streaming error: {str(streaming_error)}")
+                            assistant_content += f"\n\nStreaming error: {str(streaming_error)}"
+                        
+                        # Create response object for compatibility with the rest of the code
+                        llm_response = {
+                            "choices": [{
+                                "message": {
+                                    "role": "assistant", 
+                                    "content": assistant_content
+                                }
+                            }]
+                        }
+                    else:
+                        # Fall back to non-streaming
+                        logger.info("Using non-streaming mode for LLM request")
+                        llm_response = await queue_manager.process_request(request_obj)
                     
                     # Handle the response if successful
                     if llm_response:
@@ -287,55 +361,51 @@ async def process_message(
                             logger.error(f"Unexpected response type: {type(llm_response)}")
                             assistant_content = "Error: Unable to process response"
                         
-                        # Send initial streaming status to client
-                        await manager.send_update(user_id, {
-                            "type": "message_update",
-                            "message_id": message_id,
-                            "conversation_id": conversation_id,
-                            "status": "STREAMING",
-                            "assistant_content": ""  # Start with empty content
-                        })
-                        
-                        # For streaming, break content into chunks and send incrementally
-                        chunk_size = 4  # Approximate token size (characters)
-                        total_chunks = len(assistant_content) // chunk_size + (1 if len(assistant_content) % chunk_size > 0 else 0)
-                        
-                        logger.info(f"Streaming content in {total_chunks} chunks")
-                        
-                        # Send content chunk by chunk with small delays for more natural streaming
-                        for i in range(total_chunks):
-                            chunk_start = i * chunk_size
-                            chunk_end = min((i + 1) * chunk_size, len(assistant_content))
-                            chunk = assistant_content[chunk_start:chunk_end]
-                            
-                            # Send this chunk to the client
+                        # For non-streaming only - if using streaming we already sent updates
+                        if not request_obj.body.get("stream", False):
+                            # Send initial streaming status to client
                             await manager.send_update(user_id, {
                                 "type": "message_update",
                                 "message_id": message_id,
                                 "conversation_id": conversation_id,
                                 "status": "STREAMING",
-                                "assistant_content": chunk,
-                                "content_update_type": "APPEND",
-                                "is_complete": False  # Not complete until the last chunk
+                                "assistant_content": ""  # Start with empty content
                             })
                             
-                            # Small delay between chunks for more natural streaming
-                            await asyncio.sleep(0.02)
+                            # For non-streaming, we simulate streaming through chunked delivery
+                            chunk_size = 4  # Characters per chunk
+                            total_chunks = len(assistant_content) // chunk_size + (1 if len(assistant_content) % chunk_size > 0 else 0)
                             
-                            # Log progress periodically
-                            if i % 50 == 0 and i > 0:
-                                logger.info(f"Streamed {i}/{total_chunks} chunks ({i*chunk_size} characters)")
+                            logger.info(f"Simulating streaming with {total_chunks} chunks")
+                            
+                            for i in range(total_chunks):
+                                chunk_start = i * chunk_size
+                                chunk_end = min((i + 1) * chunk_size, len(assistant_content))
+                                chunk = assistant_content[chunk_start:chunk_end]
+                                
+                                await manager.send_update(user_id, {
+                                    "type": "message_update",
+                                    "message_id": message_id,
+                                    "conversation_id": conversation_id,
+                                    "status": "STREAMING",
+                                    "assistant_content": chunk,
+                                    "content_update_type": "APPEND",
+                                    "is_complete": False
+                                })
+                                
+                                # Small delay for more natural streaming
+                                await asyncio.sleep(0.02)
                         
-                        # Final message marking completion
+                        # Send final completion message for both streaming and non-streaming paths
                         await manager.send_update(user_id, {
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conversation_id,
                             "status": "COMPLETE",
-                            "is_complete": True  # Mark as complete
+                            "is_complete": True
                         })
                         
-                        logger.info(f"Completed streaming {len(assistant_content)} characters in {total_chunks} chunks")
+                        logger.info(f"Response message completed, total length: {len(assistant_content)} characters")
                         
                         # Create a new database session for the async operation
                         db = SessionLocal()
