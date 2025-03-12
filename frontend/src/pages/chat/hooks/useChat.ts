@@ -54,10 +54,27 @@ export interface UseChatReturn {
   // Message management
   sendMessage: (content: string, file?: File | null) => Promise<void>;
   regenerateMessage: () => Promise<void>;
+  regenerateLastMessage?: () => Promise<void>;
   stopGeneration: () => void;
   
   // WebSocket connection
   connectWebSocket: () => Promise<boolean>;
+  
+  // Derived data for components
+  messages: Message[];
+  sortedMessages?: Message[];
+  conversationList?: Conversation[];
+  activeConversation?: Conversation | null;
+  isGenerating?: boolean;
+  
+  // File handling
+  handleFileSelect?: (file: File) => void;
+  clearSelectedFile?: () => void;
+  selectedFile?: File | null;
+  
+  // Editor refs
+  codeInsertRef?: React.RefObject<((code: string) => void) | undefined>;
+  mathInsertRef?: React.RefObject<((formula: string) => void) | undefined>;
 }
 
 /**
