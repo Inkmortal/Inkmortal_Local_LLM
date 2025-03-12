@@ -10,7 +10,7 @@ import {
   MessageStreamHandlers 
 } from './types';
 import { executeServiceCall, handleApiResponse } from './errorHandling';
-import { isWebSocketConnected } from './websocketService';
+import { isWebSocketConnected, ensureWebSocketConnection } from './websocketService';
 
 /**
  * Sends a chat message with streaming support and fallback mechanisms
@@ -35,9 +35,31 @@ export async function sendChatMessage(
     onStatusUpdate = () => {}
   } = handlers;
   
-  // Check if WebSocket is connected - this determines our strategy
-  const useWebSocket = isWebSocketConnected();
-  console.log(`[messageService] WebSocket connection status: ${useWebSocket ? "CONNECTED" : "DISCONNECTED"}`);
+  // CRITICAL FIX: Don't just check connection, ENSURE connection when we want to use streaming
+  // Get token from localStorage
+  const token = localStorage.getItem('token');
+  
+  // Check current status, but don't rely only on this
+  let useWebSocket = isWebSocketConnected();
+  console.log(`[messageService] Initial WebSocket status: ${useWebSocket ? "CONNECTED" : "DISCONNECTED"}`);
+  
+  // If not connected but we have a token, try to connect WebSocket before proceeding
+  if (!useWebSocket && token) {
+    console.log('[messageService] WebSocket not connected, attempting reconnection before sending message');
+    try {
+      // Attempt synchronous connection - this is critical for proper streaming
+      // We need to await this to ensure handlers are registered in time
+      await ensureWebSocketConnection(token);
+      
+      // Check again after connection attempt
+      useWebSocket = isWebSocketConnected();
+      console.log(`[messageService] After connection attempt, WebSocket status: ${useWebSocket ? "CONNECTED" : "DISCONNECTED"}`);
+    } catch (error) {
+      console.error('[messageService] Failed to establish WebSocket connection:', error);
+      useWebSocket = false;
+    }
+  }
+  
   console.log(`[messageService] Will use ${useWebSocket ? "WebSocket streaming" : "polling fallback"} for message delivery`);
   
   try {
@@ -177,12 +199,21 @@ async function pollForMessageUpdates(
       // Get message update
       // Try both APIs that might exist in backend
       let response;
+      
+      // First validate that we have both a conversationId and messageId
+      if (!conversationId || !messageId) {
+        console.error(`Invalid IDs for message polling - conversationId: ${conversationId}, messageId: ${messageId}`);
+        throw new Error('Missing required conversation or message ID for polling');
+      }
+      
       try {
         // First try the specific message endpoint
+        console.log(`Polling for message update: ${conversationId}/${messageId}`);
         response = await fetchApi<ChatResponse>(`/api/chat/message/${conversationId}/${messageId}`, {
           method: 'GET',
         });
       } catch (error) {
+        console.log(`Message-specific endpoint failed, trying conversation endpoint fallback`);
         // Fallback to conversation endpoint if message-specific endpoint doesn't exist
         response = await fetchApi<{messages: ChatResponse[]}>(`/api/chat/conversation/${conversationId}`, {
           method: 'GET',
@@ -199,7 +230,13 @@ async function pollForMessageUpdates(
                 status: 200,
                 headers: response.headers
               });
+            } else {
+              console.error(`Message ${messageId} not found in conversation data`);
+              throw new Error(`Message not found in conversation data`);
             }
+          } else {
+            console.error(`Invalid conversation response format - missing messages array`);
+            throw new Error(`Invalid conversation response format`);
           }
         }
       }
