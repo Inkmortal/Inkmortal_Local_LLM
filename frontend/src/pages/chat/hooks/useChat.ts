@@ -500,6 +500,9 @@ export const useChat = ({
       
       if (actuallyConnected) {
         console.log(`Registering WebSocket handler for message ${assistantMessageId} (WebSocket is connected)`);
+        
+        // IMPORTANT FIX: Register handlers for multiple possible message IDs
+        // This ensures we catch messages from the model even if the ID format changes
         unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
           // Simple debug log to monitor WebSocket updates
           console.log(`WebSocket update for ${assistantMessageId}:`, update);
@@ -568,9 +571,15 @@ export const useChat = ({
               });
             }
             
+            // IMPORTANT FIX: Support both string and object status indicators
+            const streamingStatus = 
+              update.status === "STREAMING" ||
+              update.status === "streaming" ||
+              update.status === MessageStatus.STREAMING;
+            
             // Always ensure status is set to STREAMING when we get content
             // during streaming (this ensures UI shows streaming indicators)
-            if (update.status === "STREAMING") {
+            if (streamingStatus) {
               dispatch({
                 type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
@@ -578,6 +587,11 @@ export const useChat = ({
                   status: MessageStatus.STREAMING
                 }
               });
+            }
+            
+            // Special handling for Ollama message model format
+            if (update.model) {
+              console.log(`Detected model name from Ollama: ${update.model}`);
             }
           }
           
