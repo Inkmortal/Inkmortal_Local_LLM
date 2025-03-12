@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback, useRef } from 'react';
+import { useReducer, useEffect, useCallback, useRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -744,6 +744,14 @@ export const useChat = ({
             const updateMode = update.content_update_type !== "REPLACE" 
               ? ContentUpdateMode.APPEND 
               : ContentUpdateMode.REPLACE;
+              
+            // Add debugging to track message existence and updates
+            const existingMessage = state.messages[targetMessageId];
+            if (!existingMessage) {
+              console.error(`Cannot update message ${targetMessageId} - not found in state`);
+            } else {
+              console.log(`Updating message ${targetMessageId} - current content length: ${existingMessage.content.length}, adding token length: ${content.length}`);
+            }
             
             // If we have a section field, use section-specific update
             if (update.section) {
@@ -916,6 +924,50 @@ export const useChat = ({
     console.log(`Stopped generation for ${streamingMessages.length} messages`);
   }, [state.messages]);
   
+  // Convert dictionary-based messages to sorted array for components
+  const messages = useMemo(() => {
+    return Object.values(state.messages).sort((a, b) => a.timestamp - b.timestamp);
+  }, [state.messages]);
+  
+  // Get current active conversation details
+  const activeConversation = useMemo(() => {
+    return state.activeConversationId ? state.conversations[state.activeConversationId] : null;
+  }, [state.activeConversationId, state.conversations]);
+  
+  // Convert conversations dictionary to array
+  const conversationList = useMemo(() => {
+    return Object.values(state.conversations).sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [state.conversations]);
+  
+  // Alias for regenerateMessage to match expected interface
+  const regenerateLastMessage = useCallback(() => {
+    regenerateMessage();
+  }, [regenerateMessage]);
+  
+  // File handling state and helpers
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  const handleFileSelect = useCallback((file: File) => {
+    setSelectedFile(file);
+  }, []);
+  
+  const clearSelectedFile = useCallback(() => {
+    setSelectedFile(null);
+  }, []);
+  
+  // Editor refs for code and math input
+  const codeInsertRef = useRef<((code: string) => void) | undefined>(undefined);
+  const mathInsertRef = useRef<((formula: string) => void) | undefined>(undefined);
+  
+  // Flag for indicating if message generation is in progress
+  const isGenerating = useMemo(() => {
+    return Object.values(state.messages).some(msg => 
+      msg.status === MessageStatus.STREAMING || 
+      msg.status === MessageStatus.PROCESSING || 
+      msg.status === MessageStatus.QUEUED
+    );
+  }, [state.messages]);
+
   return {
     state,
     loadConversations,
@@ -925,8 +977,25 @@ export const useChat = ({
     updateConversationTitle: updateCurrentConversationTitle,
     sendMessage,
     regenerateMessage,
+    regenerateLastMessage, // Alias for expected interface
     stopGeneration,
-    connectWebSocket
+    connectWebSocket,
+    
+    // Add derived data for components
+    messages,
+    sortedMessages: messages, // Alias to match expected interface
+    conversationList,
+    activeConversation,
+    isGenerating,
+    
+    // File handling implementation
+    handleFileSelect,
+    clearSelectedFile,
+    selectedFile,
+    
+    // Editor refs for code and math
+    codeInsertRef,
+    mathInsertRef
   };
 };
 
