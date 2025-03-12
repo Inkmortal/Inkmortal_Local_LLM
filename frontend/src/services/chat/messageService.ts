@@ -1,6 +1,8 @@
 /**
- * Enhanced message service for chat communication
- * Supports WebSocket streaming with fallback to polling, and robust error handling
+ * Chat message service
+ * 
+ * Handles sending messages to the backend and receiving streaming responses
+ * Supports WebSocket streaming with fallback to polling
  */
 import { fetchApi } from '../../config/api';
 import { 
@@ -13,7 +15,8 @@ import { executeServiceCall, handleApiResponse } from './errorHandling';
 import { 
   isWebSocketConnected, 
   waitForWebSocketConnection, 
-  ensureWebSocketConnection 
+  ensureWebSocketConnection,
+  registerMessageId
 } from './websocketService';
 
 // Constants
@@ -131,10 +134,28 @@ export async function sendChatMessage(
           
           // CRITICAL: Log the assistant message ID we're expecting updates for
           console.log(`[messageService] CRITICAL! Expecting WebSocket updates for assistant_message_id: ${requestData.assistant_message_id}`);
+          
+          // Register the message ID with our service to ensure proper routing
+          if (requestData.assistant_message_id && conversationId) {
+            registerMessageId(
+              requestData.assistant_message_id,
+              requestData.assistant_message_id, // Same ID initially
+              conversationId
+            );
+          }
         }
         
         // Always return success for WebSocket clients to maintain message state
         // Actual content will come via WebSocket updates
+        // Register the message ID mapping for WebSocket routing
+        if (requestData.assistant_message_id && conversationId) {
+          registerMessageId(
+            requestData.assistant_message_id,
+            requestData.assistant_message_id, // Same ID initially
+            conversationId
+          );
+        }
+        
         const response = {
           success: true,
           message_id: requestData.assistant_message_id!, // Use the frontend-generated ID

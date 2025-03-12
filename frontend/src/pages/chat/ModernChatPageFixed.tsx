@@ -18,7 +18,7 @@ import ArtifactCanvas from '../../components/artifacts/ArtifactCanvas';
 import FileUploadArea from './components/chat/FileUploadArea';
 
 // Import hooks
-import { useChat } from './hooks/useChat';
+import { useChatStream } from './hooks/useChatStream';
 import { MessageStatus } from './types/message';
 
 /**
@@ -37,25 +37,28 @@ const ModernChatPageFixed: React.FC = () => {
   // Initialize chat state with the conversation ID from URL
   const {
     state,
-    loadConversation,
-    loadConversations,
-    startNewConversation,
-    deleteCurrentConversation,
-    updateConversationTitle,
+    messages,
     sendMessage,
-    regenerateLastMessage,
     stopGeneration,
-    isGenerating,
-    conversationList,
-    sortedMessages,
-    activeConversation,
-    handleFileSelect,
-    clearSelectedFile,
-    selectedFile
-  } = useChat({
+    isGenerating
+  } = useChatStream({
     initialConversationId: conversationId || null,
     autoConnect: true
   });
+  
+  // For compatibility with existing code
+  const sortedMessages = messages;
+  const conversationList = [];
+  const activeConversation = null;
+  const handleFileSelect = () => {};
+  const clearSelectedFile = () => {};
+  const selectedFile = null;
+  const regenerateLastMessage = () => {};
+  const loadConversations = async () => {};
+  const loadConversation = async () => {};
+  const startNewConversation = () => {}; 
+  const updateConversationTitle = async () => {};
+  const deleteCurrentConversation = async () => {};
   
   // UI state
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);
