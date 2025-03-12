@@ -211,17 +211,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         }
       }
       
-      // If this was a new message (not in state before)
-      if (!state.messages[messageId]) {
-        return {
-          ...state,
-          messages: {
-            ...state.messages,
-            [messageId]: updatedMessage
-          }
-        };
-      }
-      
+      // Always return a consistent state structure regardless of whether 
+      // this was a new or existing message
       return {
         ...state,
         messages: {
