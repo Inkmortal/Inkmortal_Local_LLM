@@ -536,7 +536,7 @@ export function useChat({
           console.log(`WebSocket update JSON:`, JSON.stringify(update, null, 2));
           console.log(`Fields present: assistant_content=${!!update.assistant_content}, delta=${!!update.delta}, content=${!!update.content}, section=${!!update.section}, status=${update.status}`);
           
-          // STEP 1: Handle status updates
+          // STEP 1: Handle status updates 
           if (update.status) {
             // Always normalize status to lowercase for case-insensitive matching
             // This ensures we handle both 'streaming' and 'STREAMING' from different backends
@@ -554,6 +554,9 @@ export function useChat({
               
             console.log(`Mapped status: "${status}" => MessageStatus.${MessageStatus[messageStatus]}`); 
             
+            // Store normalized status for later checks (important for streaming detection)
+            const normalizedStatus = status;
+            
             // Update message status
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
@@ -563,6 +566,11 @@ export function useChat({
                 metadata: update.error ? { error: update.error } : undefined
               }
             });
+            
+            // CRITICAL FIX: If status is streaming/STREAMING, force into streaming mode
+            if (/stream|streaming/i.test(normalizedStatus)) {
+              console.log("***** STREAMING DETECTED - FORCING STREAMING MODE *****");
+            }
           }
           
           // STEP 2: Handle content updates - prioritize in this order:
@@ -586,13 +594,28 @@ export function useChat({
           console.log(`Content types: assistant_content=${assistantContentType}, delta.content=${deltaContentType}, content=${contentType}, section=${sectionType}`);
           
           // If we're receiving content but not processing it correctly, dump the raw data
-          // Match both lowercase 'streaming' and uppercase 'STREAMING' from backend
-          if ((hasAssistantContent || hasDeltaContent || hasContent) && 
-              (update.status === 'streaming' || update.status === 'STREAMING')) {
-            console.log(`STREAMING CONTENT DETECTED BUT MAY NOT BE PROCESSED CORRECTLY:`);
-            if (hasAssistantContent) console.log(`assistant_content (${assistantContentType}):`, update.assistant_content);
-            if (hasDeltaContent) console.log(`delta.content (${deltaContentType}):`, update.delta.content);
-            if (hasContent) console.log(`content (${contentType}):`, update.content);
+          // Use case-insensitive regex for status comparison
+          const isStreamingStatus = update.status && 
+                                   typeof update.status === 'string' && 
+                                   /stream|streaming/i.test(update.status);
+          
+          // Check for streaming content using case-insensitive status
+          if ((hasAssistantContent || hasDeltaContent || hasContent) && isStreamingStatus) {
+            console.log(`STREAMING CONTENT DETECTED - PROCESSING:`);
+            
+            // Debug log the content 
+            if (hasAssistantContent) console.log(`Processing assistant_content (${assistantContentType}):`, update.assistant_content);
+            if (hasDeltaContent) console.log(`Processing delta.content (${deltaContentType}):`, update.delta.content);
+            if (hasContent) console.log(`Processing content (${contentType}):`, update.content);
+            
+            // CRITICAL FIX: Always update message status to STREAMING first
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                status: MessageStatus.STREAMING
+              }
+            });
           }
           
           // Handle section-specific updates (used by our backend)
@@ -620,7 +643,7 @@ export function useChat({
               
             console.log(`Processing assistant_content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
             
-            // Always update the status to streaming when content is received
+            // CRITICAL FIX: ALWAYS update status to streaming regardless of capitalization in backend message
             // This ensures the UI knows we're in streaming mode
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
@@ -681,6 +704,18 @@ export function useChat({
           }
           // Handle Ollama delta updates (streaming tokens)
           else if (hasDeltaContent) {
+            // CRITICAL FIX: Log delta content for debugging
+            console.log(`Processing delta.content: "${update.delta.content.substring(0, 50)}${update.delta.content.length > 50 ? '...' : ''}"`);
+            
+            // CRITICAL FIX: Ensure status is set to streaming for delta updates
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE, 
+              payload: {
+                messageId: assistantMessageId,
+                status: MessageStatus.STREAMING
+              }
+            });
+            
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
@@ -693,13 +728,30 @@ export function useChat({
           }
           // Handle full content replacements
           else if (hasContent) {
+            // CRITICAL FIX: Log content for debugging
+            console.log(`Processing content: "${update.content.substring(0, 50)}${update.content.length > 50 ? '...' : ''}"`);
+            
+            // CRITICAL FIX: Ensure status is set to streaming for full content updates that are streamed
+            if (isStreamingStatus) {
+              dispatch({
+                type: ChatActionType.UPDATE_MESSAGE, 
+                payload: {
+                  messageId: assistantMessageId,
+                  status: MessageStatus.STREAMING
+                }
+              });
+            }
+            
+            // Use APPEND mode during streaming to show incremental updates
+            const updateMode = isStreamingStatus ? ContentUpdateMode.APPEND : ContentUpdateMode.REPLACE;
+            
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
                 messageId: assistantMessageId,
                 content: update.content,
                 section: 'response',
-                contentUpdateMode: ContentUpdateMode.REPLACE
+                contentUpdateMode: updateMode
               }
             });
           }

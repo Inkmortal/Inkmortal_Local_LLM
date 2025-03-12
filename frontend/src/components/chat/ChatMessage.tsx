@@ -27,7 +27,8 @@ const StatusIndicator = ({ status, error }: {
     case MessageStatus.PROCESSING:
       return <div className="text-xs text-green-400 animate-pulse mt-1">Processing<LoadingDots /></div>;
     case MessageStatus.STREAMING:
-      return <div className="text-xs text-green-400 animate-pulse mt-1">Generating<LoadingDots /></div>;
+      // Removed animate-pulse to prevent flickering during streaming
+      return <div className="text-xs text-green-400 mt-1">Generating<LoadingDots /></div>;
     case MessageStatus.ERROR:
       return <div className="text-xs text-red-400 mt-1">{error || 'Error processing message'}</div>;
     default:
