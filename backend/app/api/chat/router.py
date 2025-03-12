@@ -230,6 +230,8 @@ async def send_message_endpoint(
             data = await request.json()
             message_text = data.get("message")
             conversation_id = data.get("conversation_id")
+            assistant_message_id = data.get("assistant_message_id")  # Extract assistant message ID
+            headers = data.get("headers", {})  # Extract headers for client type detection
             # Ignoring stream parameter - always stream now
             
         # Validate message text
@@ -247,7 +249,9 @@ async def send_message_endpoint(
             message_text=message_text,
             conversation_id=conversation_id,
             file_content=file_content,
-            queue_manager=queue_manager
+            queue_manager=queue_manager,
+            assistant_message_id=assistant_message_id,  # Pass the assistant message ID
+            headers=headers  # Pass headers for client type detection
         )
         
     except HTTPException:
@@ -268,7 +272,9 @@ async def stream_message(
     message_text: str,
     conversation_id: Optional[str] = None,
     file_content: Optional[Dict[str, Any]] = None,
-    queue_manager = None
+    queue_manager = None,
+    assistant_message_id: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None
 ) -> StreamingResponse:
     """Process a message with true token-by-token streaming from Ollama"""
     # Create a new conversation if needed
@@ -314,20 +320,33 @@ async def stream_message(
         fresh_db.commit()
         
         # Create request object with model name (required by Ollama)
+        request_body = {
+            "messages": [{"role": "user", "content": strip_editor_html(message_text)}],
+            "model": settings.default_model,  # Use the model configured in settings
+            "stream": True,
+            "temperature": settings.temperature,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "system": "You are a helpful AI assistant that answers questions accurately and concisely.",
+            # Include tools if enabled in settings
+            **({"tools": []} if settings.tool_calling_enabled else {})
+        }
+        
+        # Add assistant message ID if provided by frontend
+        if assistant_message_id:
+            request_body["assistant_message_id"] = assistant_message_id
+            logger.info(f"Using frontend-provided assistant message ID: {assistant_message_id}")
+            
+        # Add headers for client type detection
+        if headers:
+            request_body["headers"] = headers
+            logger.info(f"Client headers: {headers}")
+            
+        # Create the request object with our complete body
         request_obj = QueuedRequest(
             priority=RequestPriority.WEB_INTERFACE,
             endpoint="/api/chat/completions",
-            body={
-                "messages": [{"role": "user", "content": strip_editor_html(message_text)}],
-                "model": settings.default_model,  # Use the model configured in settings
-                "stream": True,
-                "temperature": settings.temperature,
-                "conversation_id": conversation_id,
-                "message_id": message_id,
-                "system": "You are a helpful AI assistant that answers questions accurately and concisely.",
-                # Include tools if enabled in settings
-                **({"tools": []} if settings.tool_calling_enabled else {})
-            },
+            body=request_body,
             user_id=user.id
         )
         
@@ -345,35 +364,46 @@ async def stream_message(
                 # Track for WebSocket updates
                 manager.track_request(request_obj.timestamp.timestamp(), user.id)
                 
-                # First update for WebSocket clients - use assistant_message_id
-                await manager.send_update(user.id, {
-                    "type": "message_update",
-                    "message_id": assistant_message_id, # Use assistant ID consistently
-                    "conversation_id": conversation_id,
-                    "status": "STREAMING",
-                    "assistant_content": ""
-                })
+                # Extract transport mode first to make decisions
+                transport_mode = request_obj.body.get("transport_mode")
                 
-                # Determine if this is a WebSocket or HTTP request based on headers
-                request_headers = request_obj.body.get("headers", {})
-                is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
+                # Fallback to header-based detection if transport_mode is not explicitly set
+                if not transport_mode:
+                    request_headers = request_obj.body.get("headers", {})
+                    is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
+                    transport_mode = "websocket" if is_websocket_client else "sse"
+                else:
+                    is_websocket_client = transport_mode == "websocket"
+                
+                logger.info(f"Using transport mode: {transport_mode} for client")
+                
+                # First update only for WebSocket clients - use assistant_message_id
+                if transport_mode == "websocket":
+                    await manager.send_update(user.id, {
+                        "type": "message_update",
+                        "message_id": assistant_message_id, # Use assistant ID consistently
+                        "conversation_id": conversation_id,
+                        "status": "STREAMING",
+                        "assistant_content": ""
+                    })
+                
                 
                 # Stream from Ollama via queue manager
                 async for chunk in queue_manager.process_streaming_request(request_obj):
                     # Log the raw chunk for debugging
                     logger.info(f"Streaming chunk: {chunk[:200]}...")
                     
-                    # For HTTP clients only - send in SSE format
-                    # Skip this for WebSocket clients to avoid duplicate messages
-                    if not is_websocket_client:
+                    # For SSE clients only - send in SSE format
+                    if transport_mode == "sse":
                         yield f"data: {chunk}\n\n".encode('utf-8')
                     
-                    # Process and send via WebSocket for all clients
-                    try:
-                        # Parse the JSON data
-                        data = json.loads(chunk)
-                        token = ""
-                        is_complete = False
+                    # Process and send via WebSocket only for WebSocket clients
+                    if transport_mode == "websocket":
+                        try:
+                            # Parse the JSON data
+                            data = json.loads(chunk)
+                            token = ""
+                            is_complete = False
                         
                         # Extract token from various formats
                         if "choices" in data and len(data["choices"]) > 0:
@@ -427,20 +457,24 @@ async def stream_message(
                             websocket_message["status"] = "COMPLETE"
                         
                         # Send to WebSocket clients - no SSE formatting
-                        await manager.send_update(user.id, websocket_message)
+                        # Only send WebSocket updates for WebSocket transport mode
+                        if transport_mode == "websocket":
+                            await manager.send_update(user.id, websocket_message)
                         
                         # Also send section-specific updates if needed
                         if "<think>" in token or "</think>" in token:
                             # This is a thinking section token
-                            await manager.send_section_update(
-                                user_id=user.id,
-                                message_id=assistant_message_id, # Use assistant ID consistently
-                                conversation_id=conversation_id,
-                                section="thinking",
-                                content=token,
-                                is_complete=is_complete,
-                                operation=APPEND
-                            )
+                            # Section updates only for WebSocket clients
+                            if transport_mode == "websocket":
+                                await manager.send_section_update(
+                                    user_id=user.id,
+                                    message_id=assistant_message_id, # Use assistant ID consistently
+                                    conversation_id=conversation_id,
+                                    section="thinking",
+                                    content=token,
+                                    is_complete=is_complete,
+                                    operation=APPEND
+                                )
                     except Exception as e:
                         # Not JSON, probably raw text
                         logger.info(f"Non-JSON response, treating as raw text: {e}")
@@ -458,15 +492,16 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Send a simplified message for non-JSON responses
-                        await manager.send_update(user.id, {
-                            "type": "message_update",
-                            "message_id": assistant_message_id, # Use assistant ID consistently
-                            "conversation_id": conversation_id,
-                            "status": "STREAMING",
-                            "assistant_content": token,
-                            "is_complete": is_complete
-                        })
+                        # Send a simplified message for non-JSON responses, but only for WebSocket clients
+                        if transport_mode == "websocket":
+                            await manager.send_update(user.id, {
+                                "type": "message_update",
+                                "message_id": assistant_message_id, # Use assistant ID consistently
+                                "conversation_id": conversation_id,
+                                "status": "STREAMING",
+                                "assistant_content": token,
+                                "is_complete": is_complete
+                            })
                         
                         # No need to yield to HTTP client again, already done above
                 
@@ -483,43 +518,59 @@ async def stream_message(
                     db.commit()
                     
                     # Final update to WebSocket clients - clean format without SSE
-                    final_websocket_message = {
-                        "type": "message_update",
-                        "message_id": assistant_message_id, # Use assistant ID consistently
-                        "conversation_id": conversation_id,
-                        "status": "COMPLETE",
-                        "assistant_content": assistant_content,
-                        "is_complete": True
-                    }
-                    
-                    logger.info("Sending final completion message to WebSocket clients")
-                    await manager.send_update(user.id, final_websocket_message)
+                    if transport_mode == "websocket":
+                        final_websocket_message = {
+                            "type": "message_update",
+                            "message_id": assistant_message_id, # Use assistant ID consistently
+                            "conversation_id": conversation_id,
+                            "status": "COMPLETE",
+                            "assistant_content": assistant_content,
+                            "is_complete": True
+                        }
+                        
+                        logger.info("Sending final completion message to WebSocket clients")
+                        await manager.send_update(user.id, final_websocket_message)
                 finally:
                     db.close()
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 
-                # For HTTP clients only - send error in SSE format 
-                if not is_websocket_client:
+                # Error handling should respect transport mode
+                
+                # For SSE clients - send error in SSE format 
+                if transport_mode == "sse":
                     yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
                 
                 # For WebSocket clients - send clean JSON error without SSE format
-                error_message = {
-                    "type": "message_update",
-                    "message_id": assistant_message_id, # Use assistant ID consistently
-                    "conversation_id": conversation_id,
-                    "status": "ERROR",
-                    "error": str(e),
-                    "is_complete": True  # Mark as complete so frontend stops waiting
-                }
-                
-                logger.info(f"Sending error message to WebSocket clients: {str(e)}")
-                await manager.send_update(user.id, error_message)
+                if transport_mode == "websocket":
+                    error_message = {
+                        "type": "message_update",
+                        "message_id": assistant_message_id, # Use assistant ID consistently
+                        "conversation_id": conversation_id,
+                        "status": "ERROR",
+                        "error": str(e),
+                        "is_complete": True  # Mark as complete so frontend stops waiting
+                    }
+                    
+                    logger.info(f"Sending error message to WebSocket clients: {str(e)}")
+                    await manager.send_update(user.id, error_message)
             finally:
                 # Clean up
                 manager.untrack_request(request_obj.timestamp.timestamp())
         
-        # Return streaming response
+        # Special case for pure WebSocket clients
+        if request_body.get("transport_mode") == "websocket":
+            # Return a simple acknowledgment since we'll use WebSockets for the actual response
+            logger.info("WebSocket client detected - returning HTTP acknowledgment")
+            async def ack_stream():
+                yield json.dumps({
+                    "status": "acknowledged", 
+                    "message": "Request accepted, responses will be sent via WebSocket",
+                    "assistant_message_id": request_body.get("assistant_message_id")
+                }).encode('utf-8')
+            return StreamingResponse(ack_stream(), media_type="application/json")
+        
+        # Return normal streaming response for SSE clients
         return StreamingResponse(event_stream(), media_type="text/event-stream")
     
     except Exception as e:

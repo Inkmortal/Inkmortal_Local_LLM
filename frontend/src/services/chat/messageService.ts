@@ -80,6 +80,8 @@ export async function sendChatMessage(
       conversation_id: conversationId,
       mode: useWebSocket ? 'streaming' : 'polling',
       assistant_message_id: file?.assistantMessageId, // Pass assistant ID if provided in file object
+      // Explicitly set transport mode to control response delivery method
+      transport_mode: useWebSocket ? 'websocket' : 'sse',
       // Add connection information to help backend distinguish WebSocket vs HTTP clients
       headers: useWebSocket ? {
         "Connection": "Upgrade",

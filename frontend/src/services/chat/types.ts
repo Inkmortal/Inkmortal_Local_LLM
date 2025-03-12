@@ -33,6 +33,7 @@ export interface ChatRequestParams {
   mode?: ChatMode | string;   // Communication mode (polling or streaming)
   assistant_message_id?: string; // Frontend-generated assistant message ID
   headers?: Record<string, string>; // Additional headers to help backend identify client type
+  transport_mode?: 'websocket' | 'sse'; // Explicitly control how responses are delivered
 }
 
 /**
