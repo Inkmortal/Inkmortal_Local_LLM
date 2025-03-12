@@ -83,12 +83,27 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
       
     case ChatActionType.SET_MESSAGES:
+      // Preserve any streaming or in-progress messages when loading conversation history
+      const newMessages = action.payload.reduce((acc, msg) => {
+        acc[msg.id] = msg;
+        return acc;
+      }, {} as Record<string, Message>);
+      
+      // Find any streaming/processing messages to preserve
+      const messagesToPreserve = Object.values(state.messages).filter(msg => 
+        msg.status === MessageStatus.STREAMING || 
+        msg.status === MessageStatus.PROCESSING ||
+        msg.status === MessageStatus.QUEUED
+      );
+      
+      // Keep those messages in the new state
+      messagesToPreserve.forEach(msg => {
+        newMessages[msg.id] = msg;
+      });
+      
       return {
         ...state,
-        messages: action.payload.reduce((acc, msg) => {
-          acc[msg.id] = msg;
-          return acc;
-        }, {} as Record<string, Message>)
+        messages: newMessages
       };
       
     case ChatActionType.ADD_MESSAGE:
