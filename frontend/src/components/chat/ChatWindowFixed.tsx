@@ -358,6 +358,9 @@ export default memo(ChatWindowFixed, (prevProps, nextProps) => {
   if (prevProps.isGenerating !== nextProps.isGenerating) return false;
   if (prevProps.isLoading !== nextProps.isLoading) return false;
   
+  // Check if messages array is undefined
+  if (!prevProps.messages || !nextProps.messages) return false;
+  
   // Check if messages array has changed
   if (prevProps.messages.length !== nextProps.messages.length) return false;
   
