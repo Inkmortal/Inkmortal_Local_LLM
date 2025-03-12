@@ -73,8 +73,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       scrollToBottom(forceScroll);
     }, 100);
     
-    return () => clearTimeout(timeoutId);
-  }, [messages, scrollToBottom]);
   }, [messages, scrollToBottom]);
   
   // When new message starts generating, always scroll to it
