@@ -37,6 +37,8 @@ export async function sendChatMessage(
   
   // Check if WebSocket is connected - this determines our strategy
   const useWebSocket = isWebSocketConnected();
+  console.log(`[messageService] WebSocket connection status: ${useWebSocket ? "CONNECTED" : "DISCONNECTED"}`);
+  console.log(`[messageService] Will use ${useWebSocket ? "WebSocket streaming" : "polling fallback"} for message delivery`);
   
   try {
     // Notify that we're starting

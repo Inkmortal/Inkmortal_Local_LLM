@@ -384,10 +384,23 @@ export function useChat({
       }
     }
     
-    // Check WebSocket connection
-    const needsWebSocketConnection = !wsConnectedRef.current;
+    // CRITICAL: Check WebSocket connection and verify its actual state
+    let useWebSocket = isWebSocketConnected();
+    
+    // If our reference says connected but actual state is disconnected, force reconnect
+    if (wsConnectedRef.current && !useWebSocket) {
+      console.log('WebSocket reference shows connected but actual state is disconnected - forcing reconnection');
+    }
+    
+    // Initialize WebSocket if needed
+    const needsWebSocketConnection = !useWebSocket;
     if (needsWebSocketConnection && tokenRef.current) {
-      await initializeWebSocketConnection();
+      console.log('No WebSocket connection detected, attempting to connect before sending message');
+      const connected = await initializeWebSocketConnection();
+      console.log(`WebSocket connection attempt result: ${connected ? "SUCCESS" : "FAILED"}`);
+      
+      // Update our connection status after the attempt
+      useWebSocket = isWebSocketConnected();
     }
     
     // Temporary IDs for immediate UI feedback
@@ -511,16 +524,24 @@ export function useChat({
       
       // Register WebSocket handler for this message
       let unregisterHandler: (() => void) | null = null;
-      if (wsConnectedRef.current) {
+      
+      // CRITICAL: Verify WebSocket state before registering handler
+      const actuallyConnected = isWebSocketConnected();
+      
+      if (actuallyConnected) {
+        console.log(`Registering WebSocket handler for message ${assistantMessageId} (WebSocket is connected)`);
         unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
-          // Simple debug log for message structure
-          console.log(`WebSocket update for ${assistantMessageId}:`, 
-                      JSON.stringify(update).substring(0, 100) + '...');
+          // CRITICAL DEBUG: Log full message structure for debugging streaming issues
+          console.log(`WebSocket update for ${assistantMessageId}:`, update);
+          console.log(`WebSocket update JSON:`, JSON.stringify(update, null, 2));
+          console.log(`Fields present: assistant_content=${!!update.assistant_content}, delta=${!!update.delta}, content=${!!update.content}, section=${!!update.section}, status=${update.status}`);
           
           // STEP 1: Handle status updates
           if (update.status) {
-            // Normalize status to lowercase for case-insensitive matching
+            // Always normalize status to lowercase for case-insensitive matching
+            // This ensures we handle both 'streaming' and 'STREAMING' from different backends
             const status = typeof update.status === 'string' ? update.status.toLowerCase() : '';
+            console.log(`Raw status from backend: "${update.status}", normalized to: "${status}"`);
             
             // Map backend status to our MessageStatus enum with more flexible matching
             const messageStatus = 
@@ -530,6 +551,8 @@ export function useChat({
               /complete|completed|done|finish|finished/i.test(status) ? MessageStatus.COMPLETE :
               /error|fail|failed|exception/i.test(status) ? MessageStatus.ERROR :
               MessageStatus.PENDING;
+              
+            console.log(`Mapped status: "${status}" => MessageStatus.${MessageStatus[messageStatus]}`); 
             
             // Update message status
             dispatch({
@@ -547,11 +570,30 @@ export function useChat({
           // 2. delta.content (streaming token from Ollama)
           // 3. content (full content replacement)
           
-          // Determine what kind of content we're receiving
-          const hasAssistantContent = update.assistant_content && typeof update.assistant_content === 'string';
+          // Determine what kind of content we're receiving - with enhanced type checking and logging
+          const hasAssistantContent = update.assistant_content !== undefined && update.assistant_content !== null;
+          const assistantContentType = hasAssistantContent ? typeof update.assistant_content : 'undefined';
+          
           const hasDeltaContent = update.delta && update.delta.content;
-          const hasContent = update.content && typeof update.content === 'string';
-          const hasSection = update.section;
+          const deltaContentType = hasDeltaContent ? typeof update.delta.content : 'undefined';
+          
+          const hasContent = update.content !== undefined && update.content !== null;
+          const contentType = hasContent ? typeof update.content : 'undefined';
+          
+          const hasSection = update.section !== undefined && update.section !== null;
+          const sectionType = hasSection ? typeof update.section : 'undefined';
+          
+          console.log(`Content types: assistant_content=${assistantContentType}, delta.content=${deltaContentType}, content=${contentType}, section=${sectionType}`);
+          
+          // If we're receiving content but not processing it correctly, dump the raw data
+          // Match both lowercase 'streaming' and uppercase 'STREAMING' from backend
+          if ((hasAssistantContent || hasDeltaContent || hasContent) && 
+              (update.status === 'streaming' || update.status === 'STREAMING')) {
+            console.log(`STREAMING CONTENT DETECTED BUT MAY NOT BE PROCESSED CORRECTLY:`);
+            if (hasAssistantContent) console.log(`assistant_content (${assistantContentType}):`, update.assistant_content);
+            if (hasDeltaContent) console.log(`delta.content (${deltaContentType}):`, update.delta.content);
+            if (hasContent) console.log(`content (${contentType}):`, update.content);
+          }
           
           // Handle section-specific updates (used by our backend)
           if (hasAssistantContent && hasSection) {
@@ -571,8 +613,24 @@ export function useChat({
           }
           // Handle streaming tokens with assistant_content but no section (appending tokens)
           else if (hasAssistantContent) {
+            // Make sure we're dealing with a string (some backends might send other types)
+            const content = typeof update.assistant_content === 'string' 
+              ? update.assistant_content 
+              : String(update.assistant_content);
+              
+            console.log(`Processing assistant_content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
+            
+            // Always update the status to streaming when content is received
+            // This ensures the UI knows we're in streaming mode
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                status: MessageStatus.STREAMING
+              }
+            });
+            
             // Check for thinking sections
-            const content = update.assistant_content;
             const hasThinking = content.includes('<think>');
             
             if (hasThinking) {
@@ -647,8 +705,8 @@ export function useChat({
           }
           
           // STEP 3: Handle completion and errors
-          // Handle completion
-          if (update.status === 'complete' || update.is_complete === true) {
+          // Handle completion - check both uppercase and lowercase status values
+          if (update.status?.toLowerCase() === 'complete' || update.is_complete === true) {
             console.log('Message completion detected, updating message status to COMPLETE');
             
             // Update the message status to COMPLETE
@@ -674,8 +732,8 @@ export function useChat({
             });
           }
           
-          // Handle errors
-          if (update.status === 'error') {
+          // Handle errors - check both uppercase and lowercase status values
+          if (update.status?.toLowerCase() === 'error') {
             console.log('Message error detected, updating message status to ERROR:', update.error || 'Unknown error');
             
             dispatch({
@@ -946,6 +1004,17 @@ export function useChat({
     ? state.conversations[state.activeConversationId] || null
     : null;
   
+  // CRITICAL: Make sure the WebSocket connection status is synchronized with the WebSocketManager
+  // Problem: wsConnectedRef might get out of sync with actual WebSocket state
+  const actualWebSocketConnected = isWebSocketConnected();
+  
+  // If there's a mismatch, log it and update our reference
+  if (actualWebSocketConnected !== wsConnectedRef.current) {
+    console.log(`WebSocket connection state mismatch: internal=${wsConnectedRef.current}, actual=${actualWebSocketConnected}`);
+    // Update our reference to match actual state
+    wsConnectedRef.current = actualWebSocketConnected;
+  }
+
   return {
     // State
     state,
