@@ -121,6 +121,19 @@ export async function sendChatMessage(
         throw new Error(result.error || 'Failed to send message');
       }
       
+      // Check if this is a WebSocket mode response
+      if (result.data?.websocket_mode) {
+        console.log('Message sent successfully. Updates will arrive via WebSocket.', 
+                    result.data);
+                    
+        // Return a successful result even though content will come via WebSocket
+        return {
+          success: true,
+          message_id: result.data.id,
+          conversation_id: result.data.conversation_id
+        };
+      }
+      
       // If using polling method, we need to poll for updates
       if (!useWebSocket) {
         onStatusUpdate(MessageStatus.PROCESSING);

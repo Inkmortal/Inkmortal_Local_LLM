@@ -555,17 +555,27 @@ async def stream_message(
                 # Clean up
                 manager.untrack_request(request_obj.timestamp.timestamp())
         
-        # Special case for pure WebSocket clients
+        # Special case for WebSocket clients - return a properly formatted response
+        # that matches the expected frontend structure but indicates responses will come via WebSocket
         if request_body.get("transport_mode") == "websocket":
-            # Return a simple acknowledgment since we'll use WebSockets for the actual response
-            logger.info("WebSocket client detected - returning HTTP acknowledgment")
-            async def ack_stream():
-                yield json.dumps({
-                    "status": "acknowledged", 
-                    "message": "Request accepted, responses will be sent via WebSocket",
-                    "assistant_message_id": request_body.get("assistant_message_id")
-                }).encode('utf-8')
-            return StreamingResponse(ack_stream(), media_type="application/json")
+            logger.info("WebSocket client detected - returning compatible HTTP response")
+            
+            # Create a proper message response format that the frontend expects
+            response_data = {
+                "id": assistant_message_id,  # Use the assistant message ID as the message ID
+                "conversation_id": conversation_id,
+                "content": "",  # Empty content since actual content will come via WebSocket
+                "created_at": datetime.now().isoformat(),
+                "role": "assistant",
+                "status": "streaming",  # Indicate streaming status
+                "websocket_mode": True,  # Custom flag to indicate WebSocket delivery
+                "success": True  # Indicate success to prevent frontend error handling
+            }
+            
+            async def response_stream():
+                yield json.dumps(response_data).encode('utf-8')
+                
+            return StreamingResponse(response_stream(), media_type="application/json")
         
         # Return normal streaming response for SSE clients
         return StreamingResponse(event_stream(), media_type="text/event-stream")
