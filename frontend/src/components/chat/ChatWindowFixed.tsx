@@ -213,7 +213,7 @@ const ChatWindowFixed: React.FC<ChatWindowProps> = ({
       </div>
     </div>
   );
-  
+  return (
     <div 
       ref={containerRef}
       className="flex-grow overflow-y-auto p-4 relative"
