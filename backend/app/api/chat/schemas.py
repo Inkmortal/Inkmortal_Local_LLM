@@ -21,7 +21,7 @@ class MessageResponse(BaseModel):
     created_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ConversationResponse(BaseModel):
@@ -33,7 +33,7 @@ class ConversationResponse(BaseModel):
     updated_at: datetime
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ConversationCreate(BaseModel):
@@ -62,3 +62,19 @@ class MessageStatusResponse(BaseModel):
     """Schema for message status response"""
     status: str
     queue_position: Optional[int] = None
+
+
+# New schemas for CreateChatRequest and GetChatResponse
+class CreateChatRequest(BaseModel):
+    """Schema for creating a new chat conversation"""
+    title: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class GetChatResponse(BaseModel):
+    """Schema for chat response"""
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    metadata: Optional[Dict[str, Any]] = None
