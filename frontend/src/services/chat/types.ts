@@ -51,9 +51,10 @@ export interface ChatResponse {
 
 /**
  * Represents a conversation summary
+ * Matches API response from /api/chat/conversations
  */
 export interface ConversationSummary {
-  conversation_id: string;
+  id: string;
   title: string;
   created_at: string;
   updated_at: string;
@@ -61,10 +62,11 @@ export interface ConversationSummary {
 
 /**
  * Represents the complete conversation data with messages
+ * Matches API response from /api/chat/conversation/{id}
  */
 export interface ConversationData {
-  conversation_id: string;
-  title?: string;
+  id: string;
+  title: string;
   messages: ChatResponse[];
   created_at: string;
   updated_at: string;

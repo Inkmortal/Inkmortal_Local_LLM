@@ -149,7 +149,7 @@ export const useChat = ({
         
         // Map API response to our Conversation type
         const conversations: Conversation[] = conversationsArray.map(convRaw => ({
-          id: convRaw.conversation_id || convRaw.id,
+          id: convRaw.id,
           title: convRaw.title || 'Untitled',
           createdAt: new Date(convRaw.created_at).getTime(),
           updatedAt: new Date(convRaw.updated_at).getTime()
@@ -195,14 +195,14 @@ export const useChat = ({
       
       // Fetch conversation data
       const conversationData = await getConversation(conversationId);
-      const conversationRaw = conversationData.conversation;
       
+      // The backend returns the conversation data directly, not nested in a 'conversation' property
       // Create conversation object
       const conversation: Conversation = {
         id: conversationId,
-        title: conversationRaw.title || 'Untitled',
-        createdAt: new Date(conversationRaw.created_at).getTime(),
-        updatedAt: new Date(conversationRaw.updated_at).getTime()
+        title: conversationData.title || 'Untitled',
+        createdAt: new Date(conversationData.created_at).getTime(),
+        updatedAt: new Date(conversationData.updated_at).getTime()
       };
       
       dispatch({ type: ChatActionType.ADD_CONVERSATION, payload: conversation });

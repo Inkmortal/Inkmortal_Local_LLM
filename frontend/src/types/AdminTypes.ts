@@ -56,7 +56,7 @@ export interface RegistrationToken {
 
 // API key
 export interface ApiKey {
-  id: string;
+  id: number; // Backend returns numeric ID
   key: string;
   description: string;
   priority: number;
@@ -68,7 +68,7 @@ export interface ApiKey {
 
 // IP whitelist entry
 export interface IPWhitelistEntry {
-  id: string;
+  id: number; // Backend returns numeric ID
   ip: string;
   added: string;
   lastUsed: string | null;
