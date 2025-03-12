@@ -25,9 +25,11 @@ import { sendChatMessage } from '../../../services/chat/messageService';
 import {
   initializeWebSocket,
   registerMessageHandler,
+  registerGlobalMessageHandler,
   addConnectionListener,
   isWebSocketConnected,
-  closeWebSocket
+  closeWebSocket,
+  waitForWebSocketConnection
 } from '../../../services/chat/websocketService';
 
 // Utils
@@ -79,18 +81,26 @@ export const useChat = ({
   
   // Setup effect: get token and connect
   useEffect(() => {
-    tokenRef.current = localStorage.getItem('token');
+    // Get token from either token or authToken storage
+    tokenRef.current = localStorage.getItem('token') || localStorage.getItem('authToken');
     
     // Connect WebSocket if auto-connect is enabled
     if (autoConnect && tokenRef.current) {
+      console.log('Auto-connecting WebSocket in useChat');
       connectWebSocket();
     }
     
     return () => {
       isMounted.current = false;
       
-      // Clean up WebSocket connection
-      closeWebSocket();
+      // Clean up WebSocket connection - but only if we're unmounting the entire chat
+      // Don't close connection when just switching between conversations
+      if (!window.location.pathname.includes('/chat')) {
+        console.log('Leaving chat area, closing WebSocket connection');
+        closeWebSocket();
+      } else {
+        console.log('Staying in chat area, keeping WebSocket connection alive');
+      }
       
       // Clean up any in-flight requests
       if (abortControllerRef.current) {
@@ -106,23 +116,47 @@ export const useChat = ({
     }
   }, [initialConversationId]);
   
-  // Connect WebSocket
+  // Connect WebSocket with improved reliability
   const connectWebSocket = useCallback(async (): Promise<boolean> => {
     const token = tokenRef.current;
     
     if (!token) {
       console.error("Cannot connect WebSocket - no authentication token");
       wsConnectedRef.current = false;
+      dispatch({ 
+        type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+        payload: false 
+      });
       return false;
     }
     
     try {
       console.log("Attempting to initialize WebSocket connection...");
-      wsConnectedRef.current = await initializeWebSocket(token);
       
-      console.log(`WebSocket initialization result: ${wsConnectedRef.current ? 'SUCCESS' : 'FAILED'}`);
+      // Check if already connected first
+      if (isWebSocketConnected()) {
+        console.log("WebSocket already connected, no need to initialize");
+        wsConnectedRef.current = true;
+        dispatch({ 
+          type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+          payload: true 
+        });
+        return true;
+      }
       
-      if (wsConnectedRef.current) {
+      // Use the new waitForWebSocketConnection function with timeout
+      const connected = await waitForWebSocketConnection(token, 5000);
+      wsConnectedRef.current = connected;
+      
+      console.log(`WebSocket initialization result: ${connected ? 'SUCCESS' : 'FAILED'}`);
+      
+      // Update UI state
+      dispatch({ 
+        type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+        payload: connected 
+      });
+      
+      if (connected) {
         // Setup connection listener for changes
         const unregisterListener = addConnectionListener((connected) => {
           wsConnectedRef.current = connected;
@@ -135,19 +169,67 @@ export const useChat = ({
           });
         });
         
-        // Store unregister function in ref to call later
-        console.log("WebSocket connection listener registered");
+        // Register a global message handler for messages without IDs (like from Ollama)
+        const unregisterGlobalHandler = registerGlobalMessageHandler((update) => {
+          console.log('Global message handler received update:', update);
+          
+          // Try to find the most recent assistant message to update
+          const assistantMessages = Object.values(state.messages)
+            .filter(msg => msg.role === MessageRole.ASSISTANT && 
+                   (msg.status === MessageStatus.STREAMING || msg.status === MessageStatus.PROCESSING))
+            .sort((a, b) => b.timestamp - a.timestamp);
+          
+          if (assistantMessages.length > 0) {
+            const latestMessage = assistantMessages[0];
+            
+            // Update the message content
+            if (update.assistant_content !== undefined) {
+              const content = typeof update.assistant_content === 'string' 
+                ? update.assistant_content 
+                : String(update.assistant_content);
+              
+              // Determine if message is complete
+              const isComplete = update.is_complete === true || 
+                               update.done === true || 
+                               update.status === 'COMPLETE' ||
+                               update.status === MessageStatus.COMPLETE;
+              
+              // Update message in state
+              dispatch({
+                type: ChatActionType.UPDATE_MESSAGE,
+                payload: {
+                  messageId: latestMessage.id,
+                  content: content,
+                  contentUpdateMode: ContentUpdateMode.APPEND,
+                  status: isComplete ? MessageStatus.COMPLETE : MessageStatus.STREAMING,
+                  isComplete: isComplete
+                }
+              });
+            }
+          } else {
+            console.warn('Received global message update but no active assistant message found');
+          }
+        });
+        
+        console.log("WebSocket connection listeners and handlers registered");
       } else {
-        console.error("WebSocket connection failed even though no error was thrown");
+        console.warn("WebSocket connection failed or timed out");
       }
       
       return wsConnectedRef.current;
     } catch (error) {
       console.error('Error connecting to WebSocket:', error);
       wsConnectedRef.current = false;
+      
+      // Update UI state
+      dispatch({ 
+        type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+        payload: false 
+      });
+      
       return false;
     }
-  }, []); // No dependencies needed
+  }, [state.messages]); // Depend on messages to find latest for global handler
   
   // Load all conversations for the current user
   const loadConversations = useCallback(async () => {
@@ -357,20 +439,30 @@ export const useChat = ({
     // CRITICAL: Check WebSocket connection and verify its actual state
     let useWebSocket = isWebSocketConnected();
     
-    // If our reference says connected but actual state is disconnected, force reconnect
-    if (wsConnectedRef.current && !useWebSocket) {
-      console.log('WebSocket reference shows connected but actual state is disconnected - forcing reconnection');
-    }
-    
-    // Initialize WebSocket if needed
-    const needsWebSocketConnection = !useWebSocket;
-    if (needsWebSocketConnection && tokenRef.current) {
+    // If we need a WebSocket connection and we have a token, make sure it's established
+    if (!useWebSocket && tokenRef.current) {
       console.log('No WebSocket connection detected, attempting to connect before sending message');
-      const connected = await initializeWebSocketConnection();
+      
+      // Use waitForWebSocketConnection with a short timeout to avoid hanging the UI
+      const connected = await waitForWebSocketConnection(tokenRef.current, 3000);
       console.log(`WebSocket connection attempt result: ${connected ? "SUCCESS" : "FAILED"}`);
       
-      // Update our connection status after the attempt
-      useWebSocket = isWebSocketConnected();
+      if (connected) {
+        useWebSocket = true;
+        wsConnectedRef.current = true;
+        dispatch({ 
+          type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+          payload: true 
+        });
+      } else {
+        console.warn('Failed to establish WebSocket connection before sending message, will use polling fallback');
+        useWebSocket = false;
+        wsConnectedRef.current = false;
+        dispatch({ 
+          type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+          payload: false 
+        });
+      }
     }
     
     // Temporary IDs for immediate UI feedback
@@ -493,55 +585,86 @@ export const useChat = ({
       }
       
       // Register WebSocket handler for this message
-      let unregisterHandler: (() => void) | null = null;
+      let messageUnregisterHandler: (() => void) | null = null;
+      let globalUnregisterHandler: (() => void) | null = null;
       
-      // CRITICAL: Verify WebSocket state before registering handler
+      // Verify WebSocket state before registering handlers
       const actuallyConnected = isWebSocketConnected();
       
       if (actuallyConnected) {
-        console.log(`Registering WebSocket handler for message ${assistantMessageId} (WebSocket is connected)`);
+        console.log(`WebSocket is connected, registering message handlers for ${assistantMessageId}`);
         
-        // IMPORTANT FIX: Register handlers for multiple possible message IDs
-        // This ensures we catch messages from the model even if the ID format changes
-        unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
-          // Simple debug log to monitor WebSocket updates
-          console.log(`WebSocket update for ${assistantMessageId}:`, update);
+        // Register specific message ID handler
+        messageUnregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
+          console.log(`Message-specific WebSocket update for ${assistantMessageId}:`, update);
+          handleWebSocketUpdate(update, assistantMessageId);
+        });
+        
+        // Also register a global handler that will be triggered for model responses that don't include message ID
+        // (like those from Ollama). This handler will only update the most recent assistant message.
+        globalUnregisterHandler = registerGlobalMessageHandler((update) => {
+          // For global updates, we need to verify this is actually for the current message
+          // by checking the timestamps to find the most recent assistant message
+          const assistantMessages = Object.values(state.messages)
+            .filter(msg => msg.role === MessageRole.ASSISTANT && 
+                 (msg.status === MessageStatus.STREAMING || 
+                  msg.status === MessageStatus.PROCESSING ||
+                  msg.status === MessageStatus.QUEUED ||
+                  msg.status === MessageStatus.PENDING))
+            .sort((a, b) => b.timestamp - a.timestamp);
           
-          // STEP 1: Handle message status updates
-          if (update.status) {
-            // Map status string directly to our enum values
-            const messageStatus = 
-              update.status === "PROCESSING" ? MessageStatus.PROCESSING :
-              update.status === "STREAMING" ? MessageStatus.STREAMING :
-              update.status === "COMPLETE" ? MessageStatus.COMPLETE :
-              update.status === "ERROR" ? MessageStatus.ERROR :
-              update.status === "QUEUED" ? MessageStatus.QUEUED :
-              MessageStatus.PENDING;
-            
-            // Update message status
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: messageStatus,
-                metadata: update.error ? { error: update.error } : undefined
-              }
-            });
-            
-            // Log streaming detection
-            if (update.status === "STREAMING") {
-              console.log("STREAMING mode detected from backend");
-            }
+          if (assistantMessages.length > 0) {
+            // Use the most recent in-progress assistant message
+            const mostRecentMessage = assistantMessages[0];
+            console.log(`Global WebSocket update routed to message ${mostRecentMessage.id}`);
+            handleWebSocketUpdate(update, mostRecentMessage.id);
           }
+        });
+      } else {
+        console.warn('WebSocket not connected, message updates will be handled via polling');
+      }
+      
+      // Helper function to process WebSocket updates for a specific message
+      const handleWebSocketUpdate = (update: any, targetMessageId: string) => {
+        // STEP 1: Handle message status updates
+        if (update.status) {
+          // Map status string directly to our enum values (case-insensitive)
+          const statusStr = typeof update.status === 'string' ? update.status.toUpperCase() : update.status;
           
-          // STEP 2: Handle content updates with our standard section-based format
-          if (update.assistant_content !== undefined) {
-            // Make sure content is a string
-            const content = typeof update.assistant_content === 'string' 
-              ? update.assistant_content 
-              : String(update.assistant_content);
-            
-            console.log(`Received content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
+          const messageStatus = 
+            statusStr === "PROCESSING" || statusStr === MessageStatus.PROCESSING ? MessageStatus.PROCESSING :
+            statusStr === "STREAMING" || statusStr === MessageStatus.STREAMING ? MessageStatus.STREAMING :
+            statusStr === "COMPLETE" || statusStr === MessageStatus.COMPLETE ? MessageStatus.COMPLETE :
+            statusStr === "ERROR" || statusStr === MessageStatus.ERROR ? MessageStatus.ERROR :
+            statusStr === "QUEUED" || statusStr === MessageStatus.QUEUED ? MessageStatus.QUEUED :
+            MessageStatus.PENDING;
+          
+          // Update message status
+          dispatch({
+            type: ChatActionType.UPDATE_MESSAGE,
+            payload: {
+              messageId: targetMessageId,
+              status: messageStatus,
+              metadata: update.error ? { error: update.error } : undefined
+            }
+          });
+        }
+        
+        // STEP 2: Handle content updates
+        const hasContent = 
+          update.assistant_content !== undefined || 
+          (update.message?.content !== undefined);
+        
+        if (hasContent) {
+          // Extract content from various formats
+          const content = update.assistant_content !== undefined
+            ? (typeof update.assistant_content === 'string' 
+               ? update.assistant_content 
+               : String(update.assistant_content))
+            : (update.message?.content || '');
+          
+          if (content) {
+            console.log(`Received content token: "${content.substring(0, 25)}${content.length > 25 ? '...' : ''}"`);
             
             // Set update mode based on content_update_type (default to APPEND)
             const updateMode = update.content_update_type !== "REPLACE" 
@@ -553,7 +676,7 @@ export const useChat = ({
               dispatch({
                 type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
-                  messageId: assistantMessageId,
+                  messageId: targetMessageId,
                   content: content,
                   section: update.section,
                   contentUpdateMode: updateMode
@@ -564,50 +687,54 @@ export const useChat = ({
               dispatch({
                 type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
-                  messageId: assistantMessageId,
+                  messageId: targetMessageId,
                   content: content,
                   contentUpdateMode: updateMode
                 }
               });
             }
             
-            // IMPORTANT FIX: Support both string and object status indicators
-            const streamingStatus = 
-              update.status === "STREAMING" ||
-              update.status === "streaming" ||
-              update.status === MessageStatus.STREAMING;
-            
-            // Always ensure status is set to STREAMING when we get content
-            // during streaming (this ensures UI shows streaming indicators)
-            if (streamingStatus) {
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: assistantMessageId,
-                  status: MessageStatus.STREAMING
-                }
-              });
-            }
-            
-            // Special handling for Ollama message model format
-            if (update.model) {
-              console.log(`Detected model name from Ollama: ${update.model}`);
-            }
-          }
-          
-          // STEP 3: Handle completion
-          if (update.is_complete) {
+            // Set status to STREAMING while receiving content
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.COMPLETE,
-                isComplete: true
+                messageId: targetMessageId,
+                status: MessageStatus.STREAMING
               }
             });
           }
-        });
-      }
+          
+          // Store model info in metadata if available
+          if (update.model) {
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: targetMessageId,
+                metadata: { model: update.model }
+              }
+            });
+          }
+        }
+        
+        // STEP 3: Handle completion from various formats
+        const isComplete = 
+          update.is_complete === true || 
+          update.done === true || 
+          update.status === "COMPLETE" ||
+          update.status === "complete" ||
+          update.status === MessageStatus.COMPLETE;
+        
+        if (isComplete) {
+          dispatch({
+            type: ChatActionType.UPDATE_MESSAGE,
+            payload: {
+              messageId: targetMessageId,
+              status: MessageStatus.COMPLETE,
+              isComplete: true
+            }
+          });
+        }
+      };
       
       try {
         // Send the message to the server
@@ -628,11 +755,17 @@ export const useChat = ({
           });
         }
       } finally {
-        // Clean up WebSocket handler when done with this request
-        if (unregisterHandler) {
+        // Clean up WebSocket handlers when done with this request
+        if (messageUnregisterHandler || globalUnregisterHandler) {
           setTimeout(() => {
-            unregisterHandler?.();
-          }, 10000); // Wait 10 seconds before unregistering to ensure we get all updates
+            console.log('Cleaning up message handlers after timeout');
+            if (messageUnregisterHandler) {
+              messageUnregisterHandler();
+            }
+            if (globalUnregisterHandler) {
+              globalUnregisterHandler();
+            }
+          }, 15000); // Wait 15 seconds before unregistering to ensure we get all updates
         }
       }
     } catch (error) {
@@ -715,15 +848,4 @@ export const useChat = ({
   };
 };
 
-// Initialize WebSocket connection helper
-async function initializeWebSocketConnection(): Promise<boolean> {
-  const token = localStorage.getItem('token');
-  if (!token) return false;
-  
-  try {
-    return await initializeWebSocket(token);
-  } catch (error) {
-    console.error('Error initializing WebSocket connection:', error);
-    return false;
-  }
-}
+// WebSocket is now managed directly within the useChat hook for better integration

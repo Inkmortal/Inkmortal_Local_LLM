@@ -1,6 +1,6 @@
 /**
  * Enhanced message service for chat communication
- * Supports WebSocket streaming, fallback to polling, and robust error handling
+ * Supports WebSocket streaming with fallback to polling, and robust error handling
  */
 import { fetchApi } from '../../config/api';
 import { 
@@ -10,10 +10,22 @@ import {
   MessageStreamHandlers 
 } from './types';
 import { executeServiceCall, handleApiResponse } from './errorHandling';
-import { isWebSocketConnected, ensureWebSocketConnection } from './websocketService';
+import { 
+  isWebSocketConnected, 
+  waitForWebSocketConnection, 
+  ensureWebSocketConnection 
+} from './websocketService';
+
+// Constants
+const WS_CONNECTION_TIMEOUT_MS = 3000; // Wait up to 3 seconds for WS connection
+const MESSAGE_POLL_INTERVAL_MS = 1000; // Poll every second when using polling mode
 
 /**
- * Sends a chat message with streaming support and fallback mechanisms
+ * Sends a chat message with optimal connection management
+ * - Properly awaits WebSocket connection before sending
+ * - Falls back to polling only when necessary
+ * - Provides comprehensive streaming support
+ * 
  * @param message The message content
  * @param conversationId The conversation ID
  * @param file Optional file data
@@ -34,41 +46,33 @@ export async function sendChatMessage(
     onError = () => {},
     onStatusUpdate = () => {}
   } = handlers;
-  
-  // For this application, we'll ALWAYS use WebSocket mode since that's what the backend expects.
-  // The "polling" approach is not properly matching the backend's response format.
-  
-  // Always use WebSocket mode regardless of connection status
-  let useWebSocket = true;
-  
-  console.log(`[messageService] FORCING WebSocket mode for streaming - ignoring connection check`);
-  
-  // Just for logging, check if we're actually connected
-  const isActuallyConnected = isWebSocketConnected();
-  if (!isActuallyConnected) {
-    console.warn('[messageService] Note: WebSocket appears to be disconnected, but we\'re proceeding with streaming mode anyway');
-    
-    // Get token from localStorage
-    const token = localStorage.getItem('token');
-    
-    // If we have a token, try to establish connection
-    if (token) {
-      try {
-        // Attempt to establish WebSocket connection
-        await ensureWebSocketConnection(token);
-        console.log('[messageService] Attempted to establish WebSocket connection');
-      } catch (error) {
-        console.error('[messageService] Failed to establish WebSocket connection:', error);
-        // NOTE: We still continue with WebSocket mode even if connection failed
-      }
-    }
-  }
-  
-  console.log(`[messageService] Will use ${useWebSocket ? "WebSocket streaming" : "polling fallback"} for message delivery`);
-  
+
   try {
     // Notify that we're starting
     onStart();
+    onStatusUpdate(MessageStatus.QUEUED);
+    
+    // Get token from localStorage for WebSocket connection
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    
+    // Choose connection mode based on WebSocket availability
+    let useWebSocket = isWebSocketConnected();
+    
+    // If not currently connected but we have a token, try to establish connection
+    if (!useWebSocket && token) {
+      console.log('[messageService] WebSocket not connected, attempting to establish connection');
+      
+      // Wait for connection with timeout
+      useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
+      
+      if (useWebSocket) {
+        console.log('[messageService] Successfully established WebSocket connection');
+      } else {
+        console.warn('[messageService] Failed to establish WebSocket connection, falling back to polling');
+      }
+    }
+    
+    console.log(`[messageService] Using ${useWebSocket ? "WebSocket streaming" : "polling fallback"} for message delivery`);
     
     // Prepare request data
     const requestData: ChatRequestParams = {
@@ -82,77 +86,42 @@ export async function sendChatMessage(
       requestData.file = file;
     }
     
-    // Update initial status - we'll be in the queue first
-    onStatusUpdate(MessageStatus.QUEUED);
-    
-    // If using WebSocket, we send the message and then wait for WebSocket updates
-    if (useWebSocket) {
-      try {
-        // Send message request
-        const response = await fetchApi<ChatResponse>('/api/chat/message', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestData),
-        });
-        
-        // Process response
-        const result = handleApiResponse(response, {
-          title: 'Message Error',
-          notifyOnError: false, // Don't show error notification here, we'll handle it
-        });
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to send message');
-        }
-        
-        // Return the initial response (WebSocket will handle the rest)
-        return result.data;
-      } catch (error) {
-        console.error('Error sending message via WebSocket:', error);
-        throw error;
-      }
-    } else {
-      // Fallback to polling if WebSocket not available
-      console.log('WebSocket not connected, falling back to polling');
+    // Send request and handle response
+    try {
+      // Send message request
+      const response = await fetchApi<ChatResponse>('/api/chat/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
       
-      try {
-        const response = await fetchApi<ChatResponse>('/api/chat/message', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestData),
-        });
-        
-        // Process response
-        const result = handleApiResponse(response, {
-          title: 'Message Error',
-          notifyOnError: false,
-        });
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to send message');
-        }
-        
-        // With polling, we need to manually set status and start polling for updates
+      // Process response
+      const result = handleApiResponse(response, {
+        title: 'Message Error',
+        notifyOnError: false, // We'll handle errors ourselves
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send message');
+      }
+      
+      // If using polling method, we need to poll for updates
+      if (!useWebSocket) {
         onStatusUpdate(MessageStatus.PROCESSING);
         
-        // Start polling for updates
+        // Get message ID from response
         const messageId = result.data?.id;
         
-        // Handle cases where we don't get a message ID (like with Ollama streaming)
+        // Handle case where backend doesn't provide a message ID
         if (!messageId) {
-          console.warn("Message ID not found in response. This is normal with streaming backends that don't provide IDs.");
+          console.warn("No message ID returned from backend - Ollama may be in use");
           
-          // Create a synthetic message object with the content we've already received
+          // Create a synthetic message with the content we've received so far
           const dataContent = result.data?.content || '';
           const dataModel = result.data?.model || 'unknown';
           
-          console.log(`Creating synthetic message with content from response: "${dataContent.substring(0, 50)}..."`);
-          
-          // Fabricate a completion message for the UI
           return {
             id: `synthetic_${Date.now()}`,
             conversation_id: conversationId,
@@ -164,21 +133,26 @@ export async function sendChatMessage(
           };
         }
         
+        // Start polling for updates
         const completeMessage = await pollForMessageUpdates(
           messageId, 
           conversationId, 
           { onToken, onStatusUpdate, onError }
         );
         
-        // When polling completes, trigger completion handler
+        // When polling completes, notify completion handler
         onComplete(completeMessage);
         
         return completeMessage;
-      } catch (error) {
-        console.error('Error sending message via polling:', error);
-        onError(error instanceof Error ? error.message : 'Unknown error');
-        throw error;
       }
+      
+      // When using WebSocket, just return the initial response
+      // WebSocket will handle the streaming updates
+      return result.data;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      onError(error instanceof Error ? error.message : 'Unknown error');
+      throw error;
     }
   } catch (error) {
     console.error('Error in sendChatMessage:', error);
@@ -207,7 +181,6 @@ async function pollForMessageUpdates(
   
   // Maximum polling attempts (10 minutes at 1 second intervals)
   const MAX_POLLING_ATTEMPTS = 600;
-  const POLLING_INTERVAL_MS = 1000;
   
   // To track content across polling updates
   let currentContent = '';
@@ -221,27 +194,24 @@ async function pollForMessageUpdates(
     
     try {
       // Wait for polling interval
-      await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
+      await new Promise(resolve => setTimeout(resolve, MESSAGE_POLL_INTERVAL_MS));
       
-      // Get message update
-      // Try both APIs that might exist in backend
-      let response;
-      
-      // First validate that we have both a conversationId and messageId
+      // Verify we have both required IDs
       if (!conversationId || !messageId) {
         console.error(`Invalid IDs for message polling - conversationId: ${conversationId}, messageId: ${messageId}`);
         throw new Error('Missing required conversation or message ID for polling');
       }
       
+      // Try the message-specific endpoint first
+      let response;
       try {
-        // First try the specific message endpoint
         console.log(`Polling for message update: ${conversationId}/${messageId}`);
         response = await fetchApi<ChatResponse>(`/api/chat/message/${conversationId}/${messageId}`, {
           method: 'GET',
         });
       } catch (error) {
+        // Fallback to conversation endpoint
         console.log(`Message-specific endpoint failed, trying conversation endpoint fallback`);
-        // Fallback to conversation endpoint if message-specific endpoint doesn't exist
         response = await fetchApi<{messages: ChatResponse[]}>(`/api/chat/conversation/${conversationId}`, {
           method: 'GET',
         });
