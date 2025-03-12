@@ -214,13 +214,13 @@ const ChatWindowFixed: React.FC<ChatWindowProps> = ({
     </div>
   );
   
-  return (
     <div 
       ref={containerRef}
-      className="flex-grow overflow-y-auto p-4 modern-scrollbar relative"
+      className="flex-grow overflow-y-auto p-4 relative"
       style={{ 
         backgroundColor: currentTheme.colors.bgPrimary,
-        ...backgroundGradients()
+        ...backgroundGradients(),
+        height: "100%" /* Ensure container takes full height */
       }}
       onScroll={handleScroll}
     >

@@ -24,6 +24,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   
   // Animation frame ref for performance
   const scrollRAFRef = useRef<number | null>(null);
+  const prevMessagesCountRef = useRef<number>(0);
   
   // Track when user has manually scrolled up
   const [userScrolledUp, setUserScrolledUp] = useState(false);
@@ -61,15 +62,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   
   // Handle scrolling when messages change
   useEffect(() => {
-    // If there are no messages, don't do anything
+    // If there are no messages, do not do anything
     if (messages.length === 0) return;
+    
+    // Always force scroll to bottom for new messages
+    const forceScroll = true; // Force scroll for better user experience
     
     // Delay scrolling slightly to ensure DOM is updated
     const timeoutId = setTimeout(() => {
-      scrollToBottom();
+      scrollToBottom(forceScroll);
     }, 100);
     
     return () => clearTimeout(timeoutId);
+  }, [messages, scrollToBottom]);
   }, [messages, scrollToBottom]);
   
   // When new message starts generating, always scroll to it

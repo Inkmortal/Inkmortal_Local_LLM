@@ -163,7 +163,7 @@ const ModernChatPageFixed: React.FC = () => {
           {/* Content container */}
           <div className="w-full h-full flex flex-col relative">
             {/* Chat Window */}
-            <div className="flex-grow overflow-hidden">
+            <div className="flex-grow ">
               <ChatWindowFixed 
                 messages={sortedMessages}
                 isLoading={state.isLoadingMessages}

@@ -453,7 +453,9 @@ class WebSocketManager {
 
   // Check if WebSocket is connected
   public isConnected(): boolean {
-    return this.websocket !== null && this.websocket.readyState === WebSocket.OPEN;
+    const isConnected = this.websocket !== null && this.websocket.readyState === WebSocket.OPEN;
+    console.log(`WebSocket connection status check: ${isConnected ? "connected" : "disconnected"}`);
+    return isConnected;
   }
 
   // Register message handler
@@ -535,9 +537,11 @@ export function closeWebSocket(): void {
 }
 
 /**
- * Check if WebSocket is connected
- */
 export function isWebSocketConnected(): boolean {
+  const isConnected = wsManager.isConnected();
+  console.log(`WebSocket connection status: ${isConnected ? "connected" : "disconnected"}`);
+  return isConnected;
+}
   return wsManager.isConnected();
 }
 

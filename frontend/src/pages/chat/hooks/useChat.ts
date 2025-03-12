@@ -98,11 +98,13 @@ export function useChat({
       
       // Abort any pending requests
       if (abortControllerRef.current) {
+        console.log('Aborting pending requests on unmount');
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
       
       // Close WebSocket connection
+      console.log('Closing WebSocket connection on unmount');
       closeWebSocket();
     };
   }, []);
@@ -336,17 +338,50 @@ export function useChat({
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
     if (!content.trim() && !file) return;
     
-    // Check if any message is currently being generated
-    const currentlyGenerating = Object.values(state.messages).some(msg => 
+    // Check if any message is currently being generated - using more careful checking
+    const generatingMessages = Object.values(state.messages).filter(msg => 
       msg.status === MessageStatus.STREAMING || 
       msg.status === MessageStatus.PROCESSING || 
       msg.status === MessageStatus.QUEUED
     );
     
-    // Prevent sending a new message while generating
+    const currentlyGenerating = generatingMessages.length > 0;
+    
+    // Log more details for debugging
     if (currentlyGenerating) {
-      console.log('Message sending blocked: AI is currently generating a response');
-      return;
+      console.log(`Message sending blocked: AI is currently generating a response. Found ${generatingMessages.length} generating messages.`);
+      console.log('Messages in generating state:', generatingMessages);
+      
+      // Force reset any messages that are stuck in generating state for too long
+      // This prevents the UI from being permanently blocked
+      const timeNow = Date.now();
+      const stuckMessages = generatingMessages.filter(msg => {
+        const messageAge = timeNow - msg.timestamp;
+        // Consider messages older than 2 minutes as stuck
+        return messageAge > 120000;
+      });
+      
+      if (stuckMessages.length > 0) {
+        console.log(`Found ${stuckMessages.length} stuck messages, resetting their state to allow new messages`);
+        
+        // Force reset stuck messages to complete status
+        stuckMessages.forEach(msg => {
+          dispatch({
+            type: ChatActionType.UPDATE_MESSAGE,
+            payload: {
+              messageId: msg.id,
+              status: MessageStatus.COMPLETE,
+              isComplete: true,
+              metadata: { error: "Message timed out", forced: true }
+            }
+          });
+        });
+        
+        // Now we can proceed with the new message
+      } else {
+        // Still block if no stuck messages found
+        return;
+      }
     }
     
     // Check WebSocket connection
@@ -478,10 +513,11 @@ export function useChat({
       let unregisterHandler: (() => void) | null = null;
       if (wsConnectedRef.current) {
         unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
-          // Log detailed message structure for debugging
-          // Removed excessive debug logging for better performance
+          // Simple debug log for message structure
+          console.log(`WebSocket update for ${assistantMessageId}:`, 
+                      JSON.stringify(update).substring(0, 100) + '...');
           
-          // Handle status updates
+          // STEP 1: Handle status updates
           if (update.status) {
             // Normalize status to lowercase for case-insensitive matching
             const status = typeof update.status === 'string' ? update.status.toLowerCase() : '';
@@ -506,100 +542,116 @@ export function useChat({
             });
           }
           
-          // Handle content updates (removed debug logging for better streaming performance)
+          // STEP 2: Handle content updates - prioritize in this order:
+          // 1. assistant_content (from our backend)
+          // 2. delta.content (streaming token from Ollama)
+          // 3. content (full content replacement)
           
-          // Process either assistant_content or content field - the backend may use either
-          const contentToProcess = update.assistant_content || update.content;
+          // Determine what kind of content we're receiving
+          const hasAssistantContent = update.assistant_content && typeof update.assistant_content === 'string';
+          const hasDeltaContent = update.delta && update.delta.content;
+          const hasContent = update.content && typeof update.content === 'string';
+          const hasSection = update.section;
           
-          if (contentToProcess) {
-            // Check if the update contains section markers
-            const hasThinking = contentToProcess.includes('<think>');
+          // Handle section-specific updates (used by our backend)
+          if (hasAssistantContent && hasSection) {
+            const sectionName = update.section as string;
+            const operation = update.content_update_type === 'APPEND' ? 
+                            ContentUpdateMode.APPEND : ContentUpdateMode.REPLACE;
+            
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                content: update.assistant_content,
+                section: sectionName,
+                contentUpdateMode: operation
+              }
+            });
+          }
+          // Handle streaming tokens with assistant_content but no section (appending tokens)
+          else if (hasAssistantContent) {
+            // Check for thinking sections
+            const content = update.assistant_content;
+            const hasThinking = content.includes('<think>');
             
             if (hasThinking) {
-              // Extract thinking and response content
-              const thinkingMatches = contentToProcess.match(/<think>([\s\S]*?)<\/think>/g);
-              let thinkingContent = '';
-              let responseContent = contentToProcess;
+              // Handle combined thinking and response content
+              const thinkingMatch = /<think>([\s\S]*?)<\/think>/g.exec(content);
               
-              if (thinkingMatches) {
-                thinkingContent = thinkingMatches
-                  .map(match => match.replace(/<think>|<\/think>/g, ''))
-                  .join('\n');
+              if (thinkingMatch) {
+                // Extract thinking content
+                const thinkingContent = thinkingMatch[1];
                 
-                // Remove thinking sections from response content
-                responseContent = contentToProcess.replace(/<think>[\s\S]*?<\/think>/g, '');
-              }
-              
-              // Update thinking section
-              if (thinkingContent) {
+                // Update thinking section
                 dispatch({
                   type: ChatActionType.UPDATE_MESSAGE,
                   payload: {
                     messageId: assistantMessageId,
                     content: thinkingContent,
                     section: 'thinking',
-                    contentUpdateMode: ContentUpdateMode.REPLACE
+                    contentUpdateMode: ContentUpdateMode.APPEND
                   }
                 });
+                
+                // Extract response content (everything but the thinking tags)
+                const responseContent = content.replace(/<think>[\s\S]*?<\/think>/g, '');
+                if (responseContent) {
+                  dispatch({
+                    type: ChatActionType.UPDATE_MESSAGE,
+                    payload: {
+                      messageId: assistantMessageId,
+                      content: responseContent,
+                      section: 'response',
+                      contentUpdateMode: ContentUpdateMode.APPEND
+                    }
+                  });
+                }
               }
-              
-              // Update response section
+            } else {
+              // Regular content (no thinking sections)
               dispatch({
                 type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
                   messageId: assistantMessageId,
-                  content: responseContent,
+                  content: content,
                   section: 'response',
-                  contentUpdateMode: ContentUpdateMode.REPLACE
+                  contentUpdateMode: ContentUpdateMode.APPEND
                 }
               });
-            } else {
-              // For streaming, prioritize the content field - it's likely a token-by-token update
-              if (update.content && typeof update.content === 'string') {
-                // This is likely a streaming token update
-                // Removed debug logging for better performance during streaming
-                
-                dispatch({
-                  type: ChatActionType.UPDATE_MESSAGE,
-                  payload: {
-                    messageId: assistantMessageId,
-                    content: update.content,
-                    section: 'response',
-                    contentUpdateMode: ContentUpdateMode.APPEND
-                  }
-                });
-              } else if (update.delta && update.delta.content) {
-                // Delta update (streaming) - append new content
-                // Removed debug logging for better performance during streaming
-                
-                dispatch({
-                  type: ChatActionType.UPDATE_MESSAGE,
-                  payload: {
-                    messageId: assistantMessageId,
-                    content: update.delta.content,
-                    section: 'response',
-                    contentUpdateMode: ContentUpdateMode.APPEND
-                  }
-                });
-              } else {
-                // Full content update - replace content
-                // Removed debug logging for better performance during content updates
-                
-                dispatch({
-                  type: ChatActionType.UPDATE_MESSAGE,
-                  payload: {
-                    messageId: assistantMessageId,
-                    content: contentToProcess,
-                    section: 'response',
-                    contentUpdateMode: ContentUpdateMode.REPLACE
-                  }
-                });
-              }
             }
           }
+          // Handle Ollama delta updates (streaming tokens)
+          else if (hasDeltaContent) {
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                content: update.delta.content,
+                section: 'response',
+                contentUpdateMode: ContentUpdateMode.APPEND
+              }
+            });
+          }
+          // Handle full content replacements
+          else if (hasContent) {
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                content: update.content,
+                section: 'response',
+                contentUpdateMode: ContentUpdateMode.REPLACE
+              }
+            });
+          }
           
+          // STEP 3: Handle completion and errors
           // Handle completion
-          if (update.status === 'complete') {
+          if (update.status === 'complete' || update.is_complete === true) {
+            console.log('Message completion detected, updating message status to COMPLETE');
+            
+            // Update the message status to COMPLETE
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
@@ -611,16 +663,21 @@ export function useChat({
             
             // Clean up handler
             if (unregisterHandler) {
+              console.log('Unregistering WebSocket handler for completed message');
               unregisterHandler();
               unregisterHandler = null;
             }
             
             // Reload conversations to get updated titles
-            loadConversations();
+            loadConversations().catch(error => {
+              console.error('Error loading conversations after message completion:', error);
+            });
           }
           
           // Handle errors
           if (update.status === 'error') {
+            console.log('Message error detected, updating message status to ERROR:', update.error || 'Unknown error');
+            
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
@@ -632,6 +689,7 @@ export function useChat({
             
             // Clean up handler
             if (unregisterHandler) {
+              console.log('Unregistering WebSocket handler due to error');
               unregisterHandler();
               unregisterHandler = null;
             }

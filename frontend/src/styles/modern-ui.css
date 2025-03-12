@@ -200,6 +200,15 @@
 .modern-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(155, 155, 155, 0.5);
 }
+  background-color: rgba(155, 155, 155, 0.5); /* More visible thumb */
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(155, 155, 155, 0.7);
+}
 
 /* Cards with glass effect */
 .glass-card {
@@ -269,4 +278,7 @@
   font-family: monospace;
   line-height: 1.5;
   overflow-x: auto;
+}
+  width: 10px \!important;
+  display: block \!important;
 }
