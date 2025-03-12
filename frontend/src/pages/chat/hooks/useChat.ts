@@ -144,7 +144,7 @@ export const useChat = ({
     }
   }, [initialConversationId]);
   
-  // Connect WebSocket with improved reliability
+  // Connect WebSocket with improved reliability - memoized to prevent re-connections
   const connectWebSocket = useCallback(async (): Promise<boolean> => {
     const token = tokenRef.current;
     
@@ -201,42 +201,45 @@ export const useChat = ({
         const unregisterGlobalHandler = registerGlobalMessageHandler((update) => {
           console.log('Global message handler received update:', update);
           
-          // Try to find the most recent assistant message to update
-          // First look for messages with in-progress statuses 
-          // Include ALL possible statuses to make sure we don't miss any messages
-          const assistantMessages = Object.values(state.messages)
-            .filter(msg => msg.role === MessageRole.ASSISTANT)
-            .sort((a, b) => b.timestamp - a.timestamp);
+          // Try to find the target message by ID or most recent assistant message
+          const messageId = update.message_id || null;
           
-          let messageToUpdate = null;
+          // First try to find by exact message ID if provided
+          let messageToUpdate = messageId ? state.messages[messageId] : null;
           
-          if (assistantMessages.length > 0) {
-            // Found an in-progress message to update
-            messageToUpdate = assistantMessages[0];
-            console.log(`Found active assistant message to update: ${messageToUpdate.id}`);
-          } else if (update.conversation_id) {
-            // If no in-progress message, try to find any assistant message in this conversation
-            const conversationMessages = Object.values(state.messages)
-              .filter(msg => 
-                msg.role === MessageRole.ASSISTANT && 
-                msg.conversationId === update.conversation_id
-              )
-              .sort((a, b) => b.timestamp - a.timestamp);
-              
-            if (conversationMessages.length > 0) {
-              messageToUpdate = conversationMessages[0];
-              console.log(`Found assistant message in conversation to update: ${messageToUpdate.id}`);
-            }
-          } else {
-            // Last resort: just use the most recent assistant message
-            const anyAssistantMessages = Object.values(state.messages)
+          // If no exact match found, use smarter lookup
+          if (!messageToUpdate) {
+            // Find all assistant messages in order of recency
+            const assistantMessages = Object.values(state.messages)
               .filter(msg => msg.role === MessageRole.ASSISTANT)
               .sort((a, b) => b.timestamp - a.timestamp);
               
-            if (anyAssistantMessages.length > 0) {
-              messageToUpdate = anyAssistantMessages[0];
-              console.log(`Using most recent assistant message as fallback: ${messageToUpdate.id}`);
+            // First priority: Find streaming/processing messages (most active)
+            const activeMessages = assistantMessages.filter(msg => 
+              msg.status === MessageStatus.STREAMING || 
+              msg.status === MessageStatus.PROCESSING);
+            
+            if (activeMessages.length > 0) {
+              messageToUpdate = activeMessages[0];
+              console.log(`Found active streaming message to update: ${messageToUpdate.id}`);
+            } 
+            // Second priority: Any message in the current conversation
+            else if (update.conversation_id) {
+              const conversationMessages = assistantMessages.filter(msg => 
+                msg.conversationId === update.conversation_id);
+                
+              if (conversationMessages.length > 0) {
+                messageToUpdate = conversationMessages[0];
+                console.log(`Found message in conversation to update: ${messageToUpdate.id}`);
+              }
             }
+            // Last resort: Most recent assistant message
+            else if (assistantMessages.length > 0) {
+              messageToUpdate = assistantMessages[0];
+              console.log(`Using most recent assistant message: ${messageToUpdate.id}`);
+            }
+          } else {
+            console.log(`Found exact message match with ID: ${messageId}`);
           }
           
           // Update the message if we found one
@@ -274,7 +277,7 @@ export const useChat = ({
               }
             });
           } else {
-            console.warn('Received global message update but no assistant message found', update);
+            console.warn('Received message update but couldn\'t find target message', update);
           }
         });
         
@@ -296,7 +299,7 @@ export const useChat = ({
       
       return false;
     }
-  }, [state.messages]); // Depend on messages to find latest for global handler
+  }, []); // No dependencies - avoid reconnecting when messages change
   
   // Load all conversations for the current user
   const loadConversations = useCallback(async () => {
@@ -816,8 +819,16 @@ export const useChat = ({
               
               // Get existing message if any
               const existingMessage = state.messages[targetMessageId];
+              
+              // Determine update mode based on message existence
+              // If message exists, APPEND to preserve streaming context
+              // If message doesn't exist yet, use REPLACE for the initial content
+              const updateMode = existingMessage ? ContentUpdateMode.APPEND : ContentUpdateMode.REPLACE;
+              
               if (!existingMessage) {
                 console.log(`Update for message ${targetMessageId} not in state yet - reducer will create it`);
+              } else {
+                console.log(`Appending content to existing message ${targetMessageId}`);
               }
               
               // Send the update with the buffered content
@@ -829,8 +840,7 @@ export const useChat = ({
                     messageId: targetMessageId,
                     content: bufferedContent,
                     section: update.section,
-                    // Always use REPLACE with buffered content
-                    contentUpdateMode: ContentUpdateMode.REPLACE,
+                    contentUpdateMode: updateMode, // Use appropriate mode
                     status: MessageStatus.STREAMING,
                     metadata: {
                       conversationId: update.conversation_id,
@@ -845,8 +855,7 @@ export const useChat = ({
                   payload: {
                     messageId: targetMessageId,
                     content: bufferedContent,
-                    // Always use REPLACE with buffered content
-                    contentUpdateMode: ContentUpdateMode.REPLACE,
+                    contentUpdateMode: updateMode, // Use appropriate mode
                     status: MessageStatus.STREAMING,
                     metadata: {
                       conversationId: update.conversation_id,

@@ -70,13 +70,18 @@ const ModernChatPageFixed: React.FC = () => {
   // Editor refs
   const codeInsertRef = useRef<((code: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((formula: string) => void) | undefined>(undefined);
+
+  // Use ref to prevent duplicate API calls
+  const previousConversationIdRef = useRef<string | null>(null);
   
   // Check if URL changed and load the corresponding conversation
   useEffect(() => {
-    if (isAuthenticated && conversationId) {
+    // Only load if authenticated, conversationId exists, and has changed since last load
+    if (isAuthenticated && conversationId && previousConversationIdRef.current !== conversationId) {
+      previousConversationIdRef.current = conversationId;
       loadConversation(conversationId);
     }
-  }, [isAuthenticated, conversationId, loadConversation]);
+  }, [isAuthenticated, conversationId]); // Removed loadConversation dependency to prevent excessive API calls
   
   // Sidebar toggles
   const toggleHistorySidebar = () => {
