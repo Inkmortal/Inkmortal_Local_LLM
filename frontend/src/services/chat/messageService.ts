@@ -102,7 +102,34 @@ export async function sendChatMessage(
     
     // Send request and handle response
     try {
-      // Send message request
+      // For WebSocket clients, handle differently to ensure message state maintenance
+      if (useWebSocket) {
+        try {
+          // Send message request but don't care about detailed response content
+          await fetchApi<ChatResponse>('/api/chat/message', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData),
+          });
+          
+          console.log('WebSocket client - bypassing standard response processing');
+        } catch (error) {
+          // For WebSocket clients, log but continue - we want to maintain message state
+          console.warn('HTTP error for WebSocket client, continuing with WebSocket streaming:', error);
+        }
+        
+        // Always return success for WebSocket clients to maintain message state
+        // Actual content will come via WebSocket updates
+        return {
+          success: true,
+          message_id: requestData.assistant_message_id!, // Use the frontend-generated ID
+          conversation_id: conversationId
+        };
+      }
+      
+      // For non-WebSocket clients, use the normal flow with error handling
       const response = await fetchApi<ChatResponse>('/api/chat/message', {
         method: 'POST',
         headers: {
@@ -111,7 +138,6 @@ export async function sendChatMessage(
         body: JSON.stringify(requestData),
       });
       
-      // Process response
       const result = handleApiResponse(response, {
         title: 'Message Error',
         notifyOnError: false, // We'll handle errors ourselves
@@ -121,20 +147,7 @@ export async function sendChatMessage(
         throw new Error(result.error || 'Failed to send message');
       }
       
-      // Check if this is a WebSocket mode response
-      if (result.data?.websocket_mode) {
-        console.log('Message sent successfully. Updates will arrive via WebSocket.', 
-                    result.data);
-                    
-        // Return a successful result even though content will come via WebSocket
-        return {
-          success: true,
-          message_id: result.data.id,
-          conversation_id: result.data.conversation_id
-        };
-      }
-      
-      // If using polling method, we need to poll for updates
+      // Now handle polling if needed
       if (!useWebSocket) {
         onStatusUpdate(MessageStatus.PROCESSING);
         
@@ -173,9 +186,13 @@ export async function sendChatMessage(
         return completeMessage;
       }
       
-      // When using WebSocket, just return the initial response
+      // When using WebSocket, just return a success object
       // WebSocket will handle the streaming updates
-      return result.data;
+      return {
+        success: true,
+        message_id: result.data?.id,
+        conversation_id: conversationId
+      };
     } catch (error) {
       console.error('Error sending message:', error);
       onError(error instanceof Error ? error.message : 'Unknown error');

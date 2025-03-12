@@ -116,6 +116,31 @@ export function handleApiResponse<T>(
     };
   }
   
+  // Special case for WebSocket streaming responses
+  // Some responses might return status 200 but with different formats
+  if (response.status === 200 && response.rawData) {
+    try {
+      // Try to parse it if it's JSON
+      const rawData = typeof response.rawData === 'string' 
+        ? JSON.parse(response.rawData) 
+        : response.rawData;
+      
+      // If it has websocket_mode flag or other clues that it's for WebSocket
+      if (rawData.websocket_mode || 
+          rawData.status === 'acknowledged' || 
+          rawData.assistant_message_id) {
+        console.log('Detected WebSocket mode response:', rawData);
+        return {
+          success: true,
+          data: rawData
+        };
+      }
+    } catch (e) {
+      // If parsing fails, continue with normal error handling
+      console.warn('Failed to parse response data:', e);
+    }
+  }
+  
   // Get appropriate error message
   const errorMessage = getErrorMessageFromStatus(response);
   const shouldRetry = RETRY_STATUS_CODES.includes(response.status);
