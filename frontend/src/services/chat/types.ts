@@ -50,6 +50,7 @@ export interface ChatResponse {
   queue_position?: number;     // Position in queue (if available)
   success?: boolean;           // Whether the operation was successful
   message_id?: string;         // Optional message ID returned from backend
+  assistant_message_id?: string; // Optional frontend-generated assistant message ID for tracking
 }
 
 /**

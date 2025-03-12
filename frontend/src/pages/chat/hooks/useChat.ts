@@ -632,16 +632,36 @@ export const useChat = ({
       
       if (actuallyConnected) {
         console.log(`WebSocket is connected, registering message handlers for ${assistantMessageId}`);
+        console.log(`Assistant message is in state:`, state.messages[assistantMessageId]);
         
         // Register specific message ID handler
         messageUnregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
           console.log(`Message-specific WebSocket update for ${assistantMessageId}:`, update);
+          console.log(`State contains these message IDs:`, Object.keys(state.messages));
+          console.log(`Message being updated exists in state: ${!!state.messages[assistantMessageId]}`);
           handleWebSocketUpdate(update, assistantMessageId);
         });
         
         // Also register a global handler that will be triggered for model responses that don't include message ID
         // (like those from Ollama). This handler will only update the most recent assistant message.
         globalUnregisterHandler = registerGlobalMessageHandler((update) => {
+          console.log(`Global message handler received update:`, update);
+          console.log(`Current state has these IDs:`, Object.keys(state.messages));
+          
+          // Check for a message ID match first (backend might be sending our ID back)
+          if (update.message_id && state.messages[update.message_id]) {
+            console.log(`Found direct message ID match for ${update.message_id}`);
+            handleWebSocketUpdate(update, update.message_id);
+            return;
+          }
+          
+          // If the message references the current assistant message ID, use it directly
+          if (assistantMessageId && state.messages[assistantMessageId]) {
+            console.log(`Using current assistant message ID ${assistantMessageId} for update`);
+            handleWebSocketUpdate(update, assistantMessageId);
+            return;
+          }
+          
           // For global updates, we need to verify this is actually for the current message
           // by checking the timestamps to find the most recent assistant message
           const assistantMessages = Object.values(state.messages)
@@ -797,8 +817,8 @@ export const useChat = ({
           assistantMessageId: assistantMessageId // Pass assistant ID to backend
         } : null;
         
-        // Send the message to the server
-        const result = await sendChatMessage(content, conversationId, fileWithAssistantId);
+        // Send the message to the server with the assistant message ID directly
+        const result = await sendChatMessage(content, conversationId, fileWithAssistantId, {}, assistantMessageId);
         
         if (!result.success) {
           throw new Error(result.error || 'Unknown error');
