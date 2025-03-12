@@ -300,17 +300,20 @@
     opacity: 0.3; 
     color: var(--accent-primary);
     text-shadow: 0 0 3px rgba(var(--accent-primary-rgb), 0.5);
+    background-color: rgba(var(--accent-primary-rgb), 0.1);
   }
   to { 
     opacity: 1;
     color: inherit;
     text-shadow: none;
+    background-color: transparent;
   }
 }
 
 /* Streaming text styling */
 .streaming-text {
   position: relative;
+  white-space: pre-wrap;
 }
 
 .streaming-text .new-token {
@@ -318,7 +321,18 @@
   animation-fill-mode: forwards;
   opacity: 1;
   color: inherit;
+  display: inline;
+}
+
+.streaming-text.with-cursor:after {
+  content: '';
   display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background-color: var(--accent-primary);
+  margin-left: 1px;
+  animation: cursor-blink 0.8s infinite;
+  vertical-align: middle;
 }
 
 .streaming-cursor {
@@ -337,6 +351,7 @@
 .streaming-container {
   display: inline;
   white-space: pre-wrap;
+  position: relative;
 }
 
 /* Enhance message streaming visual indicators */
@@ -397,4 +412,33 @@
 
 .tooltip:hover:before {
   opacity: 1;
+}
+
+/* Direct streaming text rendering */
+.streaming-container {
+  white-space: pre-wrap;
+  position: relative;
+}
+
+.new-token {
+  animation: token-appear 0.3s ease-out;
+  color: var(--accent-primary);
+  background-color: rgba(var(--accent-primary-rgb), 0.1);
+  border-radius: 2px;
+  transition: all 0.3s ease-out;
+}
+
+@keyframes token-appear {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+    color: var(--accent-primary);
+    background-color: rgba(var(--accent-primary-rgb), 0.2);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    color: inherit;
+    background-color: transparent;
+  }
 }

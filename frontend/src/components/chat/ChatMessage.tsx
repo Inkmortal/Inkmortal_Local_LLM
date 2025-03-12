@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import MessageParser from './MessageParser';
+import StreamingResponseRenderer from './StreamingResponseRenderer';
 import Button from '../ui/Button';
 import { MessageRole, MessageStatus, MessageSection } from '../../pages/chat/types/message';
 
@@ -81,6 +82,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                       message.sections?.thinking && 
                       message.sections.thinking.content.trim().length > 0;
   
+  // Determine if this message is currently streaming
+  const isStreaming = message.status === MessageStatus.STREAMING;
+  
+  // Get message content from response section if available, otherwise use main content
+  const contentToShow = isAssistant && message.sections?.response 
+    ? message.sections.response.content 
+    : message.content;
+  
   // Animate message entrance
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -114,14 +123,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       } ${isLoading ? `message-${message.status?.toLowerCase()}` : ''}`}>
         {/* Main message content (or response section) */}
         <div className="prose max-w-none">
-          <MessageParser 
-            content={
-              isAssistant && message.sections?.response 
-                ? message.sections.response.content 
-                : message.content
-            } 
-            isStreaming={message.status === MessageStatus.STREAMING}
-          />
+          {isStreaming ? (
+            <StreamingResponseRenderer 
+              content={contentToShow} 
+              isStreaming={isStreaming} 
+            />
+          ) : (
+            <MessageParser 
+              content={contentToShow}
+              isStreaming={false}
+            />
+          )}
         </div>
         
         {/* Thinking section */}
