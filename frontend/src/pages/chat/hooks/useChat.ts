@@ -707,7 +707,37 @@ export const useChat = ({
               console.log(`Using fallback: routing WebSocket update to message ${mostRecentMessage.id}`);
               handleWebSocketUpdate(update, mostRecentMessage.id);
             } else {
-              console.error("No assistant message found for update:", update);
+              console.warn("No existing assistant message found for update - creating placeholder:", update);
+              
+              // Create a temporary message ID if none exists
+              const tempMessageId = update.message_id || uuidv4();
+              
+              // Create a placeholder message to handle updates for global handlers
+              const placeholderMessage: Message = {
+                id: tempMessageId,
+                conversationId: update.conversation_id || 'temp-id',
+                role: MessageRole.ASSISTANT,
+                content: update.assistant_content || '',
+                status: MessageStatus.STREAMING,
+                timestamp: Date.now(),
+                sections: {
+                  response: {
+                    content: '',
+                    visible: true
+                  },
+                  thinking: {
+                    content: '',
+                    visible: true
+                  }
+                }
+              };
+              
+              // Add the placeholder message to state
+              dispatch({ type: ChatActionType.ADD_MESSAGE, payload: placeholderMessage });
+              console.log(`Created placeholder message ${tempMessageId} for global WebSocket update`);
+              
+              // Process the update with our new message ID
+              handleWebSocketUpdate(update, tempMessageId);
             }
           }
         });
@@ -765,7 +795,31 @@ export const useChat = ({
             // Add debugging to track message existence and updates
             const existingMessage = state.messages[targetMessageId];
             if (!existingMessage) {
-              console.error(`Cannot update message ${targetMessageId} - not found in state`);
+              console.warn(`Message ${targetMessageId} not found in state - creating placeholder for WebSocket update`);
+              
+              // Create a placeholder message to handle updates that arrive before state is updated
+              const placeholderMessage: Message = {
+                id: targetMessageId,
+                conversationId: update.conversation_id || 'temp-id',
+                role: MessageRole.ASSISTANT,
+                content: content,
+                status: MessageStatus.STREAMING,
+                timestamp: Date.now(),
+                sections: {
+                  response: {
+                    content: '',
+                    visible: true
+                  },
+                  thinking: {
+                    content: '',
+                    visible: true
+                  }
+                }
+              };
+              
+              // Add the placeholder message to state
+              dispatch({ type: ChatActionType.ADD_MESSAGE, payload: placeholderMessage });
+              console.log(`Created placeholder message ${targetMessageId} for WebSocket updates`);
             } else {
               console.log(`Updating message ${targetMessageId} - current content length: ${existingMessage.content.length}, adding token length: ${content.length}`);
             }
