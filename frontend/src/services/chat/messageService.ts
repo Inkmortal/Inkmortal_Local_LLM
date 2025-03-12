@@ -81,7 +81,7 @@ export async function sendChatMessage(
       message,
       conversation_id: conversationId,
       mode: useWebSocket ? 'streaming' : 'polling',
-      // Use directly provided ID first, then check file object, ensuring ID is always passed when available
+      // CRITICAL: Always include assistant message ID for WebSocket message handling
       assistant_message_id: assistantMessageId || file?.assistantMessageId,
       // Explicitly set transport mode to control response delivery method
       transport_mode: useWebSocket ? 'websocket' : 'sse',
@@ -91,6 +91,13 @@ export async function sendChatMessage(
         "Upgrade": "websocket"
       } : {}
     };
+    
+    // Verify assistant message ID is properly set
+    if (useWebSocket && !requestData.assistant_message_id) {
+      console.error("[messageService] No assistant message ID provided for WebSocket streaming! This may cause message handling issues.");
+    } else if (useWebSocket) {
+      console.log(`[messageService] Using assistant message ID for streaming: ${requestData.assistant_message_id}`);
+    }
     
     // Add file if provided
     if (file) {
@@ -125,12 +132,17 @@ export async function sendChatMessage(
         
         // Always return success for WebSocket clients to maintain message state
         // Actual content will come via WebSocket updates
-        return {
+        const response = {
           success: true,
           message_id: requestData.assistant_message_id!, // Use the frontend-generated ID
           conversation_id: conversationId,
           assistant_message_id: requestData.assistant_message_id // Explicitly include assistant ID
         };
+        
+        // CRITICAL: Log the response to verify IDs match
+        console.log(`[messageService] WebSocket client response with message_id: ${response.message_id} and assistant_message_id: ${response.assistant_message_id}`);
+        
+        return response;
       }
       
       // For non-WebSocket clients, use the normal flow with error handling

@@ -676,11 +676,26 @@ export const useChat = ({
           console.log(`Global message handler received update:`, update);
           console.log(`Current state has these IDs:`, Object.keys(state.messages));
           
-          // Check for a message ID match first (backend might be sending our ID back)
-          if (update.message_id && state.messages[update.message_id]) {
-            console.log(`Found direct message ID match for ${update.message_id}`);
-            handleWebSocketUpdate(update, update.message_id);
-            return;
+          // CRITICAL FIX: If backend sends message_id but it doesn't match our assistantMessageId,
+          // we need to redirect it to the correct ID
+          if (update.message_id) {
+            // If message ID exists in state, use it
+            if (state.messages[update.message_id]) {
+              console.log(`Found direct message ID match for ${update.message_id}`);
+              handleWebSocketUpdate(update, update.message_id);
+              return;
+            } 
+            // If message ID doesn't exist but we have a current assistantMessageId, redirect
+            else if (assistantMessageId && state.messages[assistantMessageId]) {
+              console.log(`Message ID ${update.message_id} not found in state, redirecting to current assistant ID ${assistantMessageId}`);
+              // Create modified update with correct message_id to avoid mismatches
+              const redirectedUpdate = {
+                ...update,
+                message_id: assistantMessageId // Ensure consistent ID
+              };
+              handleWebSocketUpdate(redirectedUpdate, assistantMessageId);
+              return;
+            }
           }
           
           // If the message references the current assistant message ID, use it directly

@@ -352,10 +352,18 @@ async def stream_message(
         
         # Set up streaming response
         async def event_stream():
-            # Get assistant message ID from request or generate a new one
-            assistant_message_id = request_obj.body.get("assistant_message_id") or generate_id()
+            # Always use the frontend-provided assistant message ID if available
+            assistant_message_id = request_obj.body.get("assistant_message_id")
+            if not assistant_message_id:
+                assistant_message_id = generate_id()
+                logger.warning(f"No assistant_message_id provided by frontend - generated new ID: {assistant_message_id}")
+            else:
+                logger.info(f"Using frontend-provided assistant message ID: {assistant_message_id}")
+                
+            # Store this ID in the request body to ensure it's available throughout processing
+            request_obj.body["assistant_message_id"] = assistant_message_id
+            
             assistant_content = ""
-            logger.info(f"Using assistant message ID: {assistant_message_id}")
             
             try:
                 # Add request to queue
