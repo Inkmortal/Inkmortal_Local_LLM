@@ -101,9 +101,24 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       
     case ChatActionType.UPDATE_MESSAGE: {
       const { messageId, content, contentUpdateMode, status, section, metadata, isComplete } = action.payload;
-      const message = state.messages[messageId];
+      let message = state.messages[messageId];
       
-      if (!message) return state;
+      // If message doesn't exist yet, create a placeholder
+      if (!message) {
+        console.log(`Creating placeholder for missing message ${messageId} in reducer`);
+        message = {
+          id: messageId,
+          conversationId: metadata?.conversationId || 'temp-id',
+          role: MessageRole.ASSISTANT,
+          content: '',
+          status: status || MessageStatus.STREAMING,
+          timestamp: Date.now(),
+          sections: {
+            response: { content: '', visible: true },
+            thinking: { content: '', visible: true }
+          }
+        };
+      }
       
       const updatedMessage = { ...message };
       
@@ -194,6 +209,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         if (isComplete && updatedMessage.status === MessageStatus.STREAMING) {
           updatedMessage.status = MessageStatus.COMPLETE;
         }
+      }
+      
+      // If this was a new message (not in state before)
+      if (!state.messages[messageId]) {
+        return {
+          ...state,
+          messages: {
+            ...state.messages,
+            [messageId]: updatedMessage
+          }
+        };
       }
       
       return {

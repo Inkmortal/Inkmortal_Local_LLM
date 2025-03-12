@@ -707,36 +707,12 @@ export const useChat = ({
               console.log(`Using fallback: routing WebSocket update to message ${mostRecentMessage.id}`);
               handleWebSocketUpdate(update, mostRecentMessage.id);
             } else {
-              console.warn("No existing assistant message found for update - creating placeholder:", update);
+              console.log("No assistant message found for global update - using reducer to create it:", update);
               
               // Create a temporary message ID if none exists
               const tempMessageId = update.message_id || uuidv4();
               
-              // Create a placeholder message to handle updates for global handlers
-              const placeholderMessage: Message = {
-                id: tempMessageId,
-                conversationId: update.conversation_id || 'temp-id',
-                role: MessageRole.ASSISTANT,
-                content: update.assistant_content || '',
-                status: MessageStatus.STREAMING,
-                timestamp: Date.now(),
-                sections: {
-                  response: {
-                    content: '',
-                    visible: true
-                  },
-                  thinking: {
-                    content: '',
-                    visible: true
-                  }
-                }
-              };
-              
-              // Add the placeholder message to state
-              dispatch({ type: ChatActionType.ADD_MESSAGE, payload: placeholderMessage });
-              console.log(`Created placeholder message ${tempMessageId} for global WebSocket update`);
-              
-              // Process the update with our new message ID
+              // Let the reducer handle creating the message - just pass the update directly
               handleWebSocketUpdate(update, tempMessageId);
             }
           }
@@ -760,13 +736,17 @@ export const useChat = ({
             statusStr === "QUEUED" || statusStr === MessageStatus.QUEUED ? MessageStatus.QUEUED :
             MessageStatus.PENDING;
           
-          // Update message status
+          // Update message status - include conversation ID for possible message creation
           dispatch({
             type: ChatActionType.UPDATE_MESSAGE,
             payload: {
               messageId: targetMessageId,
               status: messageStatus,
-              metadata: update.error ? { error: update.error } : undefined
+              metadata: {
+                conversationId: update.conversation_id,
+                error: update.error,
+                model: update.model
+              }
             }
           });
         }
@@ -792,34 +772,10 @@ export const useChat = ({
               ? ContentUpdateMode.APPEND 
               : ContentUpdateMode.REPLACE;
               
-            // Add debugging to track message existence and updates
+            // Log message updates but rely on the reducer to handle missing messages
             const existingMessage = state.messages[targetMessageId];
             if (!existingMessage) {
-              console.warn(`Message ${targetMessageId} not found in state - creating placeholder for WebSocket update`);
-              
-              // Create a placeholder message to handle updates that arrive before state is updated
-              const placeholderMessage: Message = {
-                id: targetMessageId,
-                conversationId: update.conversation_id || 'temp-id',
-                role: MessageRole.ASSISTANT,
-                content: content,
-                status: MessageStatus.STREAMING,
-                timestamp: Date.now(),
-                sections: {
-                  response: {
-                    content: '',
-                    visible: true
-                  },
-                  thinking: {
-                    content: '',
-                    visible: true
-                  }
-                }
-              };
-              
-              // Add the placeholder message to state
-              dispatch({ type: ChatActionType.ADD_MESSAGE, payload: placeholderMessage });
-              console.log(`Created placeholder message ${targetMessageId} for WebSocket updates`);
+              console.log(`Update for message ${targetMessageId} not in state yet - reducer will create it`);
             } else {
               console.log(`Updating message ${targetMessageId} - current content length: ${existingMessage.content.length}, adding token length: ${content.length}`);
             }
@@ -832,7 +788,11 @@ export const useChat = ({
                   messageId: targetMessageId,
                   content: content,
                   section: update.section,
-                  contentUpdateMode: updateMode
+                  contentUpdateMode: updateMode,
+                  metadata: {
+                    conversationId: update.conversation_id,  // Include for message creation
+                    model: update.model  // Pass model info if available
+                  }
                 }
               });
             } else {
@@ -842,7 +802,11 @@ export const useChat = ({
                 payload: {
                   messageId: targetMessageId,
                   content: content,
-                  contentUpdateMode: updateMode
+                  contentUpdateMode: updateMode,
+                  metadata: {
+                    conversationId: update.conversation_id,  // Include for message creation
+                    model: update.model  // Pass model info if available
+                  }
                 }
               });
             }
@@ -852,7 +816,10 @@ export const useChat = ({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
                 messageId: targetMessageId,
-                status: MessageStatus.STREAMING
+                status: MessageStatus.STREAMING,
+                metadata: {
+                  conversationId: update.conversation_id  // Include for message creation
+                }
               }
             });
           }
@@ -883,7 +850,11 @@ export const useChat = ({
             payload: {
               messageId: targetMessageId,
               status: MessageStatus.COMPLETE,
-              isComplete: true
+              isComplete: true,
+              metadata: {
+                conversationId: update.conversation_id,  // Include for message creation
+                model: update.model
+              }
             }
           });
         }
