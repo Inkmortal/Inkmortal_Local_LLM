@@ -174,40 +174,79 @@ export const useChat = ({
           console.log('Global message handler received update:', update);
           
           // Try to find the most recent assistant message to update
+          // First look for messages with in-progress statuses 
+          // Include ALL possible statuses to make sure we don't miss any messages
           const assistantMessages = Object.values(state.messages)
-            .filter(msg => msg.role === MessageRole.ASSISTANT && 
-                   (msg.status === MessageStatus.STREAMING || msg.status === MessageStatus.PROCESSING))
+            .filter(msg => msg.role === MessageRole.ASSISTANT)
             .sort((a, b) => b.timestamp - a.timestamp);
           
+          let messageToUpdate = null;
+          
           if (assistantMessages.length > 0) {
-            const latestMessage = assistantMessages[0];
+            // Found an in-progress message to update
+            messageToUpdate = assistantMessages[0];
+            console.log(`Found active assistant message to update: ${messageToUpdate.id}`);
+          } else if (update.conversation_id) {
+            // If no in-progress message, try to find any assistant message in this conversation
+            const conversationMessages = Object.values(state.messages)
+              .filter(msg => 
+                msg.role === MessageRole.ASSISTANT && 
+                msg.conversationId === update.conversation_id
+              )
+              .sort((a, b) => b.timestamp - a.timestamp);
+              
+            if (conversationMessages.length > 0) {
+              messageToUpdate = conversationMessages[0];
+              console.log(`Found assistant message in conversation to update: ${messageToUpdate.id}`);
+            }
+          } else {
+            // Last resort: just use the most recent assistant message
+            const anyAssistantMessages = Object.values(state.messages)
+              .filter(msg => msg.role === MessageRole.ASSISTANT)
+              .sort((a, b) => b.timestamp - a.timestamp);
+              
+            if (anyAssistantMessages.length > 0) {
+              messageToUpdate = anyAssistantMessages[0];
+              console.log(`Using most recent assistant message as fallback: ${messageToUpdate.id}`);
+            }
+          }
+          
+          // Update the message if we found one
+          if (messageToUpdate && update.assistant_content !== undefined) {
+            const content = typeof update.assistant_content === 'string' 
+              ? update.assistant_content 
+              : String(update.assistant_content);
             
-            // Update the message content
-            if (update.assistant_content !== undefined) {
-              const content = typeof update.assistant_content === 'string' 
-                ? update.assistant_content 
-                : String(update.assistant_content);
-              
-              // Determine if message is complete
-              const isComplete = update.is_complete === true || 
-                               update.done === true || 
-                               update.status === 'COMPLETE' ||
-                               update.status === MessageStatus.COMPLETE;
-              
-              // Update message in state
+            // Determine if message is complete
+            const isComplete = update.is_complete === true || 
+                             update.done === true || 
+                             update.status === 'COMPLETE' ||
+                             update.status === MessageStatus.COMPLETE;
+            
+            // Update the message status first to ensure it's visible
+            if (messageToUpdate.status === MessageStatus.PENDING) {
               dispatch({
                 type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
-                  messageId: latestMessage.id,
-                  content: content,
-                  contentUpdateMode: ContentUpdateMode.APPEND,
-                  status: isComplete ? MessageStatus.COMPLETE : MessageStatus.STREAMING,
-                  isComplete: isComplete
+                  messageId: messageToUpdate.id,
+                  status: MessageStatus.STREAMING
                 }
               });
             }
+            
+            // Update message content
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: messageToUpdate.id,
+                content: content,
+                contentUpdateMode: ContentUpdateMode.APPEND,
+                status: isComplete ? MessageStatus.COMPLETE : MessageStatus.STREAMING,
+                isComplete: isComplete
+              }
+            });
           } else {
-            console.warn('Received global message update but no active assistant message found', update);
+            console.warn('Received global message update but no assistant message found', update);
           }
         });
         
@@ -486,7 +525,7 @@ export const useChat = ({
       conversationId: state.activeConversationId || 'temp-id',
       role: MessageRole.ASSISTANT,
       content: '',
-      status: MessageStatus.PENDING,
+      status: MessageStatus.STREAMING, // Changed from PENDING to STREAMING for immediate visibility
       timestamp: now,
       // Initialize empty sections to ensure consistent UI structure
       sections: {
@@ -618,6 +657,21 @@ export const useChat = ({
             const mostRecentMessage = assistantMessages[0];
             console.log(`Global WebSocket update routed to message ${mostRecentMessage.id}`);
             handleWebSocketUpdate(update, mostRecentMessage.id);
+          } else {
+            // If we didn't find any in-progress messages, this might be the first response
+            // Find any assistant message in the current conversation, even if completed
+            const anyAssistantMessages = Object.values(state.messages)
+              .filter(msg => msg.role === MessageRole.ASSISTANT && 
+                     msg.conversationId === update.conversation_id)
+              .sort((a, b) => b.timestamp - a.timestamp);
+              
+            if (anyAssistantMessages.length > 0) {
+              const mostRecentMessage = anyAssistantMessages[0];
+              console.log(`Using fallback: routing WebSocket update to message ${mostRecentMessage.id}`);
+              handleWebSocketUpdate(update, mostRecentMessage.id);
+            } else {
+              console.error("No assistant message found for update:", update);
+            }
           }
         });
       } else {
