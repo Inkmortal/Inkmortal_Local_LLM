@@ -357,12 +357,12 @@ async def stream_message(
                     # Log the raw chunk for debugging
                     logger.info(f"Streaming chunk: {chunk[:200]}...")
                     
-                    # First yield to HTTP client
+                    # For HTTP clients - send in SSE format
                     yield f"data: {chunk}\n\n".encode('utf-8')
                     
-                    # Try to parse for WebSocket
+                    # For WebSocket clients - parse and send properly formatted JSON
                     try:
-                        # First try to parse as JSON
+                        # Parse the JSON data
                         data = json.loads(chunk)
                         token = ""
                         is_complete = False
@@ -398,7 +398,29 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Detect if token contains thinking tags
+                        # Create a clean WebSocket message with the extracted token
+                        websocket_message = {
+                            "type": "message_update",
+                            "message_id": message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": token,
+                            "is_complete": is_complete
+                        }
+                        
+                        # For Ollama format, include model info when available
+                        if "model" in data:
+                            websocket_message["model"] = data["model"]
+                        
+                        # For completeness detection
+                        if is_complete or (data.get("done") == True):
+                            websocket_message["is_complete"] = True
+                            websocket_message["status"] = "COMPLETE"
+                        
+                        # Send to WebSocket clients - no SSE formatting
+                        await manager.send_update(user_id, websocket_message)
+                        
+                        # Also send section-specific updates if needed
                         if "<think>" in token or "</think>" in token:
                             # This is a thinking section token
                             await manager.send_section_update(
@@ -406,17 +428,6 @@ async def stream_message(
                                 message_id=message_id,
                                 conversation_id=conversation_id,
                                 section="thinking",
-                                content=token,
-                                is_complete=is_complete,
-                                operation=APPEND
-                            )
-                        else:
-                            # Regular response token
-                            await manager.send_section_update(
-                                user_id=user.id,
-                                message_id=message_id,
-                                conversation_id=conversation_id,
-                                section="response",
                                 content=token,
                                 is_complete=is_complete,
                                 operation=APPEND
@@ -438,29 +449,15 @@ async def stream_message(
                         # Accumulate content
                         assistant_content += token
                         
-                        # Detect if token contains thinking tags
-                        if "<think>" in token or "</think>" in token:
-                            # This is a thinking section token
-                            await manager.send_section_update(
-                                user_id=user.id,
-                                message_id=message_id,
-                                conversation_id=conversation_id,
-                                section="thinking",
-                                content=token,
-                                is_complete=is_complete,
-                                operation=APPEND
-                            )
-                        else:
-                            # Regular response token
-                            await manager.send_section_update(
-                                user_id=user.id,
-                                message_id=message_id,
-                                conversation_id=conversation_id,
-                                section="response",
-                                content=token,
-                                is_complete=is_complete,
-                                operation=APPEND
-                            )
+                        # Send a simplified message for non-JSON responses
+                        await manager.send_update(user_id, {
+                            "type": "message_update",
+                            "message_id": message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": token,
+                            "is_complete": is_complete
+                        })
                         
                         # No need to yield to HTTP client again, already done above
                 
@@ -476,8 +473,8 @@ async def stream_message(
                     db.add(assistant_message)
                     db.commit()
                     
-                    # Final update
-                    await manager.send_update(user.id, {
+                    # Final update to WebSocket clients - clean format without SSE
+                    final_websocket_message = {
                         "type": "message_update",
                         "message_id": message_id,
                         "conversation_id": conversation_id,
@@ -485,21 +482,30 @@ async def stream_message(
                         "assistant_message_id": assistant_message_id,
                         "assistant_content": assistant_content,
                         "is_complete": True
-                    })
+                    }
+                    
+                    logger.info("Sending final completion message to WebSocket clients")
+                    await manager.send_update(user.id, final_websocket_message)
                 finally:
                     db.close()
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
+                
+                # For HTTP clients - send error in SSE format
                 yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
                 
-                # Error through WebSocket
-                await manager.send_update(user.id, {
+                # For WebSocket clients - send clean JSON error without SSE format
+                error_message = {
                     "type": "message_update",
                     "message_id": message_id,
                     "conversation_id": conversation_id,
                     "status": "ERROR",
-                    "error": str(e)
-                })
+                    "error": str(e),
+                    "is_complete": True  # Mark as complete so frontend stops waiting
+                }
+                
+                logger.info(f"Sending error message to WebSocket clients: {str(e)}")
+                await manager.send_update(user.id, error_message)
             finally:
                 # Clean up
                 manager.untrack_request(request_obj.timestamp.timestamp())

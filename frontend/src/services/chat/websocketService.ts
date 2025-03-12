@@ -298,28 +298,49 @@ class WebSocketManager {
         this.heartbeatTimeout = null;
       }
       
-      // Parse message and adapt format
+      // Parse message data with improved SSE format handling
       let data: MessageAdapter;
       
       try {
-        // Try parsing as JSON
+        // Clean JSON should be directly parseable now that backend is fixed
         data = JSON.parse(event.data);
+        console.log('WebSocket received:', data.type || 'unknown type');
       } catch (parseError) {
-        // Not JSON, treat as plain text
-        console.log('Received non-JSON message:', event.data);
-        data = {
-          type: 'text',
-          assistant_content: event.data
-        };
+        console.warn('Received non-JSON WebSocket message, attempting to cleanup:', event.data);
+        
+        // Try to detect and handle any remaining SSE-formatted messages during transition
+        if (typeof event.data === 'string' && event.data.startsWith('data: ')) {
+          // Remove SSE format prefix and try to parse again
+          const cleanJson = event.data.substring(6).trim();  // Remove "data: " prefix
+          try {
+            data = JSON.parse(cleanJson);
+            console.log('Successfully parsed SSE-formatted WebSocket message');
+          } catch (innerError) {
+            // Still not valid JSON, default to text
+            console.error('Failed to parse SSE-formatted data:', innerError);
+            data = {
+              type: 'text',
+              assistant_content: event.data
+            };
+          }
+        } else {
+          // Not JSON or SSE format, treat as plain text
+          data = {
+            type: 'text',
+            assistant_content: event.data
+          };
+        }
       }
       
-      // Handle Ollama message format - convert to our format
+      // Handle specialized formats like Ollama (direct model responses)
+      // These could be coming directly without passing through our backend formatter
       if (data.message?.content !== undefined && data.model) {
         const ollamaData: MessageAdapter = {
           type: 'message_update',
           status: data.done ? 'COMPLETE' : 'STREAMING',
           assistant_content: data.message.content,
-          is_complete: data.done === true
+          is_complete: data.done === true,
+          model: data.model  // Include model information
         };
         
         // Call all global handlers since Ollama doesn't include message IDs
@@ -327,7 +348,7 @@ class WebSocketManager {
           try {
             handler(ollamaData);
           } catch (handlerError) {
-            console.error('Error in global message handler:', handlerError);
+            console.error('Error in global message handler for Ollama format:', handlerError);
           }
         });
         
@@ -335,20 +356,28 @@ class WebSocketManager {
       }
       
       // Standard message format handling
-      if (data.type === 'message_update' && data.message_id) {
-        const handlerData = this.messageHandlers.get(data.message_id);
-        if (handlerData) {
-          // Update timestamp to show this handler is still active
-          this.messageHandlers.set(data.message_id, {
-            ...handlerData,
-            timestamp: Date.now()
-          });
-          
-          // Call the handler
-          handlerData.handler(data);
-        } else {
-          // If no specific handler found, try all global handlers
-          // This helps with Ollama integration where message IDs might not match
+      if (data.type === 'message_update') {
+        // Determine where to route this message
+        if (data.message_id) {
+          // Try to find a specific handler for this message ID
+          const handlerData = this.messageHandlers.get(data.message_id);
+          if (handlerData) {
+            // Update timestamp to show this handler is still active
+            this.messageHandlers.set(data.message_id, {
+              ...handlerData,
+              timestamp: Date.now()
+            });
+            
+            // Call the handler
+            handlerData.handler(data);
+            return;
+          }
+        }
+        
+        // If we reach here, no specific handler was found or no message_id
+        // Try all global handlers as a fallback
+        if (this.globalMessageHandlers.size > 0) {
+          console.log('Using global message handlers for update');
           this.globalMessageHandlers.forEach(handler => {
             try {
               handler(data);
@@ -356,11 +385,14 @@ class WebSocketManager {
               console.error('Error in global message handler:', handlerError);
             }
           });
+        } else {
+          console.warn('No handlers found for message update:', data);
         }
       } else if (data.type === 'ack') {
         // Heartbeat acknowledgment - logging would be too noisy
       } else {
-        // For unknown messages, try all global handlers
+        // For unknown message types, try global handlers
+        console.log('Unknown message type:', data.type);
         this.globalMessageHandlers.forEach(handler => {
           try {
             handler(data);
@@ -772,10 +804,10 @@ export function isWebSocketConnected(): boolean {
  * @param timeout Maximum time to wait in milliseconds
  * @returns Promise that resolves to true when connected or false on timeout
  */
-export async function waitForWebSocketConnection(token: string, timeout = 5000): Promise<boolean> {
+export function waitForWebSocketConnection(token: string, timeout = 5000): Promise<boolean> {
   // If already connected, return immediately
   if (isWebSocketConnected()) {
-    return true;
+    return Promise.resolve(true);
   }
   
   // Try to initialize connection
@@ -789,10 +821,10 @@ export async function waitForWebSocketConnection(token: string, timeout = 5000):
     });
     
     // Race between connection and timeout
-    return await Promise.race([connectPromise, timeoutPromise]);
+    return Promise.race([connectPromise, timeoutPromise]);
   } catch (error) {
     console.error('Error waiting for WebSocket connection:', error);
-    return false;
+    return Promise.resolve(false);
   }
 }
 
