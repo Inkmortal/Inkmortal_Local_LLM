@@ -554,8 +554,17 @@ export function closeWebSocket(): void {
  */
 export function isWebSocketConnected(): boolean {
   const isConnected = wsManager.isConnected();
-  console.log(`WebSocket connection status: ${isConnected ? "connected" : "disconnected"}`);
+  console.log(`WebSocket connection status check: ${isConnected ? "CONNECTED" : "DISCONNECTED"}`);
+  
+  // Enhanced debugging
+  if (isConnected) {
+    console.log("%c✅ WebSocket is connected and ready - streaming will be used", "color: green; font-weight: bold");
+  } else {
+    console.log("%c❌ WebSocket is NOT connected - will use polling fallback", "color: red; font-weight: bold");
+  }
+  
   return isConnected;
+}
 }
 /**
  * Safely initialize WebSocket with fallback

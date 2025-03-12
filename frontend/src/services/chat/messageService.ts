@@ -136,7 +136,14 @@ export async function sendChatMessage(
         onStatusUpdate(MessageStatus.PROCESSING);
         
         // Start polling for updates
-        const messageId = result.data.id;
+        const messageId = result.data?.id;
+        
+        // Validate that we have a valid message ID before attempting to poll
+        if (!messageId) {
+          console.error("Missing message ID from API response, cannot poll for updates", result.data);
+          throw new Error("Missing message ID from response, cannot poll for updates");
+        }
+        
         const completeMessage = await pollForMessageUpdates(
           messageId, 
           conversationId, 

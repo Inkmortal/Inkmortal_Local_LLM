@@ -111,19 +111,34 @@ export const useChat = ({
     const token = tokenRef.current;
     
     if (!token) {
+      console.error("Cannot connect WebSocket - no authentication token");
       wsConnectedRef.current = false;
       return false;
     }
     
     try {
+      console.log("Attempting to initialize WebSocket connection...");
       wsConnectedRef.current = await initializeWebSocket(token);
       
+      console.log(`WebSocket initialization result: ${wsConnectedRef.current ? 'SUCCESS' : 'FAILED'}`);
+      
       if (wsConnectedRef.current) {
-        // Setup connection listener
-        addConnectionListener((connected) => {
+        // Setup connection listener for changes
+        const unregisterListener = addConnectionListener((connected) => {
           wsConnectedRef.current = connected;
           console.log(`WebSocket connection state changed: ${connected ? 'connected' : 'disconnected'}`);
+          
+          // Update reducer state to trigger UI changes
+          dispatch({ 
+            type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+            payload: connected 
+          });
         });
+        
+        // Store unregister function in ref to call later
+        console.log("WebSocket connection listener registered");
+      } else {
+        console.error("WebSocket connection failed even though no error was thrown");
       }
       
       return wsConnectedRef.current;
@@ -132,7 +147,7 @@ export const useChat = ({
       wsConnectedRef.current = false;
       return false;
     }
-  }, []);
+  }, [dispatch]);
   
   // Load all conversations for the current user
   const loadConversations = useCallback(async () => {
