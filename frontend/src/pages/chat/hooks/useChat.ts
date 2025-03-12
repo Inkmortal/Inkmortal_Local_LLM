@@ -791,12 +791,20 @@ export const useChat = ({
       };
       
       try {
+        // Add the assistant message ID to file object so it gets passed to backend
+        const fileWithAssistantId = fileData ? {
+          ...fileData,
+          assistantMessageId: assistantMessageId // Pass assistant ID to backend
+        } : null;
+        
         // Send the message to the server
-        const result = await sendChatMessage(content, conversationId, fileData);
+        const result = await sendChatMessage(content, conversationId, fileWithAssistantId);
         
         if (!result.success) {
           throw new Error(result.error || 'Unknown error');
         }
+        
+        console.log(`Message sent with assistant ID: ${assistantMessageId}`);
         
         // Update the assistant message with the server-generated ID
         if (result.message_id) {

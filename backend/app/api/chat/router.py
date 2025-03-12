@@ -333,8 +333,10 @@ async def stream_message(
         
         # Set up streaming response
         async def event_stream():
-            assistant_message_id = generate_id()
+            # Get assistant message ID from request or generate a new one
+            assistant_message_id = request_obj.body.get("assistant_message_id") or generate_id()
             assistant_content = ""
+            logger.info(f"Using assistant message ID: {assistant_message_id}")
             
             try:
                 # Add request to queue
@@ -343,24 +345,30 @@ async def stream_message(
                 # Track for WebSocket updates
                 manager.track_request(request_obj.timestamp.timestamp(), user.id)
                 
-                # First update for WebSocket clients
+                # First update for WebSocket clients - use assistant_message_id
                 await manager.send_update(user.id, {
                     "type": "message_update",
-                    "message_id": message_id,
+                    "message_id": assistant_message_id, # Use assistant ID consistently
                     "conversation_id": conversation_id,
                     "status": "STREAMING",
                     "assistant_content": ""
                 })
+                
+                # Determine if this is a WebSocket or HTTP request based on headers
+                request_headers = request_obj.body.get("headers", {})
+                is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
                 
                 # Stream from Ollama via queue manager
                 async for chunk in queue_manager.process_streaming_request(request_obj):
                     # Log the raw chunk for debugging
                     logger.info(f"Streaming chunk: {chunk[:200]}...")
                     
-                    # For HTTP clients - send in SSE format
-                    yield f"data: {chunk}\n\n".encode('utf-8')
+                    # For HTTP clients only - send in SSE format
+                    # Skip this for WebSocket clients to avoid duplicate messages
+                    if not is_websocket_client:
+                        yield f"data: {chunk}\n\n".encode('utf-8')
                     
-                    # For WebSocket clients - parse and send properly formatted JSON
+                    # Process and send via WebSocket for all clients
                     try:
                         # Parse the JSON data
                         data = json.loads(chunk)
@@ -399,9 +407,10 @@ async def stream_message(
                         assistant_content += token
                         
                         # Create a clean WebSocket message with the extracted token
+                        # Important: Use assistant_message_id instead of user message_id here
                         websocket_message = {
                             "type": "message_update",
-                            "message_id": message_id,
+                            "message_id": assistant_message_id, # Use assistant ID for updates
                             "conversation_id": conversation_id,
                             "status": "STREAMING",
                             "assistant_content": token,
@@ -425,7 +434,7 @@ async def stream_message(
                             # This is a thinking section token
                             await manager.send_section_update(
                                 user_id=user.id,
-                                message_id=message_id,
+                                message_id=assistant_message_id, # Use assistant ID consistently
                                 conversation_id=conversation_id,
                                 section="thinking",
                                 content=token,
@@ -452,7 +461,7 @@ async def stream_message(
                         # Send a simplified message for non-JSON responses
                         await manager.send_update(user.id, {
                             "type": "message_update",
-                            "message_id": message_id,
+                            "message_id": assistant_message_id, # Use assistant ID consistently
                             "conversation_id": conversation_id,
                             "status": "STREAMING",
                             "assistant_content": token,
@@ -476,10 +485,9 @@ async def stream_message(
                     # Final update to WebSocket clients - clean format without SSE
                     final_websocket_message = {
                         "type": "message_update",
-                        "message_id": message_id,
+                        "message_id": assistant_message_id, # Use assistant ID consistently
                         "conversation_id": conversation_id,
                         "status": "COMPLETE",
-                        "assistant_message_id": assistant_message_id,
                         "assistant_content": assistant_content,
                         "is_complete": True
                     }
@@ -491,13 +499,14 @@ async def stream_message(
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 
-                # For HTTP clients - send error in SSE format
-                yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
+                # For HTTP clients only - send error in SSE format 
+                if not is_websocket_client:
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
                 
                 # For WebSocket clients - send clean JSON error without SSE format
                 error_message = {
                     "type": "message_update",
-                    "message_id": message_id,
+                    "message_id": assistant_message_id, # Use assistant ID consistently
                     "conversation_id": conversation_id,
                     "status": "ERROR",
                     "error": str(e),

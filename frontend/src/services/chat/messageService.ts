@@ -78,12 +78,24 @@ export async function sendChatMessage(
     const requestData: ChatRequestParams = {
       message,
       conversation_id: conversationId,
-      mode: useWebSocket ? 'streaming' : 'polling'
+      mode: useWebSocket ? 'streaming' : 'polling',
+      assistant_message_id: file?.assistantMessageId, // Pass assistant ID if provided in file object
+      // Add connection information to help backend distinguish WebSocket vs HTTP clients
+      headers: useWebSocket ? {
+        "Connection": "Upgrade",
+        "Upgrade": "websocket"
+      } : {}
     };
     
     // Add file if provided
     if (file) {
-      requestData.file = file;
+      if (file.assistantMessageId) {
+        // Store assistant message ID but don't include it in the file object
+        const { assistantMessageId, ...fileData } = file;
+        requestData.file = fileData;
+      } else {
+        requestData.file = file;
+      }
     }
     
     // Send request and handle response

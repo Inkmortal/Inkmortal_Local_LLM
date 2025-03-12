@@ -31,6 +31,8 @@ export interface ChatRequestParams {
   file?: File | any;          // Optional file attachment (or processed file data)
   timeout?: number;            // Optional timeout in milliseconds
   mode?: ChatMode | string;   // Communication mode (polling or streaming)
+  assistant_message_id?: string; // Frontend-generated assistant message ID
+  headers?: Record<string, string>; // Additional headers to help backend identify client type
 }
 
 /**
