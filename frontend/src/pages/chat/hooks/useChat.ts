@@ -51,148 +51,109 @@ export interface UseChatReturn {
   
   // Message management
   sendMessage: (content: string, file?: File | null) => Promise<void>;
-  regenerateLastMessage: () => Promise<void>;
+  regenerateMessage: () => Promise<void>;
   stopGeneration: () => void;
   
-  // WebSocket management
-  isWebSocketConnected: boolean;
-  
-  // UI state helpers
-  isGenerating: boolean;
-  activeConversation: Conversation | null;
-  sortedMessages: Message[];
-  conversationList: Conversation[];
-  
-  // File handling
-  handleFileSelect: (file: File) => void;
-  clearSelectedFile: () => void;
-  selectedFile: File | null;
+  // WebSocket connection
+  connectWebSocket: () => Promise<boolean>;
 }
 
 /**
- * Custom hook for chat state management with WebSocket integration
+ * Custom hook for chat functionality
+ * Handles chat state, WebSocket connections, and message interaction
  */
-export function useChat({
+export const useChat = ({ 
   initialConversationId = null,
-  autoConnect = true,
-}: UseChatOptions = {}): UseChatReturn {
-  // State management
-  const [state, dispatch] = useReducer(chatReducer, initialChatState);
+  autoConnect = true
+}: UseChatOptions = {}): UseChatReturn => {
   const navigate = useNavigate();
+  const [state, dispatch] = useReducer(chatReducer, {
+    ...initialChatState,
+    activeConversationId: initialConversationId
+  });
   
-  // Refs for tracking state between renders
-  const tokenRef = useRef<string | null>(null);
-  const wsConnectedRef = useRef<boolean>(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
   const isMounted = useRef(true);
-  const selectedFileRef = useRef<File | null>(null);
+  const wsConnectedRef = useRef(false);
+  const tokenRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Get token from localStorage
+  // Setup effect: get token and connect
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    tokenRef.current = token;
+    tokenRef.current = localStorage.getItem('token');
     
-    // Cleanup on unmount
+    // Connect WebSocket if auto-connect is enabled
+    if (autoConnect && tokenRef.current) {
+      connectWebSocket();
+    }
+    
     return () => {
       isMounted.current = false;
       
-      // Abort any pending requests
-      if (abortControllerRef.current) {
-        console.log('Aborting pending requests on unmount');
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      
-      // Close WebSocket connection
-      console.log('Closing WebSocket connection on unmount');
+      // Clean up WebSocket connection
       closeWebSocket();
+      
+      // Clean up any in-flight requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
-  }, []);
-  
-  // Initialize WebSocket connection when token is available
-  useEffect(() => {
-    if (tokenRef.current && autoConnect) {
-      initializeWebSocketConnection();
-    }
   }, [autoConnect]);
   
-  // Load initial conversation if ID provided
+  // Load initial conversation if ID is provided
   useEffect(() => {
-    if (initialConversationId) {
-      loadConversation(initialConversationId);
+    if (initialConversationId && state.activeConversationId) {
+      loadConversation(state.activeConversationId);
     }
-    
-    // Always load conversation list
-    loadConversations();
   }, [initialConversationId]);
   
-  // Helper to initialize WebSocket
-  const initializeWebSocketConnection = useCallback(async () => {
-    if (!tokenRef.current) {
-      console.log('No token available for WebSocket connection');
+  // Connect WebSocket
+  const connectWebSocket = useCallback(async (): Promise<boolean> => {
+    const token = tokenRef.current;
+    
+    if (!token) {
+      wsConnectedRef.current = false;
       return false;
     }
     
     try {
-      const connected = await initializeWebSocket(tokenRef.current);
-      wsConnectedRef.current = connected;
+      wsConnectedRef.current = await initializeWebSocket(token);
       
-      if (connected) {
-        console.log('WebSocket connected successfully');
-        
-        // Setup connection listener to track connection state
-        const unsubscribe = addConnectionListener((isConnected) => {
-          wsConnectedRef.current = isConnected;
-          
-          // Handle reconnection events - but don't automatically reload conversation
-          // as this can cause excessive API calls
-          if (isConnected && state.activeConversationId) {
-            console.log('WebSocket reconnected');
-            // Only mark the connection as established; don't reload
-            dispatch({ type: ChatActionType.SET_WEBSOCKET_CONNECTED, payload: true });
-          }
+      if (wsConnectedRef.current) {
+        // Setup connection listener
+        addConnectionListener((connected) => {
+          wsConnectedRef.current = connected;
+          console.log(`WebSocket connection state changed: ${connected ? 'connected' : 'disconnected'}`);
         });
-        
-        // Cleanup listener on unmount
-        return () => unsubscribe();
-      } else {
-        console.warn('WebSocket connection failed, falling back to polling');
-        return false;
       }
+      
+      return wsConnectedRef.current;
     } catch (error) {
-      console.error('Error establishing WebSocket connection:', error);
+      console.error('Error connecting to WebSocket:', error);
+      wsConnectedRef.current = false;
       return false;
     }
-  }, [state.activeConversationId]);
+  }, []);
   
-  // Load all conversations
+  // Load all conversations for the current user
   const loadConversations = useCallback(async () => {
-    if (!isMounted.current) return;
-    
-    dispatch({ type: ChatActionType.SET_LOADING_CONVERSATIONS, payload: true });
+    if (state.isLoadingConversations) return;
     
     try {
-      let conversations = await listConversations();
+      dispatch({ type: ChatActionType.SET_LOADING_CONVERSATIONS, payload: true });
       
-      if (!isMounted.current) return;
+      const conversationsData = await listConversations();
       
-      // Handle both array and object with conversations property
-      if (conversations && typeof conversations === 'object' && 'conversations' in conversations) {
-        conversations = conversations.conversations;
+      if (isMounted.current) {
+        // Map API response to our Conversation type
+        const conversations: Conversation[] = conversationsData.map(convRaw => ({
+          id: convRaw.conversation_id || convRaw.id,
+          title: convRaw.title || 'Untitled',
+          createdAt: new Date(convRaw.created_at).getTime(),
+          updatedAt: new Date(convRaw.updated_at).getTime()
+        }));
+        
+        dispatch({ type: ChatActionType.SET_CONVERSATIONS, payload: conversations });
       }
-      
-      // Ensure we have an array to work with
-      const conversationsArray = Array.isArray(conversations) ? conversations : [];
-      
-      dispatch({ 
-        type: ChatActionType.SET_CONVERSATIONS, 
-        payload: conversationsArray.map(conv => ({
-          id: conv.conversation_id,
-          title: conv.title || 'New conversation',
-          createdAt: new Date(conv.created_at).getTime(),
-          updatedAt: new Date(conv.updated_at).getTime()
-        }))
-      });
     } catch (error) {
       console.error('Error loading conversations:', error);
       
@@ -208,44 +169,35 @@ export function useChat({
         dispatch({ type: ChatActionType.SET_LOADING_CONVERSATIONS, payload: false });
       }
     }
-  }, []);
+  }, [state.isLoadingConversations]);
   
-  // Load a specific conversation and its messages
+  // Load a specific conversation by ID
   const loadConversation = useCallback(async (conversationId: string) => {
-    if (!isMounted.current) return;
+    if (state.isLoadingMessages || !conversationId) return;
     
-    // Skip if already loading or same conversation
-    if (state.isLoadingMessages && state.activeConversationId === conversationId) return;
-    
-    // Update active conversation immediately for UI feedback
+    // Set active conversation ID first for a more responsive UI
     dispatch({ type: ChatActionType.SET_ACTIVE_CONVERSATION, payload: conversationId });
     dispatch({ type: ChatActionType.SET_LOADING_MESSAGES, payload: true });
     
-    // Abort any previous loading request
+    // Abort any in-flight requests
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    
     abortControllerRef.current = new AbortController();
     
     try {
+      // Update URL to reflect the current conversation
+      navigate(`/chat/${conversationId}`);
+      
+      // Fetch conversation data
       const conversationData = await getConversation(conversationId);
+      const conversationRaw = conversationData.conversation;
       
-      if (!isMounted.current) return;
-      
-      if (!conversationData) {
-        // Conversation not found, show error and reset
-        dispatch({ type: ChatActionType.SET_MESSAGES, payload: [] });
-        showError('Conversation not found');
-        navigate('/chat');
-        return;
-      }
-      
-      // Update conversation in state if needed
-      // Handle both direct object and wrapped object formats from backend
-      const conversationRaw = conversationData.conversation || conversationData;
+      // Create conversation object
       const conversation: Conversation = {
-        id: conversationRaw.conversation_id,
-        title: conversationRaw.title || 'New conversation',
+        id: conversationId,
+        title: conversationRaw.title || 'Untitled',
         createdAt: new Date(conversationRaw.created_at).getTime(),
         updatedAt: new Date(conversationRaw.updated_at).getTime()
       };
@@ -531,31 +483,19 @@ export function useChat({
       if (actuallyConnected) {
         console.log(`Registering WebSocket handler for message ${assistantMessageId} (WebSocket is connected)`);
         unregisterHandler = registerMessageHandler(assistantMessageId, (update) => {
-          // CRITICAL DEBUG: Log full message structure for debugging streaming issues
+          // Simple debug log to monitor WebSocket updates
           console.log(`WebSocket update for ${assistantMessageId}:`, update);
-          console.log(`WebSocket update JSON:`, JSON.stringify(update, null, 2));
-          console.log(`Fields present: assistant_content=${!!update.assistant_content}, delta=${!!update.delta}, content=${!!update.content}, section=${!!update.section}, status=${update.status}`);
           
-          // STEP 1: Handle status updates 
+          // STEP 1: Handle message status updates
           if (update.status) {
-            // Always normalize status to lowercase for case-insensitive matching
-            // This ensures we handle both 'streaming' and 'STREAMING' from different backends
-            const status = typeof update.status === 'string' ? update.status.toLowerCase() : '';
-            console.log(`Raw status from backend: "${update.status}", normalized to: "${status}"`);
-            
-            // Map backend status to our MessageStatus enum with more flexible matching
+            // Map status string directly to our enum values
             const messageStatus = 
-              /queued|queue|waiting|wait/i.test(status) ? MessageStatus.QUEUED :
-              /process|processing|thinking/i.test(status) ? MessageStatus.PROCESSING :
-              /stream|streaming|generating/i.test(status) ? MessageStatus.STREAMING :
-              /complete|completed|done|finish|finished/i.test(status) ? MessageStatus.COMPLETE :
-              /error|fail|failed|exception/i.test(status) ? MessageStatus.ERROR :
+              update.status === "PROCESSING" ? MessageStatus.PROCESSING :
+              update.status === "STREAMING" ? MessageStatus.STREAMING :
+              update.status === "COMPLETE" ? MessageStatus.COMPLETE :
+              update.status === "ERROR" ? MessageStatus.ERROR :
+              update.status === "QUEUED" ? MessageStatus.QUEUED :
               MessageStatus.PENDING;
-              
-            console.log(`Mapped status: "${status}" => MessageStatus.${MessageStatus[messageStatus]}`); 
-            
-            // Store normalized status for later checks (important for streaming detection)
-            const normalizedStatus = status;
             
             // Update message status
             dispatch({
@@ -567,201 +507,64 @@ export function useChat({
               }
             });
             
-            // CRITICAL FIX: If status is streaming/STREAMING, force into streaming mode
-            if (/stream|streaming/i.test(normalizedStatus)) {
-              console.log("***** STREAMING DETECTED - FORCING STREAMING MODE *****");
+            // Log streaming detection
+            if (update.status === "STREAMING") {
+              console.log("STREAMING mode detected from backend");
             }
           }
           
-          // STEP 2: Handle content updates - prioritize in this order:
-          // 1. assistant_content (from our backend)
-          // 2. delta.content (streaming token from Ollama)
-          // 3. content (full content replacement)
-          
-          // Determine what kind of content we're receiving - with enhanced type checking and logging
-          const hasAssistantContent = update.assistant_content !== undefined && update.assistant_content !== null;
-          const assistantContentType = hasAssistantContent ? typeof update.assistant_content : 'undefined';
-          
-          const hasDeltaContent = update.delta && update.delta.content;
-          const deltaContentType = hasDeltaContent ? typeof update.delta.content : 'undefined';
-          
-          const hasContent = update.content !== undefined && update.content !== null;
-          const contentType = hasContent ? typeof update.content : 'undefined';
-          
-          const hasSection = update.section !== undefined && update.section !== null;
-          const sectionType = hasSection ? typeof update.section : 'undefined';
-          
-          console.log(`Content types: assistant_content=${assistantContentType}, delta.content=${deltaContentType}, content=${contentType}, section=${sectionType}`);
-          
-          // If we're receiving content but not processing it correctly, dump the raw data
-          // Use case-insensitive regex for status comparison
-          const isStreamingStatus = update.status && 
-                                   typeof update.status === 'string' && 
-                                   /stream|streaming/i.test(update.status);
-          
-          // Check for streaming content using case-insensitive status
-          if ((hasAssistantContent || hasDeltaContent || hasContent) && isStreamingStatus) {
-            console.log(`STREAMING CONTENT DETECTED - PROCESSING:`);
-            
-            // Debug log the content 
-            if (hasAssistantContent) console.log(`Processing assistant_content (${assistantContentType}):`, update.assistant_content);
-            if (hasDeltaContent) console.log(`Processing delta.content (${deltaContentType}):`, update.delta.content);
-            if (hasContent) console.log(`Processing content (${contentType}):`, update.content);
-            
-            // CRITICAL FIX: Always update message status to STREAMING first
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.STREAMING
-              }
-            });
-          }
-          
-          // Handle section-specific updates (used by our backend)
-          if (hasAssistantContent && hasSection) {
-            const sectionName = update.section as string;
-            const operation = update.content_update_type === 'APPEND' ? 
-                            ContentUpdateMode.APPEND : ContentUpdateMode.REPLACE;
-            
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                content: update.assistant_content,
-                section: sectionName,
-                contentUpdateMode: operation
-              }
-            });
-          }
-          // Handle streaming tokens with assistant_content but no section (appending tokens)
-          else if (hasAssistantContent) {
-            // Make sure we're dealing with a string (some backends might send other types)
+          // STEP 2: Handle content updates with our standard section-based format
+          if (update.assistant_content !== undefined) {
+            // Make sure content is a string
             const content = typeof update.assistant_content === 'string' 
               ? update.assistant_content 
               : String(update.assistant_content);
-              
-            console.log(`Processing assistant_content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
             
-            // CRITICAL FIX: ALWAYS update status to streaming regardless of capitalization in backend message
-            // This ensures the UI knows we're in streaming mode
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.STREAMING
-              }
-            });
+            console.log(`Received content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`);
             
-            // Check for thinking sections
-            const hasThinking = content.includes('<think>');
+            // Set update mode based on content_update_type (default to APPEND)
+            const updateMode = update.content_update_type !== "REPLACE" 
+              ? ContentUpdateMode.APPEND 
+              : ContentUpdateMode.REPLACE;
             
-            if (hasThinking) {
-              // Handle combined thinking and response content
-              const thinkingMatch = /<think>([\s\S]*?)<\/think>/g.exec(content);
-              
-              if (thinkingMatch) {
-                // Extract thinking content
-                const thinkingContent = thinkingMatch[1];
-                
-                // Update thinking section
-                dispatch({
-                  type: ChatActionType.UPDATE_MESSAGE,
-                  payload: {
-                    messageId: assistantMessageId,
-                    content: thinkingContent,
-                    section: 'thinking',
-                    contentUpdateMode: ContentUpdateMode.APPEND
-                  }
-                });
-                
-                // Extract response content (everything but the thinking tags)
-                const responseContent = content.replace(/<think>[\s\S]*?<\/think>/g, '');
-                if (responseContent) {
-                  dispatch({
-                    type: ChatActionType.UPDATE_MESSAGE,
-                    payload: {
-                      messageId: assistantMessageId,
-                      content: responseContent,
-                      section: 'response',
-                      contentUpdateMode: ContentUpdateMode.APPEND
-                    }
-                  });
-                }
-              }
-            } else {
-              // Regular content (no thinking sections)
+            // If we have a section field, use section-specific update
+            if (update.section) {
               dispatch({
                 type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
                   messageId: assistantMessageId,
                   content: content,
-                  section: 'response',
-                  contentUpdateMode: ContentUpdateMode.APPEND
+                  section: update.section,
+                  contentUpdateMode: updateMode
+                }
+              });
+            } else {
+              // No section specified, update main content
+              dispatch({
+                type: ChatActionType.UPDATE_MESSAGE,
+                payload: {
+                  messageId: assistantMessageId,
+                  content: content,
+                  contentUpdateMode: updateMode
                 }
               });
             }
-          }
-          // Handle Ollama delta updates (streaming tokens)
-          else if (hasDeltaContent) {
-            // CRITICAL FIX: Log delta content for debugging
-            console.log(`Processing delta.content: "${update.delta.content.substring(0, 50)}${update.delta.content.length > 50 ? '...' : ''}"`);
             
-            // CRITICAL FIX: Ensure status is set to streaming for delta updates
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE, 
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.STREAMING
-              }
-            });
-            
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                content: update.delta.content,
-                section: 'response',
-                contentUpdateMode: ContentUpdateMode.APPEND
-              }
-            });
-          }
-          // Handle full content replacements
-          else if (hasContent) {
-            // CRITICAL FIX: Log content for debugging
-            console.log(`Processing content: "${update.content.substring(0, 50)}${update.content.length > 50 ? '...' : ''}"`);
-            
-            // CRITICAL FIX: Ensure status is set to streaming for full content updates that are streamed
-            if (isStreamingStatus) {
+            // Always ensure status is set to STREAMING when we get content
+            // during streaming (this ensures UI shows streaming indicators)
+            if (update.status === "STREAMING") {
               dispatch({
-                type: ChatActionType.UPDATE_MESSAGE, 
+                type: ChatActionType.UPDATE_MESSAGE,
                 payload: {
                   messageId: assistantMessageId,
                   status: MessageStatus.STREAMING
                 }
               });
             }
-            
-            // Use APPEND mode during streaming to show incremental updates
-            const updateMode = isStreamingStatus ? ContentUpdateMode.APPEND : ContentUpdateMode.REPLACE;
-            
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                content: update.content,
-                section: 'response',
-                contentUpdateMode: updateMode
-              }
-            });
           }
           
-          // STEP 3: Handle completion and errors
-          // Handle completion - check both uppercase and lowercase status values
-          if (update.status?.toLowerCase() === 'complete' || update.is_complete === true) {
-            console.log('Message completion detected, updating message status to COMPLETE');
-            
-            // Update the message status to COMPLETE
+          // STEP 3: Handle completion
+          if (update.is_complete) {
             dispatch({
               type: ChatActionType.UPDATE_MESSAGE,
               payload: {
@@ -770,331 +573,125 @@ export function useChat({
                 isComplete: true
               }
             });
-            
-            // Clean up handler
-            if (unregisterHandler) {
-              console.log('Unregistering WebSocket handler for completed message');
-              unregisterHandler();
-              unregisterHandler = null;
-            }
-            
-            // Reload conversations to get updated titles
-            loadConversations().catch(error => {
-              console.error('Error loading conversations after message completion:', error);
-            });
-          }
-          
-          // Handle errors - check both uppercase and lowercase status values
-          if (update.status?.toLowerCase() === 'error') {
-            console.log('Message error detected, updating message status to ERROR:', update.error || 'Unknown error');
-            
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.ERROR,
-                metadata: { error: update.error || 'Unknown error' }
-              }
-            });
-            
-            // Clean up handler
-            if (unregisterHandler) {
-              console.log('Unregistering WebSocket handler due to error');
-              unregisterHandler();
-              unregisterHandler = null;
-            }
           }
         });
       }
       
-      // Send the message
-      await sendChatMessage(
-        content, 
-        conversationId!, 
-        fileData, 
-        {
-          onStart: () => {
-            if (!isMounted.current) {
-              if (unregisterHandler) unregisterHandler();
-              return;
-            }
-            
-            // Update assistant message to show it's been queued
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.QUEUED
-              }
-            });
-          },
-          onToken: (token) => {
-            if (!isMounted.current) {
-              if (unregisterHandler) unregisterHandler();
-              return;
-            }
-            
-            // Only use this for fallback if WebSocket fails
-            if (!wsConnectedRef.current) {
-              // Update status to streaming if needed
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: assistantMessageId,
-                  status: MessageStatus.STREAMING
-                }
-              });
-              
-              // Check if token contains section markers
-              if (token.includes('<think>')) {
-                // Extract thinking content
-                const thinkingMatch = token.match(/<think>([\s\S]*?)<\/think>/);
-                if (thinkingMatch) {
-                  dispatch({
-                    type: ChatActionType.UPDATE_MESSAGE,
-                    payload: {
-                      messageId: assistantMessageId,
-                      content: thinkingMatch[1],
-                      section: 'thinking',
-                      contentUpdateMode: ContentUpdateMode.APPEND
-                    }
-                  });
-                }
-                
-                // Extract response content
-                const responseContent = token.replace(/<think>[\s\S]*?<\/think>/g, '');
-                if (responseContent) {
-                  dispatch({
-                    type: ChatActionType.UPDATE_MESSAGE,
-                    payload: {
-                      messageId: assistantMessageId,
-                      content: responseContent,
-                      section: 'response',
-                      contentUpdateMode: ContentUpdateMode.APPEND
-                    }
-                  });
-                }
-              } else {
-                // No section markers, update response content
-                dispatch({
-                  type: ChatActionType.UPDATE_MESSAGE,
-                  payload: {
-                    messageId: assistantMessageId,
-                    content: token,
-                    contentUpdateMode: ContentUpdateMode.APPEND
-                  }
-                });
-              }
-            }
-          },
-          onStatusUpdate: (status) => {
-            if (!isMounted.current) {
-              if (unregisterHandler) unregisterHandler();
-              return;
-            }
-            
-            // Only use this for fallback if WebSocket fails
-            if (!wsConnectedRef.current) {
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: assistantMessageId,
-                  status
-                }
-              });
-            }
-          },
-          onComplete: (response) => {
-            if (!isMounted.current) {
-              if (unregisterHandler) unregisterHandler();
-              return;
-            }
-            
-            // Only use this for fallback if WebSocket fails
-            if (!wsConnectedRef.current) {
-              // Update with final content
-              dispatch({
-                type: ChatActionType.UPDATE_MESSAGE,
-                payload: {
-                  messageId: assistantMessageId,
-                  content: response.content,
-                  status: MessageStatus.COMPLETE,
-                  isComplete: true
-                }
-              });
-              
-              // Reload conversations to get updated titles
-              loadConversations();
-            }
-            
-            // Clean up handler
-            if (unregisterHandler) {
-              unregisterHandler();
-            }
-          },
-          onError: (error) => {
-            if (!isMounted.current) {
-              if (unregisterHandler) unregisterHandler();
-              return;
-            }
-            
-            console.error('Error sending message:', error);
-            
-            // Update messages to show error
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.ERROR,
-                metadata: { error }
-              }
-            });
-            
-            showError('Failed to send message');
-            
-            // Clean up handler
-            if (unregisterHandler) {
-              unregisterHandler();
-            }
-          }
-        }
-      );
-      
-      // Clear selected file if used
-      selectedFileRef.current = null;
-    } catch (error) {
-      console.error('Error in send message flow:', error);
-      
-      if (isMounted.current) {
-        // Update messages to show error
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId: assistantMessageId,
-            status: MessageStatus.ERROR,
-            metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
-          }
-        });
+      try {
+        // Send the message to the server
+        const result = await sendChatMessage(content, conversationId, fileData);
         
-        showError('Failed to send message');
+        if (!result.success) {
+          throw new Error(result.error || 'Unknown error');
+        }
+        
+        // Update the assistant message with the server-generated ID
+        if (result.message_id) {
+          dispatch({
+            type: ChatActionType.UPDATE_MESSAGE,
+            payload: {
+              messageId: assistantMessageId,
+              metadata: { serverMessageId: result.message_id }
+            }
+          });
+        }
+      } finally {
+        // Clean up WebSocket handler when done with this request
+        if (unregisterHandler) {
+          setTimeout(() => {
+            unregisterHandler?.();
+          }, 10000); // Wait 10 seconds before unregistering to ensure we get all updates
+        }
       }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      
+      // Update the assistant message to show the error
+      dispatch({
+        type: ChatActionType.UPDATE_MESSAGE,
+        payload: {
+          messageId: assistantMessageId,
+          status: MessageStatus.ERROR,
+          content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          isComplete: true
+        }
+      });
+      
+      showError('Failed to send message');
     }
   }, [
-    state.activeConversationId,
-    initializeWebSocketConnection,
-    loadConversations,
+    state.messages, 
+    state.activeConversationId, 
     navigate
   ]);
   
-  // Regenerate the last assistant message
-  const regenerateLastMessage = useCallback(async () => {
-    // Find all messages and convert from record to array
-    const messages = Object.values(state.messages)
-      .sort((a, b) => a.timestamp - b.timestamp);
-    
+  // Regenerate the last message
+  const regenerateMessage = useCallback(async () => {
     // Find the last user message
-    const lastUserMessageIndex = [...messages].reverse().findIndex(msg => msg.role === MessageRole.USER);
+    const userMessages = Object.values(state.messages)
+      .filter(msg => msg.role === MessageRole.USER)
+      .sort((a, b) => b.timestamp - a.timestamp);
     
-    if (lastUserMessageIndex === -1) {
-      showError('No user message found to regenerate from');
+    if (userMessages.length === 0) {
+      showError('No user message to regenerate');
       return;
     }
     
-    // Get the user message to regenerate from
-    const userMessageIndex = messages.length - 1 - lastUserMessageIndex;
-    const userMessage = messages[userMessageIndex];
+    // Get the most recent user message
+    const lastUserMessage = userMessages[0];
     
-    // Send this message again to regenerate the response
-    await sendMessage(userMessage.content);
+    // Send it again to regenerate the response
+    await sendMessage(lastUserMessage.content);
   }, [state.messages, sendMessage]);
   
-  // Stop ongoing message generation
+  // Stop message generation
   const stopGeneration = useCallback(() => {
-    // Find messages that are currently generating
-    const generatingMessages = Object.values(state.messages).filter(msg => 
+    // Find all messages with streaming status
+    const streamingMessages = Object.values(state.messages).filter(msg => 
       msg.status === MessageStatus.STREAMING || 
-      msg.status === MessageStatus.PROCESSING || 
-      msg.status === MessageStatus.QUEUED
+      msg.status === MessageStatus.PROCESSING
     );
     
-    // Mark all generating messages as complete
-    generatingMessages.forEach(msg => {
+    // Mark all as complete to stop the streaming UI indicators
+    streamingMessages.forEach(msg => {
       dispatch({
         type: ChatActionType.UPDATE_MESSAGE,
         payload: {
           messageId: msg.id,
           status: MessageStatus.COMPLETE,
+          isComplete: true,
           metadata: { stopped: true }
         }
       });
     });
+    
+    // Note: The backend will continue processing but we won't show further updates
+    console.log(`Stopped generation for ${streamingMessages.length} messages`);
   }, [state.messages]);
   
-  // File handling
-  const handleFileSelect = useCallback((file: File) => {
-    selectedFileRef.current = file;
-  }, []);
-  
-  const clearSelectedFile = useCallback(() => {
-    selectedFileRef.current = null;
-  }, []);
-  
-  // Compute useful derived state values
-  const isGenerating = Object.values(state.messages).some(msg => 
-    msg.status === MessageStatus.STREAMING || 
-    msg.status === MessageStatus.PROCESSING || 
-    msg.status === MessageStatus.QUEUED
-  );
-  
-  const sortedMessages = Object.values(state.messages)
-    .sort((a, b) => a.timestamp - b.timestamp);
-  
-  const conversationList = Object.values(state.conversations)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-  
-  const activeConversation = state.activeConversationId 
-    ? state.conversations[state.activeConversationId] || null
-    : null;
-  
-  // CRITICAL: Make sure the WebSocket connection status is synchronized with the WebSocketManager
-  // Problem: wsConnectedRef might get out of sync with actual WebSocket state
-  const actualWebSocketConnected = isWebSocketConnected();
-  
-  // If there's a mismatch, log it and update our reference
-  if (actualWebSocketConnected !== wsConnectedRef.current) {
-    console.log(`WebSocket connection state mismatch: internal=${wsConnectedRef.current}, actual=${actualWebSocketConnected}`);
-    // Update our reference to match actual state
-    wsConnectedRef.current = actualWebSocketConnected;
-  }
-
   return {
-    // State
     state,
-    
-    // Conversation management
     loadConversations,
     loadConversation,
     startNewConversation,
     deleteCurrentConversation,
     updateConversationTitle: updateCurrentConversationTitle,
-    
-    // Message management
     sendMessage,
-    regenerateLastMessage,
+    regenerateMessage,
     stopGeneration,
-    
-    // WebSocket management
-    isWebSocketConnected: wsConnectedRef.current,
-    
-    // UI state helpers
-    isGenerating,
-    activeConversation,
-    sortedMessages,
-    conversationList,
-    
-    // File handling
-    handleFileSelect,
-    clearSelectedFile,
-    selectedFile: selectedFileRef.current
+    connectWebSocket
   };
+};
+
+// Initialize WebSocket connection helper
+async function initializeWebSocketConnection(): Promise<boolean> {
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  
+  try {
+    return await initializeWebSocket(token);
+  } catch (error) {
+    console.error('Error initializing WebSocket connection:', error);
+    return false;
+  }
 }
