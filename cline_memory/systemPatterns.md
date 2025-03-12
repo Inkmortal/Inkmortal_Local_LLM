@@ -69,7 +69,15 @@ The system follows a microservices architecture with a central API gateway manag
 
 -   **Internal:** Services communicate via HTTP requests (primarily between the API Gateway and other services).
 -   **External:** Clients communicate with the API Gateway via HTTPS.
--   **Real-time:** WebSockets for chat functionality (planned, not fully implemented yet).
+-   **Real-time:** WebSockets for chat functionality with the following patterns:
+    - WebSocket connections established during chat page initialization
+    - Messages buffered on frontend to reduce render thrashing
+    - ContentUpdateMode.APPEND used for streaming updates to preserve context
+    - Global message handlers for messages without IDs
+    - Target message ID tracking to ensure updates go to correct messages
+    - WebSocket reconnection with exponential backoff
+    - API request deduplication using refs to track previous state
+    - Careful dependency management in useEffect hooks to prevent polling loops
 
 ## Technology Choices
 

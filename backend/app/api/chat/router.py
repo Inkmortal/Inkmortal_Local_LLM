@@ -199,7 +199,13 @@ async def send_message_endpoint(
     current_user: User = Depends(get_current_user),
     queue_manager = Depends(get_queue)
 ):
-    """Send a message to the LLM and store the conversation - always uses streaming now"""
+    """Send a message to the LLM and store the conversation - always uses streaming now
+    
+    IMPORTANT:
+    - The frontend sends an assistant_message_id with each request
+    - This ID MUST be preserved and used for all WebSocket updates
+    - Failure to use the same ID will break streaming response display
+    """
     content_type = request.headers.get("Content-Type", "")
     message_text = None
     conversation_id = None
@@ -363,6 +369,9 @@ async def stream_message(
             # Store this ID in the request body to ensure it's available throughout processing
             request_obj.body["assistant_message_id"] = assistant_message_id
             
+            # CRITICAL: Log verification to ensure assistant_message_id remains consistent
+            logger.info(f"CRITICAL: Verifying assistant_message_id is set to: {assistant_message_id}")
+            
             assistant_content = ""
             
             try:
@@ -445,7 +454,18 @@ async def stream_message(
                             assistant_content += token
                             
                             # Create a clean WebSocket message with the extracted token
-                            # Important: Use assistant_message_id instead of user message_id here
+                            # CRITICAL: Always use frontend-provided assistant_message_id consistently
+                            # to ensure the frontend can match streaming content to its placeholder message
+                            
+                            # Double-verify we're using the correct ID from the request
+                            current_assistant_id = request_obj.body.get("assistant_message_id")
+                            if assistant_message_id != current_assistant_id:
+                                logger.warning(f"ID MISMATCH! Variable assistant_message_id={assistant_message_id} doesn't match request body assistant_message_id={current_assistant_id}")
+                                # Always prefer the one from the request body if available
+                                if current_assistant_id:
+                                    assistant_message_id = current_assistant_id
+                                    logger.warning(f"Corrected to use request body assistant_message_id: {assistant_message_id}")
+                            
                             websocket_message = {
                                 "type": "message_update",
                                 "message_id": assistant_message_id, # Use assistant ID for updates
@@ -454,6 +474,10 @@ async def stream_message(
                                 "assistant_content": token,
                                 "is_complete": is_complete
                             }
+                            
+                            # Log the message ID to verify consistency
+                            if token and token[0] != " ":  # Only log for first token to avoid spam
+                                logger.info(f"WebSocket message using message_id: {assistant_message_id}")
                             
                             # For Ollama format, include model info when available
                             if "model" in data:
@@ -499,6 +523,12 @@ async def stream_message(
                             assistant_content += token
                             
                             # Send a simplified message for non-JSON responses, but only for WebSocket clients
+                            # Double-check that we're using the correct ID from the request body
+                            current_assistant_id = request_obj.body.get("assistant_message_id")
+                            if assistant_message_id != current_assistant_id and current_assistant_id:
+                                logger.warning(f"ID MISMATCH in non-JSON path! Using request body ID: {current_assistant_id} instead of {assistant_message_id}")
+                                assistant_message_id = current_assistant_id
+                                
                             await manager.send_update(user.id, {
                                 "type": "message_update",
                                 "message_id": assistant_message_id, # Use assistant ID consistently
@@ -524,6 +554,12 @@ async def stream_message(
                     
                     # Final update to WebSocket clients - clean format without SSE
                     if transport_mode == "websocket":
+                        # CRITICAL: Verify we're using the correct message_id for the final update
+                        current_assistant_id = request_obj.body.get("assistant_message_id")
+                        if assistant_message_id != current_assistant_id and current_assistant_id:
+                            logger.warning(f"ID MISMATCH in final update! Using request body ID: {current_assistant_id} instead of {assistant_message_id}")
+                            assistant_message_id = current_assistant_id
+                            
                         final_websocket_message = {
                             "type": "message_update",
                             "message_id": assistant_message_id, # Use assistant ID consistently
@@ -532,6 +568,9 @@ async def stream_message(
                             "assistant_content": assistant_content,
                             "is_complete": True
                         }
+                        
+                        # Log the final message ID to verify consistency
+                        logger.info(f"FINAL WebSocket message using message_id: {assistant_message_id}")
                         
                         logger.info("Sending final completion message to WebSocket clients")
                         await manager.send_update(user.id, final_websocket_message)
@@ -548,6 +587,12 @@ async def stream_message(
                 
                 # For WebSocket clients - send clean JSON error without SSE format
                 if transport_mode == "websocket":
+                    # One more ID verification for error messages
+                    current_assistant_id = request_obj.body.get("assistant_message_id")
+                    if assistant_message_id != current_assistant_id and current_assistant_id:
+                        logger.warning(f"ID MISMATCH in error message! Using request body ID: {current_assistant_id} instead of {assistant_message_id}")
+                        assistant_message_id = current_assistant_id
+                        
                     error_message = {
                         "type": "message_update",
                         "message_id": assistant_message_id, # Use assistant ID consistently
@@ -568,6 +613,14 @@ async def stream_message(
         if request_body.get("transport_mode") == "websocket":
             logger.info("WebSocket client detected - returning compatible HTTP response")
             
+            # CRITICAL: Verify we're returning the correct message ID to the frontend
+            final_assistant_id = request_obj.body.get("assistant_message_id")
+            if final_assistant_id != assistant_message_id:
+                logger.warning(f"Final ID MISMATCH! Using {final_assistant_id} from request body instead of {assistant_message_id}")
+                assistant_message_id = final_assistant_id
+                
+            logger.info(f"Returning final HTTP response with message ID: {assistant_message_id}")
+            
             # Create a proper message response format that the frontend expects
             response_data = {
                 "id": assistant_message_id,  # Use the assistant message ID as the message ID
@@ -577,7 +630,8 @@ async def stream_message(
                 "role": "assistant",
                 "status": "streaming",  # Indicate streaming status
                 "websocket_mode": True,  # Custom flag to indicate WebSocket delivery
-                "success": True  # Indicate success to prevent frontend error handling
+                "success": True,  # Indicate success to prevent frontend error handling
+                "assistant_message_id": assistant_message_id  # Explicitly include assistant ID again for clarity
             }
             
             async def response_stream():

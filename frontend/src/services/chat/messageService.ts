@@ -128,6 +128,9 @@ export async function sendChatMessage(
         } catch (error) {
           // For WebSocket clients, log but continue - we want to maintain message state
           console.warn('HTTP error for WebSocket client, continuing with WebSocket streaming:', error);
+          
+          // CRITICAL: Log the assistant message ID we're expecting updates for
+          console.log(`[messageService] CRITICAL! Expecting WebSocket updates for assistant_message_id: ${requestData.assistant_message_id}`);
         }
         
         // Always return success for WebSocket clients to maintain message state

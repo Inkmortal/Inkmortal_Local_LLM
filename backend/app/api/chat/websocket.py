@@ -92,10 +92,18 @@ class ConnectionManager:
         # Track the number of tokens in each update
         if "assistant_content" in data:
             token_len = len(data.get("assistant_content", ""))
+            # Enhanced logging to include first few characters of token for tracing
+            token_preview = ""
+            if token_len > 0:
+                token_preview = data.get("assistant_content", "")[:10]
+                if token_len > 10:
+                    token_preview += "..."
+                token_preview = f", token_preview=\"{token_preview}\""
+            
             logger.info(
                 f"WebSocket update: user={user_id}, type={update_type}, "
                 f"msg={message_id}, conv={conversation_id}, status={status}, "
-                f"update_type={content_update_type}, complete={is_complete}, tokens={token_len}"
+                f"update_type={content_update_type}, complete={is_complete}, tokens={token_len}{token_preview}"
             )
             
         # Send the message to all connections
@@ -140,18 +148,32 @@ class ConnectionManager:
         operation: str = APPEND
     ):
         """Send a section-specific update with improved structure"""
+        # Log the message ID to verify it's correct
+        logger.debug(f"Sending section update with message_id: {message_id}")
+        
+        # Create and validate our update data
+        update_data = {
+            "type": "message_update",
+            "message_id": message_id,
+            "conversation_id": conversation_id,
+            "status": "STREAMING",
+            "section": section,
+            "assistant_content": content,
+            "content_update_type": operation,
+            "is_complete": is_complete
+        }
+        
+        # CRITICAL: Validate message ID is not empty
+        if not message_id or message_id == "unknown" or message_id == "undefined":
+            logger.error(f"INVALID MESSAGE ID in section update: {message_id}")
+            # Try to use conversation ID + timestamp as fallback
+            fallback_id = f"{conversation_id}_{int(time.time())}"
+            logger.warning(f"Using fallback ID: {fallback_id}")
+            update_data["message_id"] = fallback_id
+        
         await self.send_update(
             user_id=user_id,
-            data={
-                "type": "message_update",
-                "message_id": message_id,
-                "conversation_id": conversation_id,
-                "status": "STREAMING",
-                "section": section,
-                "assistant_content": content,
-                "content_update_type": operation,
-                "is_complete": is_complete
-            },
+            data=update_data,
             content_update_type=operation
         )
 

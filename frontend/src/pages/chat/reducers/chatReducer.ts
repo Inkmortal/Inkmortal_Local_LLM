@@ -123,28 +123,25 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       if (!message) {
         console.log(`Creating placeholder for missing message ${messageId} in reducer`);
         
-        // Create a basic message with only required properties
+        // Create a fully-featured placeholder message with all required properties
+        // This ensures consistent structure for the message, regardless of how it's created
         message = {
           id: messageId,
           conversationId: metadata?.conversationId || 'temp-id',
           role: MessageRole.ASSISTANT,
           content: '',
           status: status || MessageStatus.STREAMING,
-          timestamp: Date.now()
-          // No sections included by default - strictly follow Message interface
+          timestamp: Date.now(),
+          // CRITICAL FIX: Always include sections to ensure consistent message structure
+          // This prevents UI issues when streaming content to a message
+          sections: {
+            response: { content: '', visible: true },
+            thinking: { content: '', visible: true }
+          }
         };
         
-        // Only add sections if specifically needed (based on section parameter)
-        if (section) {
-          message.sections = {
-            response: { content: '', visible: true }
-          };
-          
-          // Only add thinking section if specifically requested
-          if (section === 'thinking') {
-            message.sections.thinking = { content: '', visible: true };
-          }
-        }
+        // Log important message creation events with conversation ID for tracing
+        console.log(`CRITICAL: Created new placeholder message ${messageId} for conversation ${metadata?.conversationId || 'unknown'}`);
       }
       
       const updatedMessage = { ...message };

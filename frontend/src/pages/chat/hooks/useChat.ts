@@ -575,6 +575,9 @@ export const useChat = ({
     dispatch({ type: ChatActionType.ADD_MESSAGE, payload: userMessage });
     dispatch({ type: ChatActionType.ADD_MESSAGE, payload: assistantMessage });
     
+    // CRITICAL: Log the assistant message ID we're expecting updates for
+    console.log(`IMPORTANT: Added assistant message ${assistantMessage.id} to state - EXPECT all WebSocket updates to use this ID`);
+    
     try {
       // Check if we need to create a new conversation first
       let conversationId = state.activeConversationId;
@@ -827,6 +830,25 @@ export const useChat = ({
               
               if (!existingMessage) {
                 console.log(`Update for message ${targetMessageId} not in state yet - reducer will create it`);
+                
+                // CRITICAL ISSUE FIX: If we don't have a message in state yet, but we've received an
+                // update for it, and we know we have an assistantMessageId, it might be that the IDs
+                // don't match. Try to find a message created by sendMessage() that doesn't have
+                // any content yet.
+                
+                // Safety check - make sure this is a freshly created placeholder
+                const lookForPlaceholder = Object.values(state.messages).find(m => 
+                  m.role === MessageRole.ASSISTANT && 
+                  m.content === '' && 
+                  (m.status === MessageStatus.STREAMING || m.status === MessageStatus.PENDING) &&
+                  m.conversationId === update.conversation_id
+                );
+                
+                if (lookForPlaceholder) {
+                  console.log(`CRITICAL FIX: Found placeholder message ${lookForPlaceholder.id} that can be updated instead of ${targetMessageId}`);
+                  // Replace the target message ID with our existing placeholder
+                  targetMessageId = lookForPlaceholder.id;
+                }
               } else {
                 console.log(`Appending content to existing message ${targetMessageId}`);
               }

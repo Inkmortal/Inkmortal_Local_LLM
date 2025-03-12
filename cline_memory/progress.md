@@ -72,6 +72,12 @@
 -   [x] Implemented token buffering for efficient UI updates
 -   [x] Added reconnection logic for dropped connections
 -   [x] Created fallback mechanisms for when WebSocket isn't available
+-   [x] Fixed blank page issues during WebSocket streaming
+-   [x] Corrected content update mode to properly append streaming content
+-   [x] Implemented proper ID tracking for WebSocket messages
+-   [x] Added state preservation for streaming messages during API updates
+-   [x] Fixed excessive API polling during WebSocket streaming
+-   [x] Improved UI by positioning status indicators at bottom of messages
 
 ## Conversation History and Context
 
