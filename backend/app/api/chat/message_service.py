@@ -153,7 +153,7 @@ async def send_message(
             body={
                 "messages": [{"role": "user", "content": strip_editor_html(message_text)}],  # Strip editor HTML but keep pasted HTML
                 "model": settings.default_model,  # Use the model configured in settings
-                "stream": False,
+                "stream": True,  # Enable streaming for token-by-token updates
                 "conversation_id": conv_id,
                 "message_id": message_id,
                 "system": "You are a helpful AI assistant that answers questions accurately and concisely.",
@@ -296,18 +296,46 @@ async def process_message(
                             "assistant_content": ""  # Start with empty content
                         })
                         
-                        # Now let's use the actual content we already have
-                        # We'll send one message with the full content since we already have it
+                        # For streaming, break content into chunks and send incrementally
+                        chunk_size = 4  # Approximate token size (characters)
+                        total_chunks = len(assistant_content) // chunk_size + (1 if len(assistant_content) % chunk_size > 0 else 0)
+                        
+                        logger.info(f"Streaming content in {total_chunks} chunks")
+                        
+                        # Send content chunk by chunk with small delays for more natural streaming
+                        for i in range(total_chunks):
+                            chunk_start = i * chunk_size
+                            chunk_end = min((i + 1) * chunk_size, len(assistant_content))
+                            chunk = assistant_content[chunk_start:chunk_end]
+                            
+                            # Send this chunk to the client
+                            await manager.send_update(user_id, {
+                                "type": "message_update",
+                                "message_id": message_id,
+                                "conversation_id": conversation_id,
+                                "status": "STREAMING",
+                                "assistant_content": chunk,
+                                "content_update_type": "APPEND",
+                                "is_complete": False  # Not complete until the last chunk
+                            })
+                            
+                            # Small delay between chunks for more natural streaming
+                            await asyncio.sleep(0.02)
+                            
+                            # Log progress periodically
+                            if i % 50 == 0 and i > 0:
+                                logger.info(f"Streamed {i}/{total_chunks} chunks ({i*chunk_size} characters)")
+                        
+                        # Final message marking completion
                         await manager.send_update(user_id, {
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conversation_id,
-                            "status": "STREAMING",
-                            "assistant_content": assistant_content,
-                            "is_complete": True  # Mark as complete since we have the full content
+                            "status": "COMPLETE",
+                            "is_complete": True  # Mark as complete
                         })
                         
-                        logger.info(f"Sent complete content with {len(assistant_content)} characters")
+                        logger.info(f"Completed streaming {len(assistant_content)} characters in {total_chunks} chunks")
                         
                         # Create a new database session for the async operation
                         db = SessionLocal()
