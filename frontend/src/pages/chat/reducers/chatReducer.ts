@@ -1,6 +1,7 @@
 import {
   Message,
   Conversation,
+  MessageRole,
   MessageStatus,
   ContentUpdateMode,
   MessageUpdatePayload
