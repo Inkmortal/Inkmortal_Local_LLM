@@ -535,16 +535,14 @@ export function addConnectionListener(
 export function closeWebSocket(): void {
   wsManager.closeConnection();
 }
-
 /**
+ * Check if WebSocket is connected
+ */
 export function isWebSocketConnected(): boolean {
   const isConnected = wsManager.isConnected();
   console.log(`WebSocket connection status: ${isConnected ? "connected" : "disconnected"}`);
   return isConnected;
 }
-  return wsManager.isConnected();
-}
-
 /**
  * Safely initialize WebSocket with fallback
  */
