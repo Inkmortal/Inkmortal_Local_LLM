@@ -21,8 +21,8 @@ export class TokenBufferManager {
     options: { flushDelay?: number; maxBufferSize?: number } = {}
   ) {
     this.updateCallback = updateCallback;
-    this.flushDelay = options.flushDelay || 30; // ms (reduced from 50ms for even smoother streaming)
-    this.maxBufferSize = options.maxBufferSize || 10; // characters (reduced from 20 for more frequent updates)
+    this.flushDelay = options.flushDelay || 100; // ms (increased for better stability)
+    this.maxBufferSize = options.maxBufferSize || 50; // characters (increased for better performance)
     console.log("TokenBufferManager created with delay:", this.flushDelay, "max size:", this.maxBufferSize);
   }
 
