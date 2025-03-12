@@ -207,7 +207,7 @@ export const useChat = ({
               });
             }
           } else {
-            console.warn('Received global message update but no active assistant message found');
+            console.warn('Received global message update but no active assistant message found', update);
           }
         });
         

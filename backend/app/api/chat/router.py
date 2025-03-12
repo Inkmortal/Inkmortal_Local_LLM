@@ -418,7 +418,7 @@ async def stream_message(
                             websocket_message["status"] = "COMPLETE"
                         
                         # Send to WebSocket clients - no SSE formatting
-                        await manager.send_update(user_id, websocket_message)
+                        await manager.send_update(user.id, websocket_message)
                         
                         # Also send section-specific updates if needed
                         if "<think>" in token or "</think>" in token:
@@ -450,7 +450,7 @@ async def stream_message(
                         assistant_content += token
                         
                         # Send a simplified message for non-JSON responses
-                        await manager.send_update(user_id, {
+                        await manager.send_update(user.id, {
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conversation_id,
