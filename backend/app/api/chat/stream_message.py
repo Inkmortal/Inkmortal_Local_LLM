@@ -109,6 +109,15 @@ async def stream_message(
             user_id=user.id
         )
         
+        # TEMPORARY DEBUG - This is a simpler code path to test direct queue interaction
+        print("ATTEMPTING DIRECT QUEUE TEST")
+        try:
+            # Force add to queue without all the complex logic
+            queue_position = await queue_manager.add_request(request_obj)
+            print(f"DIRECT QUEUE TEST RESULT: {queue_position}")
+        except Exception as e:
+            print(f"DIRECT QUEUE TEST ERROR: {str(e)}")
+        
         # STEP 1: Extract assistant_message_id ONCE for consistency
         assistant_message_id = request_obj.body.get("assistant_message_id")
         
@@ -132,6 +141,7 @@ async def stream_message(
             is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
             transport_mode = "websocket" if is_websocket_client else "sse"
         
+        print(f"Stream message transport mode: {transport_mode}, headers={request_obj.body.get('headers')}")
         logger.info(f"Using transport mode: {transport_mode} for client")
         
         # STEP 2: Add request to queue regardless of transport mode

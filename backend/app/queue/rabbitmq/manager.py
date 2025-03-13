@@ -157,6 +157,7 @@ class RabbitMQManager(QueueManagerInterface):
     async def add_request(self, request: QueuedRequest) -> int:
         """Add a request to the queue"""
         try:
+            print(f"RabbitMQ add_request called: endpoint={request.endpoint}, priority={request.priority}")
             logger.info(f"Adding request to queue - type: {type(request)}, endpoint: {request.endpoint}")
             
             # Debug log the request priority type and value
