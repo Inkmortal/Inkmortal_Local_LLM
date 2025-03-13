@@ -44,22 +44,31 @@ async def stream_message(
     try:
         print("STREAM_MESSAGE: Inside try block!")
         # Create or get conversation
+        print(f"STREAM_MESSAGE: Checking conversation_id: {conversation_id}")
         if conversation_id:
+            print(f"STREAM_MESSAGE: Looking up conversation with ID {conversation_id} for user {user.id}")
             conversation = fresh_db.query(Conversation).filter(
                 Conversation.id == conversation_id,
                 Conversation.user_id == user.id
             ).first()
             
+            print(f"STREAM_MESSAGE: Conversation found: {conversation is not None}")
+            
             if not conversation:
+                print(f"STREAM_MESSAGE: Conversation not found, returning error")
                 # Cannot use HTTP exceptions in streaming response
                 async def error_stream():
                     yield json.dumps({"error": "Conversation not found"}).encode('utf-8')
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
         else:
             # Create new conversation using the service which adds welcome message
+            print(f"STREAM_MESSAGE: Creating new conversation for user {user.id}")
             from .conversation_service import create_conversation
             result = create_conversation(fresh_db, user.id, message_text[:50] if message_text else "New Conversation")
+            print(f"STREAM_MESSAGE: Create conversation result: {result}")
+            
             if not result.get("success", False):
+                print(f"STREAM_MESSAGE: Failed to create conversation: {result.get('error')}")
                 logger.error(f"Error creating conversation: {result.get('error')}")
                 async def error_stream():
                     yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
@@ -67,10 +76,13 @@ async def stream_message(
             
             # Use the conversation ID from the result
             conversation_id = result["conversation_id"]
+            print(f"STREAM_MESSAGE: New conversation created with ID: {conversation_id}")
             conversation = fresh_db.query(Conversation).filter(Conversation.id == conversation_id).first()
         
         # Save user message
+        print(f"STREAM_MESSAGE: Saving user message to conversation {conversation.id}")
         message_id = generate_id()
+        print(f"STREAM_MESSAGE: Generated message_id: {message_id}")
         message = Message(
             id=message_id,
             conversation_id=conversation.id,
@@ -81,7 +93,13 @@ async def stream_message(
         
         # Update timestamp
         conversation.updated_at = datetime.now()
-        fresh_db.commit()
+        print(f"STREAM_MESSAGE: Committing message to database")
+        try:
+            fresh_db.commit()
+            print(f"STREAM_MESSAGE: Database commit successful")
+        except Exception as e:
+            print(f"STREAM_MESSAGE: Database commit failed: {str(e)}")
+            raise
         
         # Create request object with model name (required by Ollama)
         request_body = {
