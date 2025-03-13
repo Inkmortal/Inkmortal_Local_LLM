@@ -38,8 +38,11 @@ async def stream_message(
     print(f"STREAM_MESSAGE: message_text={message_text[:20]}..., queue_manager={queue_manager}")
     """Process a message with true token-by-token streaming from Ollama"""
     # Create a new conversation if needed
+    print("STREAM_MESSAGE: About to create fresh_db")
     fresh_db = SessionLocal()
+    print("STREAM_MESSAGE: fresh_db created")
     try:
+        print("STREAM_MESSAGE: Inside try block!")
         # Create or get conversation
         if conversation_id:
             conversation = fresh_db.query(Conversation).filter(
@@ -103,6 +106,9 @@ async def stream_message(
             request_body["headers"] = headers
             logger.info(f"Client headers: {headers}")
             
+        print("STREAM_MESSAGE: About to create request_obj")
+        print(f"STREAM_MESSAGE: Values - priority={RequestPriority.WEB_INTERFACE}, user_id={user.id}")
+        
         # Create the request object with our complete body
         request_obj = QueuedRequest(
             priority=RequestPriority.WEB_INTERFACE,
@@ -110,6 +116,7 @@ async def stream_message(
             body=request_body,
             user_id=user.id
         )
+        print("STREAM_MESSAGE: request_obj created successfully")
         
         # TEMPORARY DEBUG - This is a simpler code path to test direct queue interaction
         print("ATTEMPTING DIRECT QUEUE TEST")
@@ -665,6 +672,7 @@ async def stream_message(
             return StreamingResponse(event_stream(), media_type="text/event-stream")
     
     except Exception as e:
+        print(f"STREAM_MESSAGE: Exception caught: {str(e)}")
         logger.error(f"Error setting up streaming: {e}")
         
         # Cleanup
