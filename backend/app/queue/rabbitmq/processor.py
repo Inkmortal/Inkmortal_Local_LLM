@@ -396,18 +396,49 @@ class RequestProcessor:
                             json=request.body,
                             timeout=300.0
                         ) as response:
+                            chunk_count = 0
+                            logger.info(f"Starting to receive streaming chunks from Ollama API...")
+                            
                             async for chunk in response.aiter_text():
+                                chunk_count += 1
+                                
                                 # Check if we've exceeded our timeout
                                 current_time = asyncio.get_event_loop().time()
                                 if current_time - start_time > timeout_seconds:
                                     logger.warning(f"Streaming request timed out after {timeout_seconds}s: {request.endpoint}")
                                     yield json.dumps({"error": f"Stream timed out after {timeout_seconds}s"})
                                     break
+                                
+                                # Log the chunk format with ID for debugging
+                                if chunk_count < 3 or chunk_count % 50 == 0:  # Log 1st, 2nd, and every 50th chunk
+                                    logger.info(f"Chunk #{chunk_count} raw format: {chunk[:200]}")
                                     
+                                    # Try to parse as JSON for deeper inspection
+                                    try:
+                                        chunk_data = json.loads(chunk)
+                                        logger.info(f"Chunk #{chunk_count} JSON keys: {list(chunk_data.keys())}")
+                                        
+                                        # Log specific fields based on known patterns
+                                        if "delta" in chunk_data:
+                                            logger.info(f"Delta format detected: {chunk_data.get('delta')}")
+                                        if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
+                                            logger.info(f"Choices format: {json.dumps(chunk_data['choices'][0])[:200]}")
+                                        if "message" in chunk_data:
+                                            logger.info(f"Message format: {json.dumps(chunk_data.get('message'))[:200]}")
+                                        if "response" in chunk_data:
+                                            logger.info(f"Response format: {chunk_data.get('response')[:50]}")
+                                    except json.JSONDecodeError:
+                                        logger.info(f"Chunk #{chunk_count} is not valid JSON, raw length: {len(chunk)}")
+                                    except Exception as e:
+                                        logger.warning(f"Error inspecting chunk format: {str(e)}")
+                                
+                                # We're not modifying the chunk yet, just logging it
                                 yield chunk
                                 
                                 # Reset timeout timer on each chunk
                                 start_time = current_time
+                                
+                            logger.info(f"Completed receiving {chunk_count} streaming chunks from Ollama API")
                     except httpx.ReadTimeout:
                         logger.warning(f"HTTPX timeout for streaming request: {request.endpoint}")
                         yield json.dumps({"error": "Connection timeout"})

@@ -68,6 +68,15 @@ class ConnectionManager:
         content_update_type: str = APPEND
     ):
         """Send a message to all websockets for a specific user"""
+        # CRITICAL DEBUG: Log full data being sent to WebSocket
+        logger.info(f"WEBSOCKET DEBUG: Preparing to send update to user {user_id}")
+        logger.info(f"WEBSOCKET DEBUG: Data type: {data.get('type')}")
+        logger.info(f"WEBSOCKET DEBUG: Message ID: {data.get('message_id')}")
+        
+        if "assistant_content" in data:
+            content = data.get("assistant_content", "")
+            logger.info(f"WEBSOCKET DEBUG: Content length: {len(content)}, preview: {content[:50]}")
+        
         if user_id not in self.active_connections:
             logger.warning(f"No active connections for user {user_id}")
             return
@@ -129,13 +138,19 @@ class ConnectionManager:
         for connection in list(connections):
             try:
                 if connection.client_state == WebSocketState.CONNECTED:
+                    # Add diagnostic for each send
+                    logger.info(f"WEBSOCKET SEND: Sending data to client for user {user_id}, msg_id={data.get('message_id')}")
                     await connection.send_json(data)
+                    logger.info(f"WEBSOCKET SEND: Successfully sent update")
                     success_count += 1
                 else:
-                    logger.warning(f"Found disconnected WebSocket for user {user_id}")
+                    logger.warning(f"Found disconnected WebSocket for user {user_id}, state={connection.client_state}")
                     disconnected.append(connection)
             except Exception as e:
                 logger.error(f"Error sending WebSocket update: {str(e)}")
+                # Add more detail for debugging
+                import traceback
+                logger.error(f"WebSocket send error details:\n{traceback.format_exc()}")
                 # Add to disconnected list if there was an error sending
                 disconnected.append(connection)
         

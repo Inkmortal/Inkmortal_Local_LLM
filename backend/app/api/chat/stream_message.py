@@ -163,9 +163,15 @@ async def stream_message(
                 
                 
                 # Stream from Ollama via queue manager
+                chunks_processed = 0
+                token_count = 0
+                logger.info(f"Starting to process streaming chunks from queue manager, transport_mode={transport_mode}")
+                
                 async for chunk in queue_manager.process_streaming_request(request_obj):
-                    # Log the raw chunk for debugging
-                    logger.info(f"Streaming chunk: {chunk[:200]}...")
+                    chunks_processed += 1
+                    
+                    # Log the raw chunk for debugging with chunk number
+                    logger.info(f"[Chunk #{chunks_processed}] Received streaming chunk: {chunk[:200]}...")
                     
                     # For SSE clients only - send in SSE format
                     if transport_mode == "sse":
@@ -174,10 +180,19 @@ async def stream_message(
                     # Process and send via WebSocket only for WebSocket clients
                     if transport_mode == "websocket":
                         try:
-                            # Parse the JSON data
-                            data = json.loads(chunk)
+                            # Parse the JSON data with detailed logging
+                            logger.info(f"[Chunk #{chunks_processed}] Parsing WebSocket chunk as JSON")
+                            try:
+                                data = json.loads(chunk)
+                                logger.info(f"[Chunk #{chunks_processed}] JSON parsed successfully: {list(data.keys())}")
+                            except Exception as json_err:
+                                logger.error(f"[Chunk #{chunks_processed}] JSON parse error: {str(json_err)}")
+                                logger.error(f"[Chunk #{chunks_processed}] Raw chunk: {chunk}")
+                                raise
+                            
                             token = ""
                             is_complete = False
+                            token_found = False
                             
                             # Extract token from various formats
                             if "choices" in data and len(data["choices"]) > 0:
@@ -265,11 +280,16 @@ async def stream_message(
                                 )
                         except Exception as e:
                             # Not JSON, probably raw text
-                            logger.info(f"Non-JSON response, treating as raw text: {e}")
+                            logger.warning(f"[Chunk #{chunks_processed}] Failed to parse as JSON: {str(e)}")
+                            logger.warning(f"[Chunk #{chunks_processed}] Raw chunk type: {type(chunk)}, length: {len(chunk)}")
+                            logger.warning(f"[Chunk #{chunks_processed}] Raw chunk content: {chunk[:100]}...")
                             
                             # Use chunk as the token directly
                             token = chunk
                             is_complete = False
+                            
+                            # Log attempt at handling
+                            logger.info(f"[Chunk #{chunks_processed}] Treating as raw text, length: {len(token)}")
                             
                             # Check if this is the last chunk (some models signal this)
                             if "[DONE]" in chunk or "<|endoftext|>" in chunk:
