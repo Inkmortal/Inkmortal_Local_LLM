@@ -176,3 +176,8 @@ Split large files to maintain 400-line limit:
    - Added proper conversion from normalized state (objects) to arrays for component compatibility
    - Updated ModernChatPageFixed.tsx to use Object.values(state.conversations) instead of direct assignment
    - Updated useChatStream.ts to convert state.messages object to array with Object.values() before filtering
+
+5. ✅ **Fixed Message Sending Interface Mismatch**: Resolved assistant_message_id undefined error
+   - Fixed parameter mismatch in sendChatMessage call in useChatStream.ts
+   - Changed from passing a single object to using the proper positional parameters
+   - Ensured assistantMessageId is correctly passed as the fifth parameter

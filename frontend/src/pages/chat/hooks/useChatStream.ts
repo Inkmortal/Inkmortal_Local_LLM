@@ -214,18 +214,18 @@ export function useChatStream({
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
       
-      // Send message
-      const response = await sendChatMessage({
-        message: content,
-        conversation_id: conversationId,
-        file: file || undefined,
-        assistant_message_id: assistantMessageId,
-        transport_mode: 'websocket',
-        headers: {
-          'X-Client-Type': 'react-web-client'
+      // Send message - match the expected parameter format of messageService.ts
+      const response = await sendChatMessage(
+        content,                  // message parameter
+        conversationId || '',     // conversationId parameter
+        file || null,             // file parameter
+        {                         // handlers parameter (empty object)
+          onStatusUpdate: (status) => {
+            console.log(`[useChatStream] Message status update: ${status}`);
+          }
         },
-        mode: 'streaming'
-      }, abortControllerRef.current.signal);
+        assistantMessageId        // assistantMessageId parameter
+      );
       
       // Handle immediate response (usually just IDs)
       if (response && response.conversation_id) {
