@@ -6,12 +6,21 @@
  * Message status enum for tracking the state of each message
  */
 export enum MessageStatus {
+  PENDING = 'pending',    // Message is yet to be sent
   SENDING = 'sending',    // Message is being sent to the server
   QUEUED = 'queued',      // Message is in the server queue
   PROCESSING = 'processing', // Message is being processed by the LLM
   STREAMING = 'streaming', // Message is streaming back from the LLM
   COMPLETE = 'complete',  // Message has been processed successfully
   ERROR = 'error'         // An error occurred during processing
+}
+
+/**
+ * Content update mode for streaming messages
+ */
+export enum ContentUpdateMode {
+  APPEND = 'append',      // Append content to existing message
+  REPLACE = 'replace'     // Replace existing content
 }
 
 /**
@@ -96,7 +105,7 @@ export interface WebSocketMessage {
 }
 
 /**
- * Message update from WebSocket
+ * Message update from WebSocket (raw format)
  */
 export interface MessageUpdateEvent extends WebSocketMessage {
   type: 'message_update';
@@ -107,4 +116,24 @@ export interface MessageUpdateEvent extends WebSocketMessage {
   assistant_message_id?: string;
   assistant_content?: string;
   error?: string;
+}
+
+/**
+ * Message section types
+ */
+export type MessageSection = 'thinking' | 'response';
+
+/**
+ * Processed message update (after going through messageHandler)
+ */
+export interface MessageUpdate {
+  messageId: string;
+  conversationId: string;
+  content: string;
+  status: MessageStatus;
+  section?: MessageSection;
+  contentUpdateMode?: ContentUpdateMode;
+  isComplete?: boolean;
+  error?: string;
+  model?: string;
 }

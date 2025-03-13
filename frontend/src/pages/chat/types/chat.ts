@@ -1,8 +1,8 @@
 // Type definitions for chat functionality
-import { MessageStatus } from '../../../services/chat/types';
+import { MessageStatus, ContentUpdateMode } from './message';
 
-// Re-export MessageStatus so it can be imported directly from this file
-export { MessageStatus };
+// Re-export types that other modules need
+export { MessageStatus, ContentUpdateMode };
 
 // Message interface for UI
 export interface Message {

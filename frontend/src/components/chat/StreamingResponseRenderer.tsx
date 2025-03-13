@@ -19,8 +19,8 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   // Store tokens as an array of {text, isNew} objects
   const [tokens, setTokens] = useState<Array<{text: string, isNew: boolean}>>([]);
   
-  // Track when each new token should transition to normal
-  const [transitionTimers, setTransitionTimers] = useState<number[]>([]);
+  // Ref to store transition timers for better memory management
+  const timerRef = useRef<number[]>([]);
   
   // Calculate new tokens when content changes
   useEffect(() => {
@@ -47,41 +47,42 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
             idx === currentTokens.length - 1 ? { ...token, isNew: false } : token
           )
         );
+        
+        // Remove this timer ID from our ref once it completes
+        timerRef.current = timerRef.current.filter(id => id !== timerId);
       }, 500); // Match this to CSS animation duration
       
-      // Store the timer ID for cleanup
-      setTransitionTimers(prev => [...prev, timerId]);
+      // Store the timer ID in our ref
+      timerRef.current.push(timerId);
     }
     
     // Update previous content reference
     setPrevContent(content);
   }, [content, isStreaming, prevContent]);
   
-  // Cleanup transition timers on unmount
+  // Cleanup all transition timers on unmount
   useEffect(() => {
     return () => {
-      transitionTimers.forEach(timerId => clearTimeout(timerId));
+      timerRef.current.forEach(timerId => clearTimeout(timerId));
+      timerRef.current = [];
     };
-  }, [transitionTimers]);
+  }, []);
 
-  // Reset everything when streaming starts
+  // Handle streaming state changes and content updates
   useEffect(() => {
     if (isStreaming) {
+      // Reset everything when streaming starts
       setTokens([]);
       setPrevContent('');
-    }
-  }, [isStreaming]);
-  
-  // Convert separate tokens back to full content when streaming stops
-  useEffect(() => {
-    if (!isStreaming) {
+    } else {
+      // Convert separate tokens to full content when streaming stops
       setTokens([{ text: content, isNew: false }]);
       
       // Clear any pending transitions
-      transitionTimers.forEach(timerId => clearTimeout(timerId));
-      setTransitionTimers([]);
+      timerRef.current.forEach(timerId => clearTimeout(timerId));
+      timerRef.current = [];
     }
-  }, [isStreaming, content, transitionTimers]);
+  }, [isStreaming, content]);
   
   // Render the tokens as React elements instead of using DOM manipulation
   const renderedContent = useMemo(() => {

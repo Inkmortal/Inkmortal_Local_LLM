@@ -1,4 +1,14 @@
-import { ContentUpdateMode, MessageStatus } from '../../pages/chat/types/message';
+/**
+ * Legacy WebSocket Service - DEPRECATED
+ * 
+ * This implementation is now deprecated in favor of the new streaming architecture in:
+ * - frontend/src/services/chat/connectionManager.ts
+ * - frontend/src/services/chat/messageHandler.ts
+ * - frontend/src/services/chat/websocketService.ts
+ * 
+ * Only kept for backward compatibility
+ */
+import { MessageStatus, ContentUpdateMode } from '../../services/chat/types';
 
 export interface WebSocketMessageHandler {
   (message: any): void;
@@ -20,14 +30,64 @@ export class WebSocketService {
   private readonly debug: boolean;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   
+  // Flag to determine if we should use new architecture
+  private useNewArchitecture: boolean = true;
+  
   constructor(private readonly baseUrl: string, options: { debug?: boolean } = {}) {
     this.debug = options.debug || false;
+    console.warn('[DEPRECATED] WebSocketService is deprecated. Please use the new WebSocket architecture.');
+    
+    // Try to dynamically import the new architecture's modules
+    // This allows us to load them lazily and bypass circular dependencies
+    try {
+      import('../chat/websocketService')
+        .then(newWsService => {
+          if (this.debug) {
+            console.log('[WebSocketService] Successfully imported new WebSocket architecture.');
+          }
+        })
+        .catch(err => {
+          console.error('[WebSocketService] Failed to import new WebSocket architecture, falling back to legacy implementation:', err);
+          this.useNewArchitecture = false;
+        });
+    } catch (e) {
+      console.error('[WebSocketService] Error setting up compatibility layer:', e);
+      this.useNewArchitecture = false;
+    }
   }
   
   public connect(token: string): void {
     if (this.isConnected() || this.isConnecting) return;
     
     this.authToken = token;
+    
+    // If using new architecture, delegate to it
+    if (this.useNewArchitecture) {
+      // Import dynamically to avoid circular dependencies
+      import('../chat/websocketService').then(newWsService => {
+        newWsService.initializeWebSocket(token)
+          .then(connected => {
+            if (connected) {
+              this.notifyStatusHandlers(true);
+            } else {
+              this.notifyStatusHandlers(false);
+            }
+          })
+          .catch(err => {
+            console.error('[WebSocketService] Error connecting using new architecture:', err);
+            this.fallbackToLegacyConnect(token);
+          });
+      }).catch(err => {
+        console.error('[WebSocketService] Failed to import new WebSocket architecture:', err);
+        this.fallbackToLegacyConnect(token);
+      });
+      return;
+    }
+    
+    this.fallbackToLegacyConnect(token);
+  }
+  
+  private fallbackToLegacyConnect(token: string): void {
     this.isConnecting = true;
     
     // Build WebSocket URL with auth token
@@ -51,6 +111,26 @@ export class WebSocketService {
   }
   
   public disconnect(): void {
+    // If using new architecture, delegate to it
+    if (this.useNewArchitecture) {
+      import('../chat/websocketService').then(newWsService => {
+        newWsService.closeWebSocket();
+        this.notifyStatusChange(false);
+        
+        if (this.debug) {
+          console.log('[WebSocket] Disconnected using new architecture');
+        }
+      }).catch(err => {
+        console.error('[WebSocketService] Failed to import new WebSocket architecture for disconnect:', err);
+        this.fallbackToLegacyDisconnect();
+      });
+      return;
+    }
+    
+    this.fallbackToLegacyDisconnect();
+  }
+  
+  private fallbackToLegacyDisconnect(): void {
     if (this.socket) {
       this.socket.close();
       this.socket = null;
@@ -61,15 +141,74 @@ export class WebSocketService {
     this.notifyStatusChange(false);
     
     if (this.debug) {
-      console.log('[WebSocket] Disconnected');
+      console.log('[WebSocket] Disconnected using legacy implementation');
     }
   }
   
   public isConnected(): boolean {
+    // If using new architecture, try to delegate to it synchronously
+    if (this.useNewArchitecture) {
+      try {
+        // This is a bit tricky because we can't use async/await here
+        // We'll use a cached value if possible
+        const newWsModule = require('../chat/websocketService');
+        if (newWsModule && typeof newWsModule.isWebSocketConnected === 'function') {
+          return newWsModule.isWebSocketConnected();
+        }
+      } catch (e) {
+        // Silently fall back to legacy implementation
+      }
+    }
+    
+    // Fallback to legacy implementation
     return this.socket !== null && this.socket.readyState === WebSocket.OPEN;
   }
   
   public addMessageHandler(handler: WebSocketMessageHandler): () => void {
+    // If using new architecture, delegate to it
+    if (this.useNewArchitecture) {
+      try {
+        // We need to use a promise and return the unsubscribe function
+        let unsubscribeFunction: (() => void) | null = null;
+        
+        // Create a promise that will resolve when we get the unsubscribe function
+        const promise = import('../chat/websocketService').then(newWsService => {
+          unsubscribeFunction = newWsService.registerGlobalMessageHandler(handler);
+          
+          if (this.debug) {
+            console.log('[WebSocket] Added message handler using new architecture');
+          }
+        }).catch(err => {
+          console.error('[WebSocketService] Failed to import new WebSocket architecture for message handling:', err);
+          // Fall back to legacy implementation
+          this.messageHandlers.add(handler);
+        });
+        
+        // Return an unsubscribe function that will wait for the promise if needed
+        return () => {
+          if (unsubscribeFunction) {
+            unsubscribeFunction();
+          } else {
+            // Need to ensure the promise has completed
+            promise.then(() => {
+              if (unsubscribeFunction) {
+                unsubscribeFunction();
+              } else {
+                // Final fallback if everything else fails
+                this.messageHandlers.delete(handler);
+              }
+            }).catch(err => {
+              console.error('[WebSocket] Error in message handler cleanup:', err);
+              this.messageHandlers.delete(handler);
+            });
+          }
+        };
+      } catch (e) {
+        console.error('[WebSocketService] Error setting up message handler with new architecture:', e);
+      }
+    }
+    
+    // Fallback to legacy implementation
     this.messageHandlers.add(handler);
     
     return () => {
@@ -78,6 +217,51 @@ export class WebSocketService {
   }
   
   public addStatusHandler(handler: WebSocketStatusHandler): () => void {
+    // If using new architecture, delegate to it
+    if (this.useNewArchitecture) {
+      try {
+        // We need to use a promise and return the unsubscribe function
+        let unsubscribeFunction: (() => void) | null = null;
+        
+        // Create a promise that will resolve when we get the unsubscribe function
+        const promise = import('../chat/websocketService').then(newWsService => {
+          unsubscribeFunction = newWsService.addConnectionListener(handler);
+          
+          if (this.debug) {
+            console.log('[WebSocket] Added status handler using new architecture');
+          }
+        }).catch(err => {
+          console.error('[WebSocketService] Failed to import new WebSocket architecture for status handling:', err);
+          // Fall back to legacy implementation
+          this.statusHandlers.add(handler);
+          handler(this.isConnected());
+        });
+        
+        // Return an unsubscribe function that will wait for the promise if needed
+        return () => {
+          if (unsubscribeFunction) {
+            unsubscribeFunction();
+          } else {
+            // Need to ensure the promise has completed
+            promise.then(() => {
+              if (unsubscribeFunction) {
+                unsubscribeFunction();
+              } else {
+                // Final fallback if everything else fails
+                this.statusHandlers.delete(handler);
+              }
+            }).catch(err => {
+              console.error('[WebSocket] Error in status handler cleanup:', err);
+              this.statusHandlers.delete(handler);
+            });
+          }
+        };
+      } catch (e) {
+        console.error('[WebSocketService] Error setting up status handler with new architecture:', e);
+      }
+    }
+    
+    // Fallback to legacy implementation
     this.statusHandlers.add(handler);
     
     // Call immediately with current status
@@ -89,6 +273,29 @@ export class WebSocketService {
   }
   
   public sendMessage(data: any): void {
+    // If using new architecture, delegate to it
+    if (this.useNewArchitecture) {
+      import('../chat/websocketService').then(newWsService => {
+        const success = newWsService.sendWebSocketMessage(data);
+        
+        if (this.debug) {
+          if (success) {
+            console.log('[WebSocket] Message sent using new architecture:', data);
+          } else {
+            console.warn('[WebSocket] Failed to send message using new architecture');
+          }
+        }
+      }).catch(err => {
+        console.error('[WebSocketService] Failed to import new WebSocket architecture for sending message:', err);
+        this.fallbackToLegacySendMessage(data);
+      });
+      return;
+    }
+    
+    this.fallbackToLegacySendMessage(data);
+  }
+  
+  private fallbackToLegacySendMessage(data: any): void {
     if (!this.isConnected()) {
       console.warn('[WebSocket] Cannot send message, not connected');
       return;
@@ -96,6 +303,10 @@ export class WebSocketService {
     
     try {
       this.socket!.send(JSON.stringify(data));
+      
+      if (this.debug) {
+        console.log('[WebSocket] Message sent using legacy implementation:', data);
+      }
     } catch (error) {
       console.error('[WebSocket] Error sending message:', error);
     }

@@ -6,17 +6,37 @@
  */
 import { connectionManager, ConnectionStatus } from './connectionManager';
 import { eventEmitter } from './eventEmitter';
-import { messageHandler, MessageUpdate } from './messageHandler';
-import { MessageStatus } from './types';
+import { messageHandler, MessageType } from './messageHandler';
+import { MessageStatus, ContentUpdateMode } from './types';
 
 // Re-export important types
 export { ConnectionStatus } from './connectionManager';
-export { MessageType, ContentUpdateMode, MessageUpdate } from './messageHandler';
+export { MessageType } from './messageHandler';
+export { MessageStatus, ContentUpdateMode } from './types';
+export type { MessageUpdate } from './types';
+
+/**
+ * Get authentication token for WebSocket connection
+ * Centralized function to ensure consistent token retrieval
+ */
+export function getAuthToken(): string {
+  // Try to get token from localStorage
+  const token = localStorage.getItem('auth_token');
+  
+  if (!token) {
+    console.warn('No authentication token found in localStorage');
+    throw new Error('Authentication token not found');
+  }
+  
+  return token;
+}
 
 /**
  * Initialize WebSocket connection and return a promise that resolves when connected
+ * Optionally accepts a token override, otherwise uses the getAuthToken function
  */
-export function initializeWebSocket(token: string): Promise<boolean> {
+export function initializeWebSocket(tokenOverride?: string): Promise<boolean> {
+  const token = tokenOverride || getAuthToken();
   console.log('Initializing WebSocket connection with token');
   return connectionManager.connect(token);
 }
@@ -90,6 +110,27 @@ export function closeWebSocket(): void {
 }
 
 /**
+ * Complete cleanup of all WebSocket resources
+ * Use this when the application is completely shutting down WebSocket services
+ */
+export function cleanupWebSocketResources(): void {
+  // First close the connection
+  connectionManager.closeConnection();
+  
+  // Then clean up all the singleton instances
+  // Import and call the cleanup functions for each manager
+  // We're using a try/catch to make sure even if one cleanup fails, others still run
+  try {
+    // Importing the functions would cause circular dependencies, so we call
+    // the cleanup methods directly on the instances we have access to
+    connectionManager.cleanup();
+    messageHandler.cleanup();
+  } catch (error) {
+    console.error('Error during WebSocket cleanup:', error);
+  }
+}
+
+/**
  * Check if WebSocket is currently connected
  */
 export function isWebSocketConnected(): boolean {
@@ -98,12 +139,12 @@ export function isWebSocketConnected(): boolean {
 
 /**
  * Wait for WebSocket connection to be established
- * @param token Auth token
+ * @param tokenOverride Optional auth token override
  * @param timeout Maximum time to wait in milliseconds
  * @returns Promise that resolves to true when connected or false on timeout
  */
 export async function waitForWebSocketConnection(
-  token: string, 
+  tokenOverride?: string, 
   timeout = 5000
 ): Promise<boolean> {
   // If already connected, return immediately
@@ -117,6 +158,9 @@ export async function waitForWebSocketConnection(
     const timeoutPromise = new Promise<boolean>((resolve) => {
       setTimeout(() => resolve(false), timeout);
     });
+    
+    // Get token (either from parameter or from storage)
+    const token = tokenOverride || getAuthToken();
     
     // Start connection
     const connectPromise = initializeWebSocket(token);
@@ -148,12 +192,69 @@ export function getConnectionStatus(): ConnectionStatus {
 /**
  * Safely ensure WebSocket connection with proper error handling
  */
-export async function ensureWebSocketConnection(token: string): Promise<boolean> {
+export async function ensureWebSocketConnection(tokenOverride?: string): Promise<boolean> {
   try {
+    // Use provided token or get from storage
+    const token = tokenOverride || getAuthToken();
     return await initializeWebSocket(token);
   } catch (error) {
     console.warn('WebSocket connection failed, falling back to polling:', 
       error instanceof Error ? error.message : 'Unknown error');
     return false;
   }
+}
+
+/**
+ * Register handler for updates to a specific message ID
+ * @param messageId The message ID to watch for updates
+ * @param callback Function to call when update for this message is received
+ * @returns Function to unsubscribe
+ */
+export function registerMessageHandler(messageId: string, callback: (update: MessageUpdate) => void): () => void {
+  console.log(`Registering message handler for message ID: ${messageId}`);
+  
+  // Create an event filter that only passes updates for this message ID
+  const filteredCallback = (update: MessageUpdate) => {
+    if (update.messageId === messageId) {
+      console.log(`Message handler triggered for ${messageId}`);
+      callback(update);
+    }
+  };
+  
+  // Subscribe to all message updates and filter in the callback
+  return eventEmitter.on('message_update', filteredCallback);
+}
+
+/**
+ * Register a global handler for all message updates
+ * Useful for handling updates that don't have a specific message ID
+ * @param callback Function to call for any message update
+ * @returns Function to unsubscribe
+ */
+export function registerGlobalMessageHandler(callback: (update: MessageUpdate) => void): () => void {
+  console.log('Registering global message handler');
+  return eventEmitter.on('message_update', callback);
+}
+
+/**
+ * Register a listener for connection status changes
+ * @param callback Function to call when connection status changes
+ * @returns Function to unsubscribe
+ */
+export function addConnectionListener(callback: (connected: boolean) => void): () => void {
+  console.log('Registering connection status listener');
+  
+  // Map ConnectionStatus enum to boolean for simpler API
+  const statusCallback = (status: ConnectionStatus) => {
+    const isConnected = status === ConnectionStatus.CONNECTED;
+    callback(isConnected);
+  };
+  
+  // Initial callback with current status
+  setTimeout(() => {
+    statusCallback(connectionManager.getStatus());
+  }, 0);
+  
+  // Subscribe to future status changes
+  return eventEmitter.on('connection_status', statusCallback);
 }

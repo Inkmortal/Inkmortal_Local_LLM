@@ -5,7 +5,7 @@
  * Decouples WebSocket handling from React components
  */
 import { eventEmitter } from './eventEmitter';
-import { MessageStatus } from './types';
+import { MessageStatus, ContentUpdateMode, MessageSection, MessageUpdate } from './types';
 
 // Message types we can receive from the backend
 export enum MessageType {
@@ -14,28 +14,6 @@ export enum MessageType {
   SYSTEM_MESSAGE = 'system_message',
   ERROR = 'error',
   ACK = 'ack'
-}
-
-// Content update modes
-export enum ContentUpdateMode {
-  APPEND = 'append',
-  REPLACE = 'replace',
-}
-
-// Message sections that can be updated
-export type MessageSection = 'thinking' | 'response';
-
-// Interface for parsed message updates
-export interface MessageUpdate {
-  messageId: string;
-  conversationId: string;
-  content: string;
-  status: MessageStatus;
-  section?: MessageSection;
-  contentUpdateMode?: ContentUpdateMode;
-  isComplete?: boolean;
-  error?: string;
-  model?: string;
 }
 
 // Message ID mappings to track backend<->frontend IDs
@@ -52,13 +30,28 @@ class MessageHandler {
   // Track message ID mappings
   private messageIdMappings: MessageIdMapping[] = [];
   
+  // Interval timer reference
+  private cleanupInterval: number | null = null;
+  
   // Constructor
   private constructor() {
     // Subscribe to WebSocket messages
     eventEmitter.on('message_received', this.handleMessage.bind(this));
     
     // Clean up old mappings periodically
-    setInterval(this.cleanupOldMappings.bind(this), 60000);
+    this.cleanupInterval = window.setInterval(this.cleanupOldMappings.bind(this), 60000);
+  }
+  
+  // Method to clean up resources
+  public cleanup(): void {
+    // Clear the cleanup interval
+    if (this.cleanupInterval) {
+      window.clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // Unsubscribe from message events
+    eventEmitter.off('message_received', this.handleMessage.bind(this));
   }
   
   // Get singleton instance
@@ -248,3 +241,8 @@ class MessageHandler {
 
 // Export singleton instance
 export const messageHandler = MessageHandler.getInstance();
+
+// Export cleanup function for use in component unmount
+export function cleanupMessageHandler(): void {
+  messageHandler.cleanup();
+}

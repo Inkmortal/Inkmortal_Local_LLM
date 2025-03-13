@@ -98,8 +98,13 @@ export function useChatStream({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      
+      // If this was the last component using the connection,
+      // we could potentially clean up all WebSocket resources here
+      // But this would depend on the requirements of the application
+      // For now, we'll leave the singleton instances running
     };
-  }, [autoConnect, subscribeToMessages]);
+  }, [autoConnect, subscribeToMessages, handleMessageUpdate]);
   
   // Handle message updates from WebSocket
   const handleMessageUpdate = useCallback((update: MessageUpdate) => {
@@ -133,8 +138,12 @@ export function useChatStream({
     if (isComplete) {
       isGeneratingRef.current = false;
       dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
+    } else if (status === MessageStatus.STREAMING && !state.isGenerating) {
+      // Ensure state and ref are synchronized
+      isGeneratingRef.current = true;
+      dispatch({ type: ChatActionType.SET_GENERATING, payload: true });
     }
-  }, []);
+  }, [state.isGenerating]);
   
   // Send a chat message
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
@@ -145,7 +154,7 @@ export function useChatStream({
     }
     
     // Check for existing generation in progress
-    if (isGeneratingRef.current) {
+    if (state.isGenerating || isGeneratingRef.current) {
       showError('A message is already being generated. Please wait or stop generation.');
       return;
     }
@@ -299,11 +308,11 @@ export function useChatStream({
       isGeneratingRef.current = false;
       dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
     }
-  }, [state.activeConversationId, registerMessage]);
+  }, [state.activeConversationId, registerMessage, state.isGenerating]);
   
   // Stop message generation
   const stopGeneration = useCallback(() => {
-    if (!isGeneratingRef.current) return;
+    if (!state.isGenerating && !isGeneratingRef.current) return;
     
     // TODO: Implement stop generation (requires backend support)
     console.log('Stopping generation is not yet implemented');
@@ -329,7 +338,7 @@ export function useChatStream({
         }
       });
     }
-  }, [state.messages]);
+  }, [state.messages, state.isGenerating]);
   
   // Compute derived data for components
   const messages = useMemo(() => {
@@ -343,7 +352,7 @@ export function useChatStream({
     state,
     sendMessage,
     stopGeneration,
-    isGenerating: isGeneratingRef.current,
+    isGenerating: state.isGenerating, // Use state value instead of ref
     messages
   };
 }

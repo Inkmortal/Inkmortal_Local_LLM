@@ -127,7 +127,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       if (!message) {
         console.log(`Creating placeholder for missing message ${messageId} in reducer`);
         
-        // Create a fully-featured placeholder message with all required properties
+        // CRITICAL FIX: Create a fully-featured placeholder message with all required properties
         // This ensures consistent structure for the message, regardless of how it's created
         message = {
           id: messageId,
@@ -136,13 +136,27 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           content: '',
           status: status || MessageStatus.STREAMING,
           timestamp: Date.now(),
-          // CRITICAL FIX: Always include sections to ensure consistent message structure
-          // This prevents UI issues when streaming content to a message
+          // Always include sections with proper structure
           sections: {
-            response: { content: '', visible: true },
-            thinking: { content: '', visible: true }
+            response: { 
+              content: '', 
+              visible: true 
+            },
+            thinking: { 
+              content: '', 
+              visible: true 
+            }
+          },
+          // Initialize metadata to prevent undefined access
+          metadata: {
+            ...metadata,
+            isComplete: false
           }
         };
+        
+        // Log this critical placeholder creation
+        console.log(`[chatReducer] Created placeholder message ${messageId} with conversationId ${metadata?.conversationId || 'temp-id'}`);
+        console.log(`[chatReducer] Placeholder status: ${status || MessageStatus.STREAMING}`);
         
         // Log important message creation events with conversation ID for tracing
         console.log(`CRITICAL: Created new placeholder message ${messageId} for conversation ${metadata?.conversationId || 'unknown'}`);

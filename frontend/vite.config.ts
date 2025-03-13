@@ -14,7 +14,11 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        ws: true, // Enable WebSocket proxy support for all /api paths
+        rewrite: (path) => path,
       }
+      // Removed redundant '/api/chat/ws' proxy as it's covered by the '/api' proxy
+      // The main '/api' proxy handles WebSockets with ws: true
     }
   },
   resolve: {

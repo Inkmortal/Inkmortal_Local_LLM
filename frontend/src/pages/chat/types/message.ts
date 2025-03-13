@@ -1,26 +1,22 @@
 // Enhanced message types for the chat system
+import { 
+  MessageStatus, 
+  ContentUpdateMode,
+  MessageUpdate as WebSocketMessageUpdate,
+  MessageSection as WebSocketMessageSection
+} from '../../../services/chat/types';
+
+// Re-export these for backwards compatibility
+export { MessageStatus, ContentUpdateMode };
+export type MessageSection = WebSocketMessageSection;
+
 export enum MessageRole {
   USER = 'user',
   ASSISTANT = 'assistant',
   SYSTEM = 'system'
 }
 
-export enum MessageStatus {
-  PENDING = 'pending',
-  SENDING = 'sending',
-  QUEUED = 'queued',
-  PROCESSING = 'processing',
-  STREAMING = 'streaming',
-  COMPLETE = 'complete',
-  ERROR = 'error'
-}
-
-export enum ContentUpdateMode {
-  APPEND = 'append',
-  REPLACE = 'replace'
-}
-
-export interface MessageSection {
+export interface MessageSectionContent {
   content: string;
   visible: boolean;
 }
@@ -34,8 +30,8 @@ export interface Message {
   
   // Optional sectioned content
   sections?: {
-    response: MessageSection;
-    thinking?: MessageSection;
+    response: MessageSectionContent;
+    thinking?: MessageSectionContent;
   };
   
   status: MessageStatus;
@@ -49,13 +45,13 @@ export interface Conversation {
   updatedAt: number;
 }
 
-// Update payload type for modifying existing messages
-export interface MessageUpdatePayload {
+// Update payload type for modifying existing messages - aligned with MessageUpdate from services/chat/types.ts
+export interface MessageUpdatePayload extends Partial<WebSocketMessageUpdate> {
   messageId: string;
   content?: string;
   contentUpdateMode?: ContentUpdateMode;
   status?: MessageStatus;
-  section?: string;
+  section?: MessageSection;
   isComplete?: boolean;
   metadata?: Record<string, any>;
 }

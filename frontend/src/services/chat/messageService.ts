@@ -95,10 +95,19 @@ export async function sendChatMessage(
       } : {}
     };
     
-    // Verify assistant message ID is properly set
+    // Add debug logging to verify the assistant_message_id is properly set
+    console.log(`[messageService] Request prepared with assistant_message_id: ${requestData.assistant_message_id}`);
+    
+    // Verify assistant message ID is present for WebSocket transport
     if (useWebSocket && !requestData.assistant_message_id) {
-      console.error("[messageService] No assistant message ID provided for WebSocket streaming! This may cause message handling issues.");
-    } else if (useWebSocket) {
+      console.error("[messageService] CRITICAL ERROR: No assistant message ID for WebSocket transport!");
+      // Generate a fallback ID to prevent null/undefined issues
+      requestData.assistant_message_id = `fallback_${Date.now()}`;
+      console.log(`[messageService] Generated fallback ID: ${requestData.assistant_message_id}`);
+    }
+    
+    // We've already verified the assistant_message_id above, just log it now
+    if (useWebSocket) {
       console.log(`[messageService] Using assistant message ID for streaming: ${requestData.assistant_message_id}`);
     }
     
@@ -135,25 +144,23 @@ export async function sendChatMessage(
           // CRITICAL: Log the assistant message ID we're expecting updates for
           console.log(`[messageService] CRITICAL! Expecting WebSocket updates for assistant_message_id: ${requestData.assistant_message_id}`);
           
-          // Register the message ID with our service to ensure proper routing
-          if (requestData.assistant_message_id && conversationId) {
-            registerMessageId(
-              requestData.assistant_message_id,
-              requestData.assistant_message_id, // Same ID initially
-              conversationId
-            );
-          }
+          // Skip message ID registration here - we'll do it once after all error handling
         }
         
         // Always return success for WebSocket clients to maintain message state
         // Actual content will come via WebSocket updates
-        // Register the message ID mapping for WebSocket routing
+        
+        // CRITICAL FIX: Only register the message ID once, after all error handling
+        // This ensures we have a single consistent registration
         if (requestData.assistant_message_id && conversationId) {
+          console.log(`[messageService] Registering WebSocket message ID mapping for: ${requestData.assistant_message_id}`);
           registerMessageId(
-            requestData.assistant_message_id,
-            requestData.assistant_message_id, // Same ID initially
+            requestData.assistant_message_id, // Frontend ID
+            requestData.assistant_message_id, // Backend ID (same initially)
             conversationId
           );
+        } else {
+          console.error(`[messageService] CRITICAL ERROR: Cannot register message ID mapping - missing ID or conversation ID`);
         }
         
         const response = {

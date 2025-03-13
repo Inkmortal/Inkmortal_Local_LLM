@@ -37,19 +37,29 @@ class ConnectionManager {
   private lastHeartbeatResponse = 0;
   private connectionStatus = ConnectionStatus.DISCONNECTED;
 
+  // Handler references for proper cleanup
+  private boundVisibilityHandler: any = null;
+  private boundOnlineHandler: any = null;
+  private boundOfflineHandler: any = null;
+  
   // Private constructor for singleton pattern
   private constructor() {
     this.tryRestoreConnectionState();
     
+    // Create bound handler references for later cleanup
+    this.boundVisibilityHandler = this.handleVisibilityChange.bind(this);
+    this.boundOnlineHandler = this.handleOnline.bind(this);
+    this.boundOfflineHandler = this.handleOffline.bind(this);
+    
     // Set up visibility change handler to reconnect when tab becomes visible
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
+      document.addEventListener('visibilitychange', this.boundVisibilityHandler);
     }
     
     // Set up online/offline handlers
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', this.handleOnline.bind(this));
-      window.addEventListener('offline', this.handleOffline.bind(this));
+      window.addEventListener('online', this.boundOnlineHandler);
+      window.addEventListener('offline', this.boundOfflineHandler);
     }
   }
 
@@ -139,20 +149,36 @@ class ConnectionManager {
 
   // Get WebSocket URL based on current environment
   private getWebSocketUrl(token: string): string {
+    // Always derive protocol from current page protocol for security
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    // Production mode - use same host and protocol
+    // Common WebSocket path
+    const wsPath = '/api/chat/ws';
+    
+    // Check if we should use Vite proxy or direct connection
+    // Production mode - use same host and protocol (let the proxy handle routing)
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      // Use current host - the proxy should handle routing to backend
-      return `${protocol}//${window.location.host}/api/chat/ws?token=${token}`;
+      const url = `${protocol}//${window.location.host}${wsPath}?token=${encodeURIComponent(token)}`;
+      console.log(`Using production WebSocket URL: ${url.replace(token, 'TOKEN_REDACTED')}`);
+      return url;
     }
     
-    // Development mode - use fixed backend port 8000
-    const backendPort = '8000'; // Hardcoded for simplicity
-    const backendHost = `${window.location.hostname}:${backendPort}`;
+    // Development mode with Vite proxy
+    if (import.meta.env.DEV) {
+      // In development, use the same host as the page but with the API path
+      // Vite will proxy this to the backend
+      const url = `${protocol}//${window.location.host}${wsPath}?token=${encodeURIComponent(token)}`;
+      console.log(`Using development WebSocket URL (via Vite proxy): ${url.replace(token, 'TOKEN_REDACTED')}`);
+      return url;
+    }
     
-    console.log(`Using WebSocket backend at ${protocol}//${backendHost}/api/chat/ws`);
-    return `${protocol}//${backendHost}/api/chat/ws?token=${token}`;
+    // Fallback to direct backend connection (rarely used, but kept for compatibility)
+    const backendPort = '8000';
+    const backendHost = `${window.location.hostname}:${backendPort}`;
+    const url = `${protocol}//${backendHost}${wsPath}?token=${encodeURIComponent(token)}`;
+    
+    console.log(`Using direct WebSocket backend: ${url.replace(token, 'TOKEN_REDACTED')}`);
+    return url;
   }
 
   // Initialize WebSocket connection with improved error handling
@@ -160,16 +186,43 @@ class ConnectionManager {
     this.authToken = token;
     this.saveConnectionState();
     
-    // Return existing connection if open
+    // CRITICAL FIX: Better connection state detection and handling
+    
+    // Check current WebSocket state and provide detailed status info
+    if (this.websocket) {
+      const stateStr = 
+        this.websocket.readyState === WebSocket.CONNECTING ? "CONNECTING" :
+        this.websocket.readyState === WebSocket.OPEN ? "OPEN" :
+        this.websocket.readyState === WebSocket.CLOSING ? "CLOSING" :
+        this.websocket.readyState === WebSocket.CLOSED ? "CLOSED" : "UNKNOWN";
+      
+      console.log(`[connectionManager] Current WebSocket state: ${stateStr} (${this.websocket.readyState})`);
+    } else {
+      console.log('[connectionManager] No existing WebSocket instance found');
+    }
+    
+    // Return existing connection if open - with added logging
     if (this.websocket?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected - reusing existing connection');
+      console.log('[connectionManager] WebSocket already connected - reusing existing connection');
+      this.updateConnectionStatus(ConnectionStatus.CONNECTED);
       return Promise.resolve(true);
     }
     
-    // Return existing promise if connecting
+    // Return existing promise if connecting - with added verification
     if (this.isConnecting && this.connectionPromise) {
-      console.log('WebSocket connection already in progress - waiting for result');
+      console.log('[connectionManager] WebSocket connection already in progress - waiting for result');
       return this.connectionPromise;
+    }
+    
+    // If we're in CLOSING state, wait a moment for it to complete before creating a new connection
+    if (this.websocket?.readyState === WebSocket.CLOSING) {
+      console.log('[connectionManager] WebSocket is currently closing - waiting before reconnecting');
+      return new Promise<boolean>((resolve) => {
+        setTimeout(() => {
+          // After delay, call connect again
+          resolve(this.connect(token));
+        }, 500);
+      });
     }
     
     // Clean up any resources before connecting
@@ -484,23 +537,52 @@ class ConnectionManager {
     this.stopHeartbeat();
   }
 
-  // Clean up all resources
+  // CRITICAL FIX: Enhanced resource cleanup to prevent memory leaks and stale connections
   private cleanupResources(): void {
+    // First clean up all timers
     this.cleanupTimeouts();
     
-    // Close existing connection if any
+    // Close existing connection if any, with detailed state checks
     if (this.websocket) {
       try {
-        // Only close if not already closing/closed
-        if (this.websocket.readyState === WebSocket.OPEN || this.websocket.readyState === WebSocket.CONNECTING) {
-          console.log('Closing existing WebSocket connection');
+        // Check current state and handle appropriately
+        const currentState = this.websocket.readyState;
+        const stateStr = 
+          currentState === WebSocket.CONNECTING ? "CONNECTING" :
+          currentState === WebSocket.OPEN ? "OPEN" :
+          currentState === WebSocket.CLOSING ? "CLOSING" :
+          currentState === WebSocket.CLOSED ? "CLOSED" : "UNKNOWN";
+          
+        console.log(`[connectionManager] Cleaning up WebSocket in ${stateStr} state`);
+        
+        // Only attempt to close if not already closing/closed
+        if (currentState === WebSocket.OPEN || currentState === WebSocket.CONNECTING) {
+          console.log('[connectionManager] Closing existing WebSocket connection');
+          
+          // Use a specific code and reason to help with debugging
           this.websocket.close(1000, 'Client closing connection for new connection');
+          
+          // Also remove all event listeners to prevent memory leaks
+          this.websocket.onopen = null;
+          this.websocket.onclose = null;
+          this.websocket.onerror = null;
+          this.websocket.onmessage = null;
+        } else {
+          console.log(`[connectionManager] No need to close WebSocket - already in ${stateStr} state`);
         }
       } catch (error) {
-        console.error('Error closing WebSocket:', error);
+        console.error('[connectionManager] Error closing WebSocket:', error);
+      } finally {
+        // Always null out the reference to allow garbage collection
+        this.websocket = null;
       }
-      this.websocket = null;
+    } else {
+      console.log('[connectionManager] No WebSocket instance to clean up');
     }
+    
+    // Reset connection state
+    this.isConnecting = false;
+    this.connectionPromise = null;
   }
 
   // Close connection and clean up
@@ -554,7 +636,34 @@ class ConnectionManager {
   public getStatus(): ConnectionStatus {
     return this.connectionStatus;
   }
+  
+  // Cleanup resources and event listeners
+  public cleanup(): void {
+    // Close WebSocket connection
+    this.closeConnection();
+    
+    // Remove event listeners
+    if (typeof document !== 'undefined' && this.boundVisibilityHandler) {
+      document.removeEventListener('visibilitychange', this.boundVisibilityHandler);
+      this.boundVisibilityHandler = null;
+    }
+    if (typeof window !== 'undefined') {
+      if (this.boundOnlineHandler) {
+        window.removeEventListener('online', this.boundOnlineHandler);
+        this.boundOnlineHandler = null;
+      }
+      if (this.boundOfflineHandler) {
+        window.removeEventListener('offline', this.boundOfflineHandler);
+        this.boundOfflineHandler = null;
+      }
+    }
+  }
 }
 
 // Export a singleton instance
 export const connectionManager = ConnectionManager.getInstance();
+
+// Export cleanup function for use in component unmount
+export function cleanupConnectionManager(): void {
+  connectionManager.cleanup();
+}

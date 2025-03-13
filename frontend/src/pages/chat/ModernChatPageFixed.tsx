@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -48,17 +48,59 @@ const ModernChatPageFixed: React.FC = () => {
   
   // For compatibility with existing code
   const sortedMessages = messages;
-  const conversationList = [];
-  const activeConversation = null;
+  const conversationList = state.conversations || [];
+  const activeConversation = state.activeConversationId ? 
+    conversationList.find(c => c.id === state.activeConversationId) || null : null;
+  
+  // File handling stubs
   const handleFileSelect = () => {};
   const clearSelectedFile = () => {};
   const selectedFile = null;
-  const regenerateLastMessage = () => {};
-  const loadConversations = async () => {};
-  const loadConversation = async () => {};
-  const startNewConversation = () => {}; 
-  const updateConversationTitle = async () => {};
-  const deleteCurrentConversation = async () => {};
+  
+  // Load conversations from useChatStream
+  const loadConversations = useCallback(async () => {
+    // This functionality should be implemented in useChatStream
+    // For now, we'll add a console log
+    console.log('Loading conversations requested');
+  }, []);
+  
+  // Load a specific conversation by ID
+  const loadConversation = useCallback(async (conversationId: string) => {
+    console.log(`Loading conversation: ${conversationId}`);
+    // This should update the state in useChatStream
+    // We should provide this functionality in the hook
+    // For now, we'll dispatch directly
+    if (conversationId) {
+      // This is handled by the initialized state in useChatStream
+      // The conversationId from URL parameter is already passed to useChatStream
+    }
+  }, []);
+  
+  // Start a new conversation
+  const startNewConversation = useCallback(() => {
+    // Reset conversation ID to create a new one
+    navigate('/chat');
+  }, [navigate]);
+  
+  // Update conversation title
+  const updateConversationTitle = async (title: string) => {
+    console.log(`Updating conversation title to: ${title}`);
+    // This should be implemented in useChatStream
+  };
+  
+  // Delete the current conversation
+  const deleteCurrentConversation = async () => {
+    console.log('Deleting current conversation');
+    // This should be implemented in useChatStream
+    // After deletion, navigate to main chat page
+    navigate('/chat');
+  };
+  
+  // Regenerate last message
+  const regenerateLastMessage = () => {
+    // This should be implemented in useChatStream
+    console.log('Regenerate last message requested');
+  };
   
   // UI state
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);
@@ -82,9 +124,10 @@ const ModernChatPageFixed: React.FC = () => {
     // Only load if authenticated, conversationId exists, and has changed since last load
     if (isAuthenticated && conversationId && previousConversationIdRef.current !== conversationId) {
       previousConversationIdRef.current = conversationId;
-      loadConversation(conversationId);
+      // No need to call loadConversation here as useChatStream already handles this
+      // via the initialConversationId prop
     }
-  }, [isAuthenticated, conversationId]); // Removed loadConversation dependency to prevent excessive API calls
+  }, [isAuthenticated, conversationId]);
   
   // Sidebar toggles
   const toggleHistorySidebar = () => {

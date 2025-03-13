@@ -361,8 +361,8 @@ export default memo(ChatWindowFixed, (prevProps, nextProps) => {
   if (prevProps.isGenerating !== nextProps.isGenerating) return false;
   if (prevProps.isLoading !== nextProps.isLoading) return false;
   
-  // During active generation, always re-render to ensure smooth updates
-  if (nextProps.isGenerating) return false;
+  // Check message content only when necessary
+  if (nextProps.isGenerating !== prevProps.isGenerating) return false;
   
   // Check if messages array is undefined
   if (!prevProps.messages || !nextProps.messages) return false;

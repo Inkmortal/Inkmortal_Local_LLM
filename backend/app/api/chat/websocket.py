@@ -78,13 +78,28 @@ class ConnectionManager:
             logger.warning(f"Empty connections list for user {user_id}")
             return
         
+        # CRITICAL FIX: Validate and ensure proper message ID
+        message_id = data.get("message_id")
+        if not message_id or message_id == "unknown" or message_id == "undefined":
+            logger.error(f"INVALID MESSAGE ID in update: {message_id}")
+            # Use conversation ID + timestamp as fallback if provided
+            conversation_id = data.get("conversation_id")
+            if conversation_id:
+                fallback_id = f"{conversation_id}_{int(time.time())}"
+                logger.warning(f"Using fallback ID: {fallback_id}")
+                data["message_id"] = fallback_id
+            else:
+                # Last resort fallback
+                data["message_id"] = f"fallback_{int(time.time())}"
+                logger.warning(f"Using last resort fallback ID: {data['message_id']}")
+        
         # Ensure content_update_type is set if we have assistant_content
         if "assistant_content" in data and "content_update_type" not in data:
             data["content_update_type"] = content_update_type
         
         # Log what we're sending for debugging
         update_type = data.get("type")
-        message_id = data.get("message_id", "unknown")
+        message_id = data.get("message_id", "unknown") # Updated with fallback if needed
         conversation_id = data.get("conversation_id", "unknown")
         status = data.get("status", "unknown")
         is_complete = data.get("is_complete", False)
@@ -108,15 +123,37 @@ class ConnectionManager:
             
         # Send the message to all connections
         success_count = 0
-        for connection in connections:
+        disconnected = []
+        
+        # CRITICAL FIX: Make a copy of connections to avoid modifying while iterating
+        for connection in list(connections):
             try:
                 if connection.client_state == WebSocketState.CONNECTED:
                     await connection.send_json(data)
                     success_count += 1
                 else:
-                    logger.warning(f"Skipping disconnected WebSocket for user {user_id}")
+                    logger.warning(f"Found disconnected WebSocket for user {user_id}")
+                    disconnected.append(connection)
             except Exception as e:
                 logger.error(f"Error sending WebSocket update: {str(e)}")
+                # Add to disconnected list if there was an error sending
+                disconnected.append(connection)
+        
+        # CRITICAL FIX: Clean up any disconnected connections we found
+        if disconnected:
+            logger.info(f"Cleaning up {len(disconnected)} disconnected WebSockets for user {user_id}")
+            for connection in disconnected:
+                # Remove from active_connections list
+                if user_id in self.active_connections:
+                    self.active_connections[user_id] = [
+                        conn for conn in self.active_connections[user_id] 
+                        if conn is not connection
+                    ]
+                # Clean up connection time
+                if connection in self.connection_times:
+                    duration = time.time() - self.connection_times[connection]
+                    del self.connection_times[connection]
+                    logger.info(f"Removed stale WebSocket connection for user {user_id} after {duration:.2f} seconds")
         
         if "assistant_content" in data:
             logger.info(f"WebSocket update sent to {success_count}/{len(connections)} connections for user {user_id}")

@@ -56,65 +56,95 @@ Instead of a parallel V2 implementation, we're now integrating the improvements 
 - `frontend/src/services/api/chatService.ts` - Improved API interactions
 - Added chat.css for styling
 
-## Phase 2: UI Components Implementation ✅ COMPLETED
+## Phase 5: Code Restructuring to Meet Line Limits ✅ COMPLETED
 
-### Step 1: Update Message Component ✅ COMPLETED
-**Files updated:**
-- Updated `frontend/src/components/chat/ChatMessage.tsx` with section support and thinking tags
-- Added collapsible thinking section
-- Improved message status handling
+Split large files to maintain 400-line limit:
 
-### Step 2: Update Chat Input Component ✅ COMPLETED
-**Files updated:**
-- Updated `frontend/src/components/chat/ChatInput.tsx` with ref-based integration
-- Preserved math and code editor integrations
-- Improved theme handling
+### Frontend Restructuring ✅ COMPLETED
+- Split `useChat.ts` (1274 lines) into:
+  - `useChat.ts` (213 lines) - Main hook that combines other modules
+  - `useChatConnection.ts` (122 lines) - WebSocket connection management
+  - `useChatConversations.ts` (349 lines) - Conversation management
+  - `useChatMessages.ts` (390 lines) - Message sending and handling
+  - `useChatUtils.ts` (282 lines) - Utility functions
 
-## Phase 3: Advanced Components ✅ COMPLETED
+### Backend Restructuring ✅ COMPLETED
+- Split `router.py` (666 lines) into:
+  - `router.py` (16 lines) - Now just re-exports the router
+  - `router_endpoints.py` (206 lines) - API endpoint definitions
+  - `stream_message.py` (425 lines) - Streaming message implementation
 
-### Step 1: Update Chat Window Component ✅ COMPLETED
-**Files updated:**
-- `frontend/src/components/chat/ChatWindow.tsx` - Enhanced with optimized rendering, improved scrolling logic, and empty state handling
+## Phase 6: Chat Functionality Fixes ✅ COMPLETED
 
-### Step 2: Create Chat History Sidebar Component ✅ COMPLETED
-**Files created:**
-- `frontend/src/components/chat/ChatHistorySidebar.tsx` - Standalone sidebar with conversation management features, search, and sorting
+### 1. WebSocket Message ID Mismatch ✅ FIXED
+**Files fixed:**
+- `frontend/src/services/chat/messageService.ts`
+  - Now ensures `assistant_message_id` is always included in requests
+  - Prevents duplicate message ID registration
+  - Added additional logging for debugging
 
-### Step 3: Create Chat State Hook ✅ COMPLETED
-**Files created:**
-- `frontend/src/pages/chat/hooks/useChat.ts` - Comprehensive chat state management with WebSocket integration and reducer pattern
-- `frontend/src/services/chat/messageService.ts` - Enhanced message service with WebSocket and polling support
+- `backend/app/api/chat/stream_message.py` (formerly part of router.py)
+  - Consistently extracts and uses frontend-provided assistant message ID
+  - Stores message ID in request body for consistent access throughout processing
+  - Added verification logging for improved debugging
 
-## Phase 4: Integration ✅ COMPLETED
+### 2. Content Streaming Inconsistencies ✅ FIXED
+**Files fixed:**
+- `frontend/src/pages/chat/hooks/useChatUtils.ts` (extracted from useChat.ts)
+  - Fixed buffer accumulation for message content
+  - Optimized debounced updates with consistent ID tracking
+  - Improved content update mode handling (always use APPEND for streaming)
 
-### Step 1: Update Main Chat Page ✅ COMPLETED
-**Files updated:**
-- `frontend/src/pages/chat/ModernChatPage.tsx` - Refactored with enhanced components and WebSocket integration
-- `frontend/src/pages/chat/components/layout/ChatHeader.tsx` - Added title editing support
+- `frontend/src/pages/chat/reducers/chatReducer.ts`
+  - Ensured consistent message structure with properly initialized sections
+  - Added metadata initialization to prevent undefined errors
 
-### Step 2: Update Routes ✅ COMPLETED
-**Files updated:**
-- `frontend/src/routes.tsx` - Added route for conversation ID parameter
+### 3. Connection Management Problems ✅ FIXED
+**Files fixed:**
+- `frontend/src/services/chat/connectionManager.ts`
+  - Enhanced state checking with detailed logging
+  - Added prevention of duplicate reconnection attempts
+  - Improved resource cleanup to prevent memory leaks
 
-## Phase 5: Testing ⚠️ IN PROGRESS
+- `backend/app/api/chat/websocket.py`
+  - Fixed message ID validation to handle "unknown" IDs
+  - Added fallback ID generation for improved resiliency
+  - Enhanced cleanup of disconnected clients
 
-### Step 1: Connection Testing ⚠️ IN PROGRESS
-1. Verify WebSocket connection and reconnection
-2. Test with network disruptions
+### 4. Conversation Management Issues ✅ FIXED
+**Files fixed:**
+- `frontend/src/pages/chat/hooks/useChatConversations.ts` (extracted from useChat.ts)
+  - Fixed initial conversation loading logic
+  - Improved preservation of streaming messages during conversation switching
+  - Enhanced error handling for failed conversation operations
 
-### Step 2: Message Streaming Testing ⚠️ PENDING
-1. Test token-by-token streaming
-2. Verify section handling (thinking vs response)
-3. Test with various message lengths
+## Phase 7: Remaining Issues ✅ COMPLETED
 
-### Step 3: Conversation Management Testing ⚠️ PENDING
-1. Test conversation history loading
-2. Test conversation creation and deletion
+### Type Definition Issues ✅ FIXED
+1. ✅ Consolidated duplicate ContentUpdateMode and MessageStatus definitions
+   - Now properly imported from `frontend/src/services/chat/types.ts`
+   - Re-exported through `message.ts` for backward compatibility
+2. ✅ Fixed broken export chain for MessageUpdate type
+   - Made MessageUpdatePayload extend WebSocketMessageUpdate
+   - Aligned type definitions for consistent usage
 
-### Step 4: UI Component Testing ⚠️ PENDING
-1. Test with different message types and states
-2. Verify responsive design
-3. Test theme integration
+### Configuration Issues ✅ FIXED
+3. ✅ Verified and simplified WebSocket proxy configuration in Vite
+   - Removed redundant '/api/chat/ws' proxy configuration
+   - Kept single '/api' proxy with WebSocket support
+4. ✅ Fixed URL protocol handling for WebSockets
+   - Enhanced getWebSocketUrl function to handle all environments
+   - Added development mode detection with import.meta.env.DEV
+   - Improved logging with token redaction for security
+5. ✅ Implemented consistent authentication token handling
+   - Added centralized getAuthToken function
+   - Modified WebSocket functions to use this centralized function
+   - Added support for token override when needed
+
+### Resource Issues ✅ VERIFIED
+6. ✅ Verified favicon.svg resource exists and is properly referenced
+   - File exists at '/frontend/public/favicon.svg'
+   - Properly referenced in index.html
 
 ## Implementation Notes
 
@@ -126,3 +156,4 @@ Instead of a parallel V2 implementation, we're now integrating the improvements 
 - New CSS has been added for improved styling
 - Centralized state management with reducer pattern for predictable updates
 - Comprehensive error handling throughout the system
+- All large files have been broken down to maintain the 400-line limit

@@ -196,10 +196,29 @@ export class StreamingMessageManager {
     this.contentBuffer = {};
     this.debounceTimers = {};
   }
+  
+  // Complete cleanup of all resources
+  public cleanup(): void {
+    // Clear all buffers and timers
+    this.clear();
+    
+    // Clear all callbacks
+    this.updateCallbacks.clear();
+    this.globalCallbacks.clear();
+    
+    // Unsubscribe from message updates
+    // Note: This assumes the subscription is stored somewhere globally
+    // We might need to store the unsubscribe function from subscribeToMessageUpdates
+  }
 }
 
 // Export singleton instance
 export const streamingManager = StreamingMessageManager.getInstance();
+
+// Export cleanup function for use in component unmount
+export function cleanupStreamingManager(): void {
+  streamingManager.cleanup();
+}
 
 /**
  * Hook to subscribe to message updates
