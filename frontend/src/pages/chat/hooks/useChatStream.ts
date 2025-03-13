@@ -145,34 +145,59 @@ export function useChatStream({
     };
   }, [autoConnect, subscribeToMessages, handleMessageUpdate]);
   
-  // Send a chat message
+  // Send a chat message with optimistic UI updates
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
     if (!content.trim() && !file) {
       return; // Don't send empty messages without files
     }
     
     try {
-      // Ensure we have an active conversation ID
-      const conversationId = state.activeConversationId || null;
+      // Generate temporary conversation ID if needed
+      const tempConversationId = uuidv4();
+      
+      // Determine the conversation ID to use:
+      // 1. Use existing conversation ID if available
+      // 2. Otherwise, use the new temporary ID
+      const conversationId = state.activeConversationId || tempConversationId;
       
       // Generate message IDs
       const userMessageId = uuidv4();
       const assistantMessageId = uuidv4();
       
-      // Create user message
+      // If we're creating a new conversation, set it as active immediately
+      if (!state.activeConversationId) {
+        console.log(`[useChatStream] Creating new conversation with temp ID: ${tempConversationId}`);
+        dispatch({
+          type: ChatActionType.SET_ACTIVE_CONVERSATION,
+          payload: tempConversationId
+        });
+        
+        // Also add a temporary conversation object
+        dispatch({
+          type: ChatActionType.ADD_CONVERSATION,
+          payload: {
+            id: tempConversationId,
+            title: "New conversation",
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+        });
+      }
+      
+      // Create user message with the determined conversationId
       const userMessage: Message = {
         id: userMessageId,
-        conversationId: conversationId || '',
+        conversationId: conversationId,
         role: MessageRole.USER,
         content,
         timestamp: Date.now(),
         status: MessageStatus.SENDING
       };
       
-      // Create placeholder assistant message
+      // Create placeholder assistant message with the same conversationId
       const assistantMessage: Message = {
         id: assistantMessageId,
-        conversationId: conversationId || '',
+        conversationId: conversationId,
         role: MessageRole.ASSISTANT,
         content: '',
         timestamp: Date.now(),
@@ -183,7 +208,7 @@ export function useChatStream({
         }
       };
       
-      // Add messages to state
+      // Add messages to state immediately for optimistic UI update
       dispatch({ 
         type: ChatActionType.ADD_MESSAGE, 
         payload: userMessage 
@@ -206,20 +231,21 @@ export function useChatStream({
         isConnected = isWebSocketConnected() || await ensureWebSocketConnection(token);
       }
       
-      console.log('WebSocket connected:', isConnected);
+      console.log('[useChatStream] WebSocket connected:', isConnected);
       
       // Register assistant message ID for tracking
-      registerMessage(assistantMessageId, assistantMessageId, conversationId || '');
+      registerMessage(assistantMessageId, assistantMessageId, conversationId);
       
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
       
-      // Send message - match the expected parameter format of messageService.ts
+      // Send message to backend
+      console.log(`[useChatStream] Sending message to backend with conversationId: ${conversationId}`);
       const response = await sendChatMessage(
         content,                  // message parameter
-        conversationId || '',     // conversationId parameter
+        conversationId,           // conversationId parameter (never empty string now)
         file || null,             // file parameter
-        {                         // handlers parameter (empty object)
+        {                         // handlers parameter
           onStatusUpdate: (status) => {
             console.log(`[useChatStream] Message status update: ${status}`);
           }
@@ -227,13 +253,24 @@ export function useChatStream({
         assistantMessageId        // assistantMessageId parameter
       );
       
-      // Handle immediate response (usually just IDs)
+      // Handle backend response with real IDs
       if (response && response.conversation_id) {
-        // If we didn't have a conversation ID, update it now
-        if (!conversationId) {
+        console.log(`[useChatStream] Received conversation_id from backend: ${response.conversation_id}`);
+        
+        // If the backend returned a different conversation ID than our temp one
+        if (!state.activeConversationId || 
+            (state.activeConversationId === tempConversationId && 
+             response.conversation_id !== tempConversationId)) {
+              
+          console.log(`[useChatStream] Syncing with backend conversation ID: ${response.conversation_id}`);
+          
+          // Update our state with the real conversation ID
           dispatch({
-            type: ChatActionType.SET_ACTIVE_CONVERSATION,
-            payload: response.conversation_id
+            type: ChatActionType.SYNC_CONVERSATION_ID,
+            payload: {
+              oldId: conversationId,
+              newId: response.conversation_id
+            }
           });
         }
       }

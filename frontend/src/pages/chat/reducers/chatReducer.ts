@@ -31,7 +31,8 @@ export enum ChatActionType {
   SET_ERROR = 'SET_ERROR',
   CLEAR_ERROR = 'CLEAR_ERROR',
   SET_WEBSOCKET_CONNECTED = 'SET_WEBSOCKET_CONNECTED',
-  SET_GENERATING = 'SET_GENERATING'
+  SET_GENERATING = 'SET_GENERATING',
+  SYNC_CONVERSATION_ID = 'SYNC_CONVERSATION_ID' // New action for syncing temporary IDs with backend
 }
 
 export type ChatAction =
@@ -47,7 +48,8 @@ export type ChatAction =
   | { type: ChatActionType.SET_ERROR; payload: Error }
   | { type: ChatActionType.CLEAR_ERROR }
   | { type: ChatActionType.SET_WEBSOCKET_CONNECTED; payload: boolean }
-  | { type: ChatActionType.SET_GENERATING; payload: boolean };
+  | { type: ChatActionType.SET_GENERATING; payload: boolean }
+  | { type: ChatActionType.SYNC_CONVERSATION_ID; payload: { oldId: string, newId: string } };
 
 export const initialChatState: ChatState = {
   messages: {},
@@ -309,6 +311,59 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         isGenerating: action.payload
       };
+    
+    case ChatActionType.SYNC_CONVERSATION_ID: {
+      const { oldId, newId } = action.payload;
+      
+      console.log(`[chatReducer] Syncing conversation ID: ${oldId} → ${newId}`);
+      
+      // If IDs are the same, no need to sync
+      if (oldId === newId) {
+        console.log(`[chatReducer] IDs are the same, no syncing needed`);
+        return state;
+      }
+      
+      // Update conversation object if it exists
+      const updatedConversations = { ...state.conversations };
+      if (updatedConversations[oldId]) {
+        // Create conversation with new ID
+        updatedConversations[newId] = {
+          ...updatedConversations[oldId],
+          id: newId
+        };
+        
+        // Remove old ID entry
+        delete updatedConversations[oldId];
+        console.log(`[chatReducer] Updated conversation object: ${oldId} → ${newId}`);
+      }
+      
+      // Update all message objects that reference the old conversation ID
+      const updatedMessages = { ...state.messages };
+      let messageUpdateCount = 0;
+      
+      Object.keys(updatedMessages).forEach(messageId => {
+        const message = updatedMessages[messageId];
+        if (message.conversationId === oldId) {
+          updatedMessages[messageId] = {
+            ...message,
+            conversationId: newId
+          };
+          messageUpdateCount++;
+        }
+      });
+      
+      console.log(`[chatReducer] Updated ${messageUpdateCount} messages with new conversation ID`);
+      
+      // Update active conversation ID if needed
+      const updatedActiveId = state.activeConversationId === oldId ? newId : state.activeConversationId;
+      
+      return {
+        ...state,
+        messages: updatedMessages,
+        conversations: updatedConversations,
+        activeConversationId: updatedActiveId
+      };
+    }
       
     default:
       return state;
