@@ -157,3 +157,17 @@ Split large files to maintain 400-line limit:
 - Centralized state management with reducer pattern for predictable updates
 - Comprehensive error handling throughout the system
 - All large files have been broken down to maintain the 400-line limit
+
+## Bug Fixes
+
+1. ✅ **Fixed Circular Dependency**: Resolved circular dependency between websocketService.ts and streamingManager.ts by directly importing types from their source.
+   - Modified streamingManager.ts to import MessageUpdate from types.ts directly
+   - Removed re-export of MessageUpdate from websocketService.ts
+
+2. ✅ **Fixed Function Reference Order**: Resolved "Cannot access handleMessageUpdate before initialization" error
+   - Moved the handleMessageUpdate function declaration before its usage in useEffect
+   - Ensured proper function order in useChatStream.ts
+
+3. ✅ **Fixed Favicon Loading**: Addressed 404 error for favicon.svg
+   - Verified favicon.svg exists in the correct location
+   - Updated Vite base path to use relative URLs (./ instead of /)

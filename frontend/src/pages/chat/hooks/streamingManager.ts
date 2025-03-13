@@ -7,11 +7,10 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { 
   subscribeToMessageUpdates, 
-  registerMessageId,
-  MessageUpdate,
-  ContentUpdateMode
+  registerMessageId
 } from '../../../services/chat/websocketService';
-import { MessageStatus } from '../types/message';
+import { MessageStatus, ContentUpdateMode } from '../types/message';
+import { MessageUpdate } from '../../../services/chat/types';
 
 // Interface for buffered content state
 interface BufferedContent {

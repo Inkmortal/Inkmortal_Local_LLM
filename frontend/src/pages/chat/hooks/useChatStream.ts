@@ -77,36 +77,7 @@ export function useChatStream({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isGeneratingRef = useRef<boolean>(false);
   
-  // Setup effect: get token and set up message handling
-  useEffect(() => {
-    // Get token from localStorage
-    tokenRef.current = localStorage.getItem('token') || localStorage.getItem('authToken');
-    
-    // Connect WebSocket if needed
-    if (autoConnect && tokenRef.current) {
-      ensureWebSocketConnection(tokenRef.current);
-    }
-    
-    // Subscribe to streaming messages
-    const unsubscribe = subscribeToMessages(handleMessageUpdate);
-    
-    // Cleanup on unmount
-    return () => {
-      isMounted.current = false;
-      unsubscribe();
-      
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      
-      // If this was the last component using the connection,
-      // we could potentially clean up all WebSocket resources here
-      // But this would depend on the requirements of the application
-      // For now, we'll leave the singleton instances running
-    };
-  }, [autoConnect, subscribeToMessages, handleMessageUpdate]);
-  
-  // Handle message updates from WebSocket
+  // Handle message updates from WebSocket - MOVED BEFORE useEffect
   const handleMessageUpdate = useCallback((update: MessageUpdate) => {
     // Skip updates for messages that we don't know about
     if (!update.messageId) return;
@@ -145,209 +116,177 @@ export function useChatStream({
     }
   }, [state.isGenerating]);
   
+  // Setup effect: get token and set up message handling
+  useEffect(() => {
+    // Get token from localStorage
+    tokenRef.current = localStorage.getItem('token') || localStorage.getItem('authToken');
+    
+    // Connect WebSocket if needed
+    if (autoConnect && tokenRef.current) {
+      ensureWebSocketConnection(tokenRef.current);
+    }
+    
+    // Subscribe to streaming messages
+    const unsubscribe = subscribeToMessages(handleMessageUpdate);
+    
+    // Cleanup on unmount
+    return () => {
+      isMounted.current = false;
+      unsubscribe();
+      
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // If this was the last component using the connection,
+      // we could potentially clean up all WebSocket resources here
+      // But this would depend on the requirements of the application
+      // For now, we'll leave the singleton instances running
+    };
+  }, [autoConnect, subscribeToMessages, handleMessageUpdate]);
+  
   // Send a chat message
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
-    // Prevent sending empty messages
     if (!content.trim() && !file) {
-      console.warn('Attempted to send empty message');
-      return;
+      return; // Don't send empty messages without files
     }
-    
-    // Check for existing generation in progress
-    if (state.isGenerating || isGeneratingRef.current) {
-      showError('A message is already being generated. Please wait or stop generation.');
-      return;
-    }
-    
-    // Create temp IDs for immediate UI feedback
-    const messageId = uuidv4();
-    const assistantMessageId = uuidv4();
-    const now = Date.now();
-    
-    // Create user message
-    const userMessage: Message = {
-      id: messageId,
-      conversationId: state.activeConversationId || 'temp-id',
-      role: MessageRole.USER,
-      content,
-      status: MessageStatus.SENDING,
-      timestamp: now
-    };
-    
-    // Create placeholder for assistant response
-    const assistantMessage: Message = {
-      id: assistantMessageId,
-      conversationId: state.activeConversationId || 'temp-id',
-      role: MessageRole.ASSISTANT,
-      content: '',
-      status: MessageStatus.STREAMING,
-      timestamp: now,
-      sections: {
-        response: { content: '', visible: true },
-        thinking: { content: '', visible: true }
-      }
-    };
-    
-    // Add messages to state for immediate feedback
-    dispatch({ type: ChatActionType.ADD_MESSAGE, payload: userMessage });
-    dispatch({ type: ChatActionType.ADD_MESSAGE, payload: assistantMessage });
-    
-    // Set generating state
-    isGeneratingRef.current = true;
-    dispatch({ type: ChatActionType.SET_GENERATING, payload: true });
-    
-    // Log the message we're sending
-    console.log(`Sending message with assistant ID: ${assistantMessageId}`);
     
     try {
-      // Use current conversation ID or create a new one on backend
-      const conversationId = state.activeConversationId || undefined;
+      // Ensure we have an active conversation ID
+      const conversationId = state.activeConversationId || null;
       
-      // Ensure WebSocket is connected if we have a token
-      let useWebSocket = isWebSocketConnected();
-      if (!useWebSocket && tokenRef.current) {
-        useWebSocket = await ensureWebSocketConnection(tokenRef.current);
-      }
+      // Generate message IDs
+      const userMessageId = uuidv4();
+      const assistantMessageId = uuidv4();
       
-      // Register our message ID before sending the request
-      if (useWebSocket && conversationId) {
-        // Pre-register for message ID mapping
-        registerMessage(assistantMessageId, assistantMessageId, conversationId);
-      }
-      
-      // Send message to server
-      const response = await sendChatMessage(
+      // Create user message
+      const userMessage: Message = {
+        id: userMessageId,
+        conversationId: conversationId || '',
+        role: MessageRole.USER,
         content,
-        conversationId || '',
-        file,
-        {
-          onError: (error) => {
-            // Handle errors
-            console.error('Error sending message:', error);
-            
-            // Update message status
-            dispatch({
-              type: ChatActionType.UPDATE_MESSAGE,
-              payload: {
-                messageId: assistantMessageId,
-                status: MessageStatus.ERROR,
-                metadata: { error }
-              }
-            });
-            
-            // Reset generating state
-            isGeneratingRef.current = false;
-            dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
-          }
+        timestamp: Date.now(),
+        status: MessageStatus.SENDING
+      };
+      
+      // Create placeholder assistant message
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        conversationId: conversationId || '',
+        role: MessageRole.ASSISTANT,
+        content: '',
+        timestamp: Date.now(),
+        status: MessageStatus.PENDING,
+        sections: {
+          response: { content: '', visible: true },
+          thinking: { content: '', visible: false }
+        }
+      };
+      
+      // Add messages to state
+      dispatch({ 
+        type: ChatActionType.ADD_MESSAGE, 
+        payload: userMessage 
+      });
+      
+      dispatch({ 
+        type: ChatActionType.ADD_MESSAGE, 
+        payload: assistantMessage 
+      });
+      
+      // Set generating state
+      isGeneratingRef.current = true;
+      dispatch({ type: ChatActionType.SET_GENERATING, payload: true });
+      
+      // Ensure WebSocket connection is active
+      const token = tokenRef.current;
+      let isConnected = false;
+      
+      if (token) {
+        isConnected = isWebSocketConnected() || await ensureWebSocketConnection(token);
+      }
+      
+      console.log('WebSocket connected:', isConnected);
+      
+      // Register assistant message ID for tracking
+      registerMessage(assistantMessageId, assistantMessageId, conversationId || '');
+      
+      // Create abort controller for this request
+      abortControllerRef.current = new AbortController();
+      
+      // Send message
+      const response = await sendChatMessage({
+        message: content,
+        conversation_id: conversationId,
+        file: file || undefined,
+        assistant_message_id: assistantMessageId,
+        transport_mode: 'websocket',
+        headers: {
+          'X-Client-Type': 'react-web-client'
         },
-        assistantMessageId
-      );
+        mode: 'streaming'
+      }, abortControllerRef.current.signal);
       
-      // Update conversation ID if this was a new conversation
-      if (response.conversation_id && !state.activeConversationId) {
-        dispatch({
-          type: ChatActionType.SET_ACTIVE_CONVERSATION,
-          payload: response.conversation_id
-        });
-        
-        // Update message conversation IDs
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId,
-            metadata: { conversationId: response.conversation_id }
-          }
-        });
-        
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId: assistantMessageId,
-            metadata: { conversationId: response.conversation_id }
-          }
-        });
-      }
-      
-      // If we got a different ID back from the server, register the mapping
-      if (response.message_id && response.message_id !== assistantMessageId) {
-        registerMessage(
-          assistantMessageId,
-          response.message_id,
-          response.conversation_id || state.activeConversationId || ''
-        );
-      }
-      
-      // Update user message to show it's been sent
-      dispatch({
-        type: ChatActionType.UPDATE_MESSAGE,
-        payload: {
-          messageId,
-          status: MessageStatus.COMPLETE
+      // Handle immediate response (usually just IDs)
+      if (response && response.conversation_id) {
+        // If we didn't have a conversation ID, update it now
+        if (!conversationId) {
+          dispatch({
+            type: ChatActionType.SET_ACTIVE_CONVERSATION,
+            payload: response.conversation_id
+          });
         }
-      });
-      
-      // With WebSocket streaming we're done at this point
-      // Updates will happen via WebSocket events
-      console.log(`Message sent with assistant ID: ${assistantMessageId}`);
+      }
     } catch (error) {
-      console.error('Error in sendMessage:', error);
-      
-      // Update assistant message to show error
-      dispatch({
-        type: ChatActionType.UPDATE_MESSAGE,
-        payload: {
-          messageId: assistantMessageId,
-          status: MessageStatus.ERROR,
-          metadata: { 
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
-        }
-      });
+      console.error('Error sending message:', error);
       
       // Reset generating state
       isGeneratingRef.current = false;
       dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
+      
+      // Show error notification
+      showError(error instanceof Error ? error.message : 'Error sending message');
     }
-  }, [state.activeConversationId, registerMessage, state.isGenerating]);
+  }, [state.activeConversationId, registerMessage]);
   
-  // Stop message generation
+  // Stop ongoing generation
   const stopGeneration = useCallback(() => {
-    if (!state.isGenerating && !isGeneratingRef.current) return;
-    
-    // TODO: Implement stop generation (requires backend support)
-    console.log('Stopping generation is not yet implemented');
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     
     // Reset generating state
     isGeneratingRef.current = false;
     dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
     
-    // Find the most recent assistant message
-    const messages = Object.values(state.messages);
-    const assistantMessages = messages
-      .filter(msg => msg.role === MessageRole.ASSISTANT)
-      .sort((a, b) => b.timestamp - a.timestamp);
-    
-    // Mark it as complete
-    if (assistantMessages.length > 0) {
+    // Update the last message to show it's been stopped
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage && lastMessage.role === MessageRole.ASSISTANT) {
       dispatch({
         type: ChatActionType.UPDATE_MESSAGE,
         payload: {
-          messageId: assistantMessages[0].id,
+          messageId: lastMessage.id,
           status: MessageStatus.COMPLETE,
-          isComplete: true
+          isComplete: true,
+          metadata: {
+            stopped: true
+          }
         }
       });
     }
-  }, [state.messages, state.isGenerating]);
-  
-  // Compute derived data for components
-  const messages = useMemo(() => {
-    // Extract an array of messages sorted by timestamp
-    return Object.values(state.messages)
-      .sort((a, b) => a.timestamp - b.timestamp);
   }, [state.messages]);
   
-  // Return public interface
+  // Compute filtered messages based on active conversation
+  const messages = useMemo(() => {
+    if (!state.activeConversationId) return [];
+    
+    return state.messages.filter(
+      message => message.conversationId === state.activeConversationId
+    );
+  }, [state.messages, state.activeConversationId]);
+  
+  // Return interface
   return {
     state,
     sendMessage,

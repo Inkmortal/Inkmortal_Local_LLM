@@ -24,5 +24,5 @@ export default defineConfig({
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx']
   },
-  base: '/' // Explicitly set the base URL
+  base: './', // Use relative paths for better compatibility
 })

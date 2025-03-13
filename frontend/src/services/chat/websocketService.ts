@@ -13,7 +13,6 @@ import { MessageStatus, ContentUpdateMode } from './types';
 export { ConnectionStatus } from './connectionManager';
 export { MessageType } from './messageHandler';
 export { MessageStatus, ContentUpdateMode } from './types';
-export type { MessageUpdate } from './types';
 
 /**
  * Get authentication token for WebSocket connection
