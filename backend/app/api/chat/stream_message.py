@@ -109,77 +109,114 @@ async def stream_message(
             user_id=user.id
         )
         
-        # Set up streaming response
-        async def event_stream():
-            # CRITICAL FIX: Always use the frontend-provided assistant message ID if available
-            # Extract it once and store it consistently throughout the request lifecycle
-            assistant_message_id = request_obj.body.get("assistant_message_id")
+        # ARCHITECTURAL CHANGE: Extract and validate the assistant_message_id before any processing paths
+        assistant_message_id = request_obj.body.get("assistant_message_id")
+        
+        if not assistant_message_id:
+            assistant_message_id = generate_id()
+            logger.warning(f"No assistant_message_id provided by frontend - generated new ID: {assistant_message_id}")
+            # Store the generated ID back in the request body for consistent access
+            request_obj.body["assistant_message_id"] = assistant_message_id
+        else:
+            logger.info(f"Using frontend-provided assistant message ID: {assistant_message_id}")
             
-            if not assistant_message_id:
-                assistant_message_id = generate_id()
-                logger.warning(f"No assistant_message_id provided by frontend - generated new ID: {assistant_message_id}")
-                # Store the generated ID back in the request body for consistent access
-                request_obj.body["assistant_message_id"] = assistant_message_id
+        # Log detailed verification of the assistant_message_id
+        logger.info(f"VERIFICATION: assistant_message_id is set to '{assistant_message_id}' and stored in request_obj.body")
+        
+        # Extract transport mode first to make decisions
+        transport_mode = request_obj.body.get("transport_mode")
+        
+        # Fallback to header-based detection if transport_mode is not explicitly set
+        if not transport_mode:
+            request_headers = request_obj.body.get("headers", {})
+            is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
+            transport_mode = "websocket" if is_websocket_client else "sse"
+        else:
+            is_websocket_client = transport_mode == "websocket"
+        
+        # ARCHITECTURAL CHANGE: Process the queue request before any response path is determined
+        try:
+            # Add request to queue with error handling - NOW HAPPENS FOR ALL CLIENTS
+            logger.info(f"Adding request to queue: user_id={user.id}, conversation_id={conversation_id}, message_id={assistant_message_id}")
+            logger.info(f"Request priority: {request_obj.priority}, endpoint: {request_obj.endpoint}, transport mode: {transport_mode}")
+            
+            # Verify the type of the priority
+            if hasattr(request_obj.priority, 'name'):
+                logger.info(f"Priority is an enum: {request_obj.priority.name} (value: {request_obj.priority.value})")
             else:
-                logger.info(f"Using frontend-provided assistant message ID: {assistant_message_id}")
+                logger.warning(f"Priority is not an enum: {request_obj.priority}")
+            
+            # Add the request to the queue - THIS NOW HAPPENS FOR ALL CLIENTS
+            queue_position = await queue_manager.add_request(request_obj)
+            
+            # Check if request was added to queue successfully
+            if queue_position < 0:
+                logger.error(f"Failed to add message to queue: position={queue_position}")
+                # Return error response to client
+                error_message = "Failed to add message to queue. Please try again."
                 
-            # Log detailed verification of the assistant_message_id
-            logger.info(f"VERIFICATION: assistant_message_id is set to '{assistant_message_id}' and stored in request_obj.body")
+                if transport_mode == "websocket":
+                    await manager.send_update(user.id, {
+                        "type": "message_update",
+                        "message_id": assistant_message_id,
+                        "conversation_id": conversation_id,
+                        "status": "ERROR",
+                        "error": error_message
+                    })
+                    # For WebSocket failures, still return a valid HTTP response
+                    response_data = {
+                        "error": error_message,
+                        "success": False
+                    }
+                    async def error_response_stream():
+                        yield json.dumps(response_data).encode('utf-8')
+                    return StreamingResponse(error_response_stream(), media_type="application/json")
+                else:
+                    # For SSE clients, return error in SSE format
+                    async def error_sse_stream():
+                        yield f"data: {json.dumps({'error': error_message})}\n\n".encode('utf-8')
+                    return StreamingResponse(error_sse_stream(), media_type="text/event-stream")
             
-            # CRITICAL: Log verification to ensure assistant_message_id remains consistent
-            logger.info(f"CRITICAL: Verifying assistant_message_id is set to: {assistant_message_id}")
+            # Successfully added to queue
+            logger.info(f"Successfully added request to queue: position={queue_position}")
             
+            # Track for WebSocket updates - HAPPENS FOR ALL CLIENTS
+            manager.track_request(request_obj.timestamp.timestamp(), user.id)
+            
+            # ARCHITECTURAL CHANGE: Now we branch for different response types
+            # after ensuring the request is always added to queue
+        except Exception as e:
+            logger.error(f"Error adding request to queue: {e}")
+            # Handle error consistently for both client types
+            if transport_mode == "websocket":
+                await manager.send_update(user.id, {
+                    "type": "message_update",
+                    "message_id": assistant_message_id,
+                    "conversation_id": conversation_id,
+                    "status": "ERROR",
+                    "error": str(e)
+                })
+                # For WebSocket clients - return JSON error
+                response_data = {
+                    "error": str(e),
+                    "success": False
+                }
+                async def exception_response_stream():
+                    yield json.dumps(response_data).encode('utf-8')
+                return StreamingResponse(exception_response_stream(), media_type="application/json")
+            else:
+                # For SSE clients, return error in SSE format
+                async def exception_sse_stream():
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
+                return StreamingResponse(exception_sse_stream(), media_type="text/event-stream")
+        
+        # Set up streaming response - now this is only for the actual streaming part
+        async def event_stream():
             assistant_content = ""
             
             try:
-                # Add request to queue with error handling
-                logger.info(f"Adding request to queue: user_id={user.id}, conversation_id={conversation_id}, message_id={assistant_message_id}")
-                # Print the request body for debugging
-                logger.info(f"Request priority: {request_obj.priority}, endpoint: {request_obj.endpoint}")
-                
-                # Verify the type of the priority
-                if hasattr(request_obj.priority, 'name'):
-                    logger.info(f"Priority is an enum: {request_obj.priority.name} (value: {request_obj.priority.value})")
-                else:
-                    logger.warning(f"Priority is not an enum: {request_obj.priority}")
-                
-                # Add the request to the queue
-                queue_position = await queue_manager.add_request(request_obj)
-                
-                # Check if request was added to queue successfully
-                if queue_position < 0:
-                    logger.error(f"Failed to add message to queue: position={queue_position}")
-                    # Return error response to client
-                    error_message = "Failed to add message to queue. Please try again."
-                    if transport_mode == "websocket":
-                        await manager.send_update(user.id, {
-                            "type": "message_update",
-                            "message_id": assistant_message_id,
-                            "conversation_id": conversation_id,
-                            "status": "ERROR",
-                            "error": error_message
-                        })
-                    
-                    # Raise an exception to trigger error handling
-                    raise RuntimeError("Failed to add message to queue. See logs for details.")
-                
-                logger.info(f"Successfully added request to queue: position={queue_position}")
-                
-                # Track for WebSocket updates
-                manager.track_request(request_obj.timestamp.timestamp(), user.id)
-                
-                # Extract transport mode first to make decisions
-                transport_mode = request_obj.body.get("transport_mode")
-                
-                # Fallback to header-based detection if transport_mode is not explicitly set
-                if not transport_mode:
-                    request_headers = request_obj.body.get("headers", {})
-                    is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
-                    transport_mode = "websocket" if is_websocket_client else "sse"
-                else:
-                    is_websocket_client = transport_mode == "websocket"
-                
-                logger.info(f"Using transport mode: {transport_mode} for client")
+                # We've already added the request to the queue and determined transport_mode earlier
+                logger.info(f"Starting event_stream processing for transport_mode: {transport_mode}")
                 
                 # First update only for WebSocket clients - use assistant_message_id
                 if transport_mode == "websocket":
@@ -416,18 +453,11 @@ async def stream_message(
                 # Clean up
                 manager.untrack_request(request_obj.timestamp.timestamp())
         
+        # After request is added to queue, branch based on transport mode
         # Special case for WebSocket clients - return a properly formatted response
         # that matches the expected frontend structure but indicates responses will come via WebSocket
-        if request_body.get("transport_mode") == "websocket":
+        if transport_mode == "websocket":
             logger.info("WebSocket client detected - returning compatible HTTP response")
-            
-            # CRITICAL: Verify we're returning the correct message ID to the frontend
-            final_assistant_id = request_obj.body.get("assistant_message_id")
-            if final_assistant_id != assistant_message_id:
-                logger.warning(f"Final ID MISMATCH! Using {final_assistant_id} from request body instead of {assistant_message_id}")
-                assistant_message_id = final_assistant_id
-                
-            logger.info(f"Returning final HTTP response with message ID: {assistant_message_id}")
             
             # Create a proper message response format that the frontend expects
             response_data = {
@@ -439,8 +469,15 @@ async def stream_message(
                 "status": "streaming",  # Indicate streaming status
                 "websocket_mode": True,  # Custom flag to indicate WebSocket delivery
                 "success": True,  # Indicate success to prevent frontend error handling
-                "assistant_message_id": assistant_message_id  # Explicitly include assistant ID again for clarity
+                "assistant_message_id": assistant_message_id,  # Explicitly include assistant ID again for clarity
+                "queue_position": queue_position  # Include the queue position
             }
+            
+            # Start the WebSocket streaming process in background without awaiting
+            # This ensures the streaming happens even though we're returning HTTP response
+            asyncio.create_task(event_stream())
+            
+            logger.info(f"Created background task for WebSocket streaming, returning HTTP response for message ID: {assistant_message_id}")
             
             async def response_stream():
                 yield json.dumps(response_data).encode('utf-8')
@@ -448,6 +485,7 @@ async def stream_message(
             return StreamingResponse(response_stream(), media_type="application/json")
         
         # Return normal streaming response for SSE clients
+        logger.info("SSE client detected - returning streaming response")
         return StreamingResponse(event_stream(), media_type="text/event-stream")
     
     except Exception as e:

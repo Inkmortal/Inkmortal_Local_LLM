@@ -62,10 +62,6 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
             priorities_checked = []
             from ..queue.models import RequestPriority
             
-            # Get queue sizes to verify each priority queue
-            queue_sizes = await queue_manager.get_queue_size()
-            logger.info(f"Queue sizes before get_next_request: {queue_sizes}")
-            
             # Get next message from highest priority queue that has messages
             request = await queue_manager.get_next_request()
             
