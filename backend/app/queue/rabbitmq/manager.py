@@ -416,6 +416,17 @@ class RabbitMQManager(QueueManagerInterface):
             logger.error(f"Error getting queue position: {str(e)}")
             return None
     
+    async def handle_request_aging(self) -> None:
+        """
+        Handle aging of requests in queues.
+        
+        Note: Request aging is automatically handled by RabbitMQ's TTL and dead letter exchange mechanisms.
+        The aging.py module sets up the necessary infrastructure for automatic promotion of aged messages.
+        No manual intervention or periodic calls are needed - the system handles aging on its own.
+        """
+        # No implementation needed as RabbitMQ handles aging automatically
+        pass
+    
     def _add_to_history(self, request: QueuedRequest) -> None:
         """Add request to history"""
         self.request_history.append(request.to_dict())
