@@ -34,6 +34,8 @@ async def stream_message(
     assistant_message_id: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None
 ) -> StreamingResponse:
+    print("STREAM_MESSAGE: Function called!")
+    print(f"STREAM_MESSAGE: message_text={message_text[:20]}..., queue_manager={queue_manager}")
     """Process a message with true token-by-token streaming from Ollama"""
     # Create a new conversation if needed
     fresh_db = SessionLocal()

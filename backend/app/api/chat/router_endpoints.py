@@ -200,6 +200,7 @@ async def send_message_endpoint(
     current_user: User = Depends(get_current_user),
     queue_manager = Depends(get_queue)
 ):
+    print("ROUTER ENDPOINT: send_message_endpoint called!")
     """Send a message to the LLM and store the conversation - always uses streaming now
     
     IMPORTANT:
@@ -250,6 +251,8 @@ async def send_message_endpoint(
         
         # Always use streaming now - no more condition check
         # Using the synchronous queue_manager dependency (no need to await)
+        print("ROUTER ENDPOINT: About to call stream_message!")
+        print(f"ROUTER ENDPOINT: message_text={message_text[:20]}..., conversation_id={conversation_id}, assistant_message_id={assistant_message_id}")
         return await stream_message(
             db=db,
             user=current_user,
