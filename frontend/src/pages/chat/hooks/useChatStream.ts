@@ -281,7 +281,8 @@ export function useChatStream({
   const messages = useMemo(() => {
     if (!state.activeConversationId) return [];
     
-    return state.messages.filter(
+    // Convert from normalized state object to array, then filter
+    return Object.values(state.messages).filter(
       message => message.conversationId === state.activeConversationId
     );
   }, [state.messages, state.activeConversationId]);

@@ -46,9 +46,11 @@ const ModernChatPageFixed: React.FC = () => {
     autoConnect: true
   });
   
-  // For compatibility with existing code
+  // Convert from normalized state (objects) to arrays for component compatibility
   const sortedMessages = messages;
-  const conversationList = state.conversations || [];
+  // Convert conversations object to array
+  const conversationList = state.conversations ? Object.values(state.conversations) : [];
+  // Find active conversation from the array
   const activeConversation = state.activeConversationId ? 
     conversationList.find(c => c.id === state.activeConversationId) || null : null;
   
