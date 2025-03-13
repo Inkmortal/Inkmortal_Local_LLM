@@ -25,7 +25,8 @@ from .api.artifacts import router as artifacts_router
 from .admin.router import router as admin_router
 from .db import engine, Base, get_db
 from .queue import get_queue_manager
-from .config import settings
+from .config import settings
+from .queue.consumer import start_message_consumer
 
 # Configure logging
 logging.basicConfig(
@@ -57,7 +58,9 @@ app.add_middleware(
 load_dotenv()
 
 # Get the queue manager instance
-queue_manager = get_queue_manager()
+queue_manager = get_queue_manager()
+
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -73,6 +76,9 @@ async def startup_event():
                 await queue_manager.connect()
                 connected = True
                 logger.info("Successfully connected to message queue")
+                # Start background message consumer task
+                asyncio.create_task(start_message_consumer(queue_manager))
+                logger.info("Started background message consumer task")
             except Exception as e:
                 retry_count += 1
                 wait_time = retry_count * 2  # Exponential backoff
