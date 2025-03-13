@@ -9,7 +9,7 @@ import asyncio
 from ..models import User
 from ..utils import get_current_user
 from ...db import get_db
-from ...queue import get_queue_manager, QueuedRequest
+from ...queue import get_queue_manager, QueuedRequest, RequestPriority
 
 # Create router
 router = APIRouter(tags=["queue"])
@@ -29,7 +29,7 @@ async def get_queue_position(
     dummy_request = QueuedRequest(
         id=request_id,
         user_id=current_user.id,
-        priority=2,  # Default priority
+        priority=RequestPriority.WEB_INTERFACE,  # Web interface priority
         endpoint="/api/chat/completions",
         body={},
         auth_type="jwt"

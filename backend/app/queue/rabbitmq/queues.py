@@ -174,11 +174,18 @@ class QueueManager:
     ) -> None:
         """Publish a message to an exchange"""
         try:
+            # Enhanced logging before publishing
+            logger.info(f"Preparing to publish message to exchange '{exchange.name}' with routing key '{routing_key}'")
+            logger.info(f"Channel status: is_closed={self.channel.is_closed}")
+            body_preview = message_body[:100].decode('utf-8', errors='replace') if message_body else 'None'
+            logger.info(f"Message body preview: {body_preview}...")
+
             # Check if channel is closed
             if self.channel.is_closed:
                 logger.warning("Channel closed, attempting to reopen")
                 # Try to reacquire
                 self.channel = await self.channel.connection.channel()
+                logger.info("Channel reopened successfully")
                 
             message = Message(
                 body=message_body,
@@ -186,13 +193,26 @@ class QueueManager:
                 headers=headers or {}
             )
             
+            # Log detailed info right before the publish
+            logger.info(f"Publishing message to exchange '{exchange.name}' with routing key '{routing_key}', message size: {len(message_body)} bytes")
+            
+            # Actually publish the message
             await exchange.publish(
                 message,
                 routing_key=routing_key
             )
-            logger.info(f"Published message to exchange {exchange.name} with routing key {routing_key}")
+            
+            # Confirm successful publish
+            logger.info(f"Successfully published message to exchange '{exchange.name}' with routing key '{routing_key}'")
+            
+            # Log queue names and bindings
+            logger.info(f"Available queues: {list(self.queues.keys())}")
         except Exception as e:
+            # Enhanced error logging
+            import traceback
             logger.error(f"Error publishing message: {str(e)}")
+            logger.error(f"Exchange: {exchange.name}, Routing key: {routing_key}")
+            logger.error(f"Exception traceback: {traceback.format_exc()}")
             raise
     
     async def get_next_message(

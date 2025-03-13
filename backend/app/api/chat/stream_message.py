@@ -132,8 +132,38 @@ async def stream_message(
             assistant_content = ""
             
             try:
-                # Add request to queue
-                await queue_manager.add_request(request_obj)
+                # Add request to queue with error handling
+                logger.info(f"Adding request to queue: user_id={user.id}, conversation_id={conversation_id}, message_id={assistant_message_id}")
+                # Print the request body for debugging
+                logger.info(f"Request priority: {request_obj.priority}, endpoint: {request_obj.endpoint}")
+                
+                # Verify the type of the priority
+                if hasattr(request_obj.priority, 'name'):
+                    logger.info(f"Priority is an enum: {request_obj.priority.name} (value: {request_obj.priority.value})")
+                else:
+                    logger.warning(f"Priority is not an enum: {request_obj.priority}")
+                
+                # Add the request to the queue
+                queue_position = await queue_manager.add_request(request_obj)
+                
+                # Check if request was added to queue successfully
+                if queue_position < 0:
+                    logger.error(f"Failed to add message to queue: position={queue_position}")
+                    # Return error response to client
+                    error_message = "Failed to add message to queue. Please try again."
+                    if transport_mode == "websocket":
+                        await manager.send_update(user.id, {
+                            "type": "message_update",
+                            "message_id": assistant_message_id,
+                            "conversation_id": conversation_id,
+                            "status": "ERROR",
+                            "error": error_message
+                        })
+                    
+                    # Raise an exception to trigger error handling
+                    raise RuntimeError("Failed to add message to queue. See logs for details.")
+                
+                logger.info(f"Successfully added request to queue: position={queue_position}")
                 
                 # Track for WebSocket updates
                 manager.track_request(request_obj.timestamp.timestamp(), user.id)

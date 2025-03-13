@@ -19,15 +19,21 @@ logger = logging.getLogger("admin.queue_monitor")
 router = APIRouter(prefix="/admin/queue", tags=["admin", "queue"])
 
 # Helper functions
-def priority_to_source(priority: int) -> str:
+def priority_to_source(priority) -> str:
     """Map priority to source name"""
-    if priority == RequestPriority.DIRECT_API:
+    # Handle both enum instance and integer value
+    if hasattr(priority, 'value'):
+        priority_value = priority.value
+    else:
+        priority_value = priority
+    
+    if priority_value == RequestPriority.DIRECT_API.value:
         return "Direct API"
-    elif priority == RequestPriority.CUSTOM_APP:
+    elif priority_value == RequestPriority.CUSTOM_APP.value:
         return "Custom App"
-    elif priority == RequestPriority.WEB_INTERFACE:
+    elif priority_value == RequestPriority.WEB_INTERFACE.value:
         return "Web Interface"
-    return "Unknown"
+    return f"Unknown ({priority_value})"
 
 def calculate_age(timestamp: datetime) -> int:
     """Calculate age in seconds"""
@@ -135,24 +141,43 @@ async def get_queue_items(
     try:
         # Get current request being processed
         current_request = await queue_manager.get_current_request()
-        current_items = []
+        queue_items = []
         
         if current_request:
-            # Add currently processing request
-            current_items.append(format_queue_item(current_request))
+            # Add currently processing request with status
+            item = format_queue_item(current_request)
+            item["status"] = "processing"  # Force processing status
+            queue_items.append(item)
         
-        # Get queued requests (this would need to be implemented in the queue manager)
-        # This is a simplification - actual implementation would need to retrieve items from RabbitMQ
-        # Since RabbitMQ doesn't allow browsing, this might need a cache of pending requests
+        # Get queue sizes to report accurate counts
+        queue_sizes = await queue_manager.get_queue_size()
         
-        # For now, return a minimal implementation
-        # In a production system, you would implement this functionality in the queue manager
+        # For each priority, add placeholder items to represent queued messages
+        # Since RabbitMQ doesn't allow browsing without consuming, we create representative placeholders
+        for priority in sorted(RequestPriority):
+            queue_size = queue_sizes.get(priority, 0)
+            if queue_size > 0:
+                # Create a placeholder item for each priority queue that has messages
+                for i in range(queue_size):
+                    placeholder_id = f"queue_{priority.name}_{i}"
+                    queue_items.append({
+                        "id": placeholder_id,
+                        "priority": priority.value,
+                        "source": priority_to_source(priority),
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "status": "waiting",
+                        "age": 0,  # Unknown actual age
+                        "retries": 0,
+                        "prompt": f"Message in {priority_to_source(priority)} queue",
+                        "api_key": None,
+                        "position": i + 1  # Position in this priority queue
+                    })
         
         # Filter by priority if specified
         if priority is not None:
-            current_items = [item for item in current_items if item["priority"] == priority]
+            queue_items = [item for item in queue_items if item["priority"] == priority]
             
-        return current_items
+        return queue_items
     except Exception as e:
         logger.error(f"Error getting queue items: {e}")
         raise HTTPException(
@@ -168,31 +193,34 @@ async def get_queue_history(
 ) -> List[Dict[str, Any]]:
     """Get completed/error queue items"""
     try:
-        # Get history from queue manager
-        history = []
-        
-        # In a production system, you would implement this with:
-        # history = queue_manager.get_history()
+        # Get history from our recently added history tracking in queue manager
+        # The history is now maintained by the consumer.py implementation
+        history = queue_manager.get_history()
         
         # Format history items
         formatted_history = []
         for item_dict in history:
             try:
-                # Create QueuedRequest from dict
-                queue_request = QueuedRequest.from_dict(item_dict)
+                # Create QueuedRequest from dict if needed
+                if isinstance(item_dict, dict):
+                    queue_request = QueuedRequest.from_dict(item_dict)
+                else:
+                    queue_request = item_dict
                 
                 # Only include completed or error requests
-                if queue_request.status in ["completed", "error"]:
+                if queue_request.status in ["completed", "failed", "error"]:
                     formatted = format_queue_item(queue_request)
                     formatted_history.append(formatted)
             except Exception as e:
                 logger.error(f"Error formatting history item: {e}")
+                logger.error(f"Item content: {str(item_dict)[:200]}...")
                 
         # Filter by priority if specified
         if priority is not None:
             formatted_history = [item for item in formatted_history if item["priority"] == priority]
             
-        return formatted_history
+        # Limit to most recent 100 items to prevent overwhelming the UI
+        return formatted_history[:100]
     except Exception as e:
         logger.error(f"Error getting queue history: {e}")
         raise HTTPException(
@@ -207,9 +235,9 @@ async def clear_queue(
 ) -> Dict[str, Any]:
     """Clear the queue"""
     try:
-        # Clear queue
-        # This would need to be implemented in the queue manager
-        # await queue_manager.clear_queue()
+        # Clear all queues using the existing method
+        await queue_manager.clear_queue()
+        logger.info(f"Queue cleared by admin user: {current_user.username}")
         
         return {"success": True, "message": "Queue cleared successfully"}
     except Exception as e:
@@ -226,10 +254,30 @@ async def process_next_item(
 ) -> Dict[str, Any]:
     """Process the next item in queue"""
     try:
-        # This would need to be implemented in the queue manager
-        # await queue_manager.process_next()
+        # Get the next message from the queue but don't process it yet
+        next_request = await queue_manager.get_next_request()
         
-        return {"success": True, "message": "Next request is being processed"}
+        if next_request:
+            # Process the request
+            logger.info(f"Processing next request manually: {next_request.endpoint}")
+            
+            # Determine if this is a streaming request
+            is_streaming = next_request.body.get("stream", False) or "streaming" in next_request.endpoint
+            
+            if is_streaming:
+                # Create a background task to handle streaming without blocking the API response
+                import asyncio
+                from ..queue.consumer import process_streaming_request
+                asyncio.create_task(process_streaming_request(queue_manager, next_request))
+                message = f"Streaming request from {priority_to_source(next_request.priority)} is being processed"
+            else:
+                # Process directly (non-streaming)
+                await queue_manager.process_request(next_request)
+                message = f"Request from {priority_to_source(next_request.priority)} has been processed"
+                
+            return {"success": True, "message": message}
+        else:
+            return {"success": False, "message": "No requests in queue to process"}
     except Exception as e:
         logger.error(f"Error processing next item: {e}")
         raise HTTPException(

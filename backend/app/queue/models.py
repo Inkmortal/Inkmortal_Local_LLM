@@ -67,8 +67,12 @@ class QueuedRequest:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert request to dictionary for storage"""
+        # Convert enum values to ints for consistent serialization
+        priority_value = self.priority.value if hasattr(self.priority, 'value') else self.priority
+        original_priority_value = self.original_priority.value if hasattr(self.original_priority, 'value') else self.original_priority
+        
         return {
-            "priority": self.priority,
+            "priority": priority_value,  # Store raw value, not enum
             "endpoint": self.endpoint,
             "body": self.body,
             "headers": self.headers,
@@ -76,7 +80,7 @@ class QueuedRequest:
             "auth_type": self.auth_type,
             "timestamp": self.timestamp.timestamp(),
             "status": self.status,
-            "original_priority": self.original_priority,
+            "original_priority": original_priority_value,  # Store raw value, not enum
             "promoted": self.promoted,
             "promotion_time": self.promotion_time.timestamp() if self.promotion_time else None,
             "processing_start": self.processing_start.timestamp() if self.processing_start else None,
@@ -87,8 +91,24 @@ class QueuedRequest:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "QueuedRequest":
         """Create request from dictionary"""
+        # Convert priority from int value to enum if needed
+        priority = data["priority"]
+        if isinstance(priority, int) or (isinstance(priority, str) and priority.isdigit()):
+            # Convert string digits or ints to int, then to enum
+            priority_int = int(priority)
+            # Find matching enum by value
+            priority = next((p for p in RequestPriority if p.value == priority_int), 
+                           RequestPriority.WEB_INTERFACE)  # Default to WEB_INTERFACE if not found
+        
+        # Same for original_priority
+        original_priority = data.get("original_priority", priority)
+        if isinstance(original_priority, int) or (isinstance(original_priority, str) and str(original_priority).isdigit()):
+            original_priority_int = int(original_priority)
+            original_priority = next((p for p in RequestPriority if p.value == original_priority_int),
+                                   RequestPriority.WEB_INTERFACE)
+        
         request = cls(
-            priority=data["priority"],
+            priority=priority,
             endpoint=data["endpoint"],
             body=data["body"],
             headers=data.get("headers"),
@@ -97,7 +117,7 @@ class QueuedRequest:
         )
         request.timestamp = datetime.fromtimestamp(data["timestamp"])
         request.status = data["status"]
-        request.original_priority = data["original_priority"]
+        request.original_priority = original_priority
         request.promoted = data.get("promoted", False)
         if data.get("promotion_time"):
             request.promotion_time = datetime.fromtimestamp(data["promotion_time"])

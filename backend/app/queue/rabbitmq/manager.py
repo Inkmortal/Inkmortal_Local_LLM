@@ -103,13 +103,16 @@ class RabbitMQManager(QueueManagerInterface):
             # Set up aging system
             await self.aging_manager.setup_aging()
             
-            # Bind queues to exchange
+            # Bind queues to exchange using priority values, not enum instances
             for priority in RequestPriority:
                 queue_name = self.queue_handler.queue_names[priority]
+                # Use priority.value to ensure we bind with integer values consistently 
+                routing_key = f"priority_{priority.value}"
+                logger.info(f"Binding queue {queue_name} to exchange with routing key: {routing_key}")
                 await self.queue_handler.bind_queue(
                     queue_name,
                     main_exchange,
-                    f"priority_{priority}"
+                    routing_key
                 )
         except Exception as e:
             logger.error(f"Failed to connect to RabbitMQ: {e}")
@@ -163,10 +166,22 @@ class RabbitMQManager(QueueManagerInterface):
             if not exchange:
                 raise RuntimeError("Main exchange not found")
             
-            # Publish message
+            # Get the integer value of the priority correctly
+            priority_value = request.priority.value if hasattr(request.priority, 'value') else request.priority
+            
+            # Prepare routing key that exactly matches binding format
+            routing_key = f"priority_{priority_value}"
+            logger.info(f"Publishing message with routing key: '{routing_key}', priority: {request.priority}, priority value: {priority_value}")
+            
+            # Log queue names to verify routing will work
+            logger.info(f"Available queue names: {self.queue_handler.queue_names}")
+            target_queue = self.queue_handler.queue_names.get(request.priority)
+            logger.info(f"Target queue for priority {request.priority} is: {target_queue}, routing key={routing_key}")
+            
+            # Publish message with extra logging
             await self.queue_handler.publish_message(
                 exchange,
-                f"priority_{request.priority}",
+                routing_key,
                 json.dumps(request.to_dict()).encode(),
                 {"x-original-priority": request.original_priority}
             )
@@ -185,7 +200,11 @@ class RabbitMQManager(QueueManagerInterface):
             
             return position
         except Exception as e:
+            # Enhanced error logging with stack trace
+            import traceback
             logger.error(f"Error adding request to queue: {e}")
+            logger.error(f"Request details: endpoint={request.endpoint}, user_id={request.user_id}, priority={request.priority}")
+            logger.error(f"Exception traceback: {traceback.format_exc()}")
             return -1  # Return -1 to indicate an error
     
     async def get_next_request(self) -> Optional[QueuedRequest]:
@@ -306,7 +325,14 @@ class RabbitMQManager(QueueManagerInterface):
     
     def get_history(self) -> List[Dict[str, Any]]:
         """Get request history"""
-        return self.request_history
+        try:
+            # Try to import from the consumer which has actual history
+            from ..consumer import get_request_history
+            return get_request_history()
+        except ImportError:
+            logger.warning("Could not import get_request_history from consumer module")
+            # Fall back to empty history
+            return []
     
     async def promote_request(self, request: QueuedRequest, new_priority: int) -> None:
         """Promote a request to higher priority"""
@@ -335,16 +361,9 @@ class RabbitMQManager(QueueManagerInterface):
         except Exception as e:
             logger.error(f"Error promoting request: {e}")
     
-    async def handle_request_aging(self) -> None:
-        """Handle request aging (managed by aging system)"""
-        try:
-            # This is handled by the aging manager through RabbitMQ's dead letter exchange
-            if self.aging_manager:
-                logger.debug("Aging system is active")
-            else:
-                logger.warning("Aging manager not initialized")
-        except Exception as e:
-            logger.error(f"Error in request aging: {e}")
+    # Note: Request aging is automatically handled by RabbitMQ's TTL and dead letter exchange mechanisms.
+    # The aging.py module sets up the necessary infrastructure for automatic promotion of aged messages.
+    # No manual intervention or periodic calls are needed - the system handles aging on its own.
     
     async def get_stats(self) -> QueueStats:
         """Get queue statistics"""
