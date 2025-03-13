@@ -109,7 +109,7 @@ async def stream_message(
             user_id=user.id
         )
         
-        # ARCHITECTURAL CHANGE: Extract and validate the assistant_message_id before any processing paths
+        # STEP 1: Extract assistant_message_id ONCE for consistency
         assistant_message_id = request_obj.body.get("assistant_message_id")
         
         if not assistant_message_id:
@@ -123,7 +123,7 @@ async def stream_message(
         # Log detailed verification of the assistant_message_id
         logger.info(f"VERIFICATION: assistant_message_id is set to '{assistant_message_id}' and stored in request_obj.body")
         
-        # Extract transport mode first to make decisions
+        # STEP 1: Determine transport mode early
         transport_mode = request_obj.body.get("transport_mode")
         
         # Fallback to header-based detection if transport_mode is not explicitly set
@@ -131,14 +131,14 @@ async def stream_message(
             request_headers = request_obj.body.get("headers", {})
             is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
             transport_mode = "websocket" if is_websocket_client else "sse"
-        else:
-            is_websocket_client = transport_mode == "websocket"
         
-        # ARCHITECTURAL CHANGE: Process the queue request before any response path is determined
+        logger.info(f"Using transport mode: {transport_mode} for client")
+        
+        # STEP 2: Add request to queue regardless of transport mode
         try:
             # Add request to queue with error handling - NOW HAPPENS FOR ALL CLIENTS
             logger.info(f"Adding request to queue: user_id={user.id}, conversation_id={conversation_id}, message_id={assistant_message_id}")
-            logger.info(f"Request priority: {request_obj.priority}, endpoint: {request_obj.endpoint}, transport mode: {transport_mode}")
+            logger.info(f"Request priority: {request_obj.priority}, endpoint: {request_obj.endpoint}")
             
             # Verify the type of the priority
             if hasattr(request_obj.priority, 'name'):
@@ -210,13 +210,182 @@ async def stream_message(
                     yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
                 return StreamingResponse(exception_sse_stream(), media_type="text/event-stream")
         
-        # Set up streaming response - now this is only for the actual streaming part
-        async def event_stream():
+        # STEP 3: Define separate streaming function for WebSocket clients
+        async def process_streaming_for_websocket():
+            """Process streaming for WebSocket clients without blocking HTTP response"""
             assistant_content = ""
             
             try:
-                # We've already added the request to the queue and determined transport_mode earlier
-                logger.info(f"Starting event_stream processing for transport_mode: {transport_mode}")
+                # First update to show processing has started
+                await manager.send_update(user.id, {
+                    "type": "message_update",
+                    "message_id": assistant_message_id,
+                    "conversation_id": conversation_id,
+                    "status": "STREAMING",
+                    "assistant_content": ""
+                })
+                
+                # Stream from Ollama via queue manager
+                chunks_processed = 0
+                token_count = 0
+                logger.info(f"Starting to process streaming chunks from queue manager for WebSocket client")
+                
+                async for chunk in queue_manager.process_streaming_request(request_obj):
+                    chunks_processed += 1
+                    
+                    # Log the raw chunk for debugging with chunk number
+                    if chunks_processed % 50 == 0:  # Log every 50th chunk to reduce log volume
+                        logger.info(f"[Chunk #{chunks_processed}] Processed WebSocket streaming chunk")
+                    
+                    try:
+                        # Parse the JSON data
+                        data = json.loads(chunk)
+                        
+                        token = ""
+                        is_complete = False
+                        
+                        # Extract token from various formats
+                        if "choices" in data and len(data["choices"]) > 0:
+                            choice = data["choices"][0]
+                            if "delta" in choice and "content" in choice["delta"]:
+                                token = choice["delta"]["content"]
+                            elif "text" in choice:
+                                token = choice["text"]
+                            elif "message" in choice and "content" in choice["message"]:
+                                token = choice["message"]["content"]
+                            
+                            if "finish_reason" in choice and choice["finish_reason"] is not None:
+                                is_complete = True
+                        # Handle Ollama direct format (commonly used with Chinese models)
+                        elif "message" in data and "content" in data["message"]:
+                            token = data["message"]["content"]
+                            if "done" in data and data["done"] == True:
+                                is_complete = True
+                        # Try other formats
+                        elif "response" in data:
+                            token = data["response"]
+                        elif "content" in data:
+                            token = data["content"]
+                        
+                        # If we couldn't find a token, use the entire chunk as fallback
+                        if not token and isinstance(data, dict):
+                            token = json.dumps(data)
+                        
+                        # Accumulate content
+                        assistant_content += token
+                        
+                        # Create WebSocket update message
+                        websocket_message = {
+                            "type": "message_update",
+                            "message_id": assistant_message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": token,
+                            "is_complete": is_complete
+                        }
+                        
+                        # For Ollama format, include model info when available
+                        if "model" in data:
+                            websocket_message["model"] = data["model"]
+                        
+                        # For completeness detection
+                        if is_complete or (data.get("done") == True):
+                            websocket_message["is_complete"] = True
+                            websocket_message["status"] = "COMPLETE"
+                        
+                        # Send WebSocket update
+                        await manager.send_update(user.id, websocket_message)
+                        
+                        # Also send section-specific updates if needed
+                        if "<think>" in token or "</think>" in token:
+                            # This is a thinking section token
+                            await manager.send_section_update(
+                                user_id=user.id,
+                                message_id=assistant_message_id,
+                                conversation_id=conversation_id,
+                                section="thinking",
+                                content=token,
+                                is_complete=is_complete,
+                                operation=APPEND
+                            )
+                    except json.JSONDecodeError:
+                        # Not JSON, probably raw text
+                        logger.warning(f"[Chunk #{chunks_processed}] Failed to parse as JSON")
+                        
+                        # Use chunk as the token directly
+                        token = chunk
+                        is_complete = False
+                        
+                        # Check if this is the last chunk (some models signal this)
+                        if "[DONE]" in chunk or "<|endoftext|>" in chunk:
+                            is_complete = True
+                            # Remove marker from token
+                            token = token.replace("[DONE]", "").replace("<|endoftext|>", "")
+                        
+                        # Accumulate content
+                        assistant_content += token
+                        
+                        # Send a simplified message for non-JSON responses
+                        await manager.send_update(user.id, {
+                            "type": "message_update",
+                            "message_id": assistant_message_id,
+                            "conversation_id": conversation_id,
+                            "status": "STREAMING",
+                            "assistant_content": token,
+                            "is_complete": is_complete
+                        })
+                    except Exception as e:
+                        logger.error(f"Error processing chunk: {e}")
+                
+                # Save final message to database
+                db = SessionLocal()
+                try:
+                    assistant_message = Message(
+                        id=assistant_message_id,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=assistant_content
+                    )
+                    db.add(assistant_message)
+                    db.commit()
+                    
+                    # Final update to WebSocket clients
+                    final_websocket_message = {
+                        "type": "message_update",
+                        "message_id": assistant_message_id,
+                        "conversation_id": conversation_id,
+                        "status": "COMPLETE",
+                        "assistant_content": assistant_content,
+                        "is_complete": True
+                    }
+                    
+                    logger.info(f"Sending final completion message to WebSocket clients, id={assistant_message_id}")
+                    await manager.send_update(user.id, final_websocket_message)
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"Streaming error in background task: {e}")
+                await manager.send_update(user.id, {
+                    "type": "message_update",
+                    "message_id": assistant_message_id,
+                    "conversation_id": conversation_id,
+                    "status": "ERROR",
+                    "error": str(e),
+                    "is_complete": True
+                })
+            finally:
+                # Cleanup
+                manager.untrack_request(request_obj.timestamp.timestamp())
+        
+        # STEP 4: Simplified event_stream function for SSE clients
+        async def event_stream():
+            """Stream response for SSE clients only"""
+            assistant_content = ""
+            
+            try:
+                # Stream from Ollama via queue manager
+                chunks_processed = 0
+                logger.info(f"Starting to process streaming chunks from queue manager for SSE client")
                 
                 # First update only for WebSocket clients - use assistant_message_id
                 if transport_mode == "websocket":
@@ -453,40 +622,35 @@ async def stream_message(
                 # Clean up
                 manager.untrack_request(request_obj.timestamp.timestamp())
         
-        # After request is added to queue, branch based on transport mode
-        # Special case for WebSocket clients - return a properly formatted response
-        # that matches the expected frontend structure but indicates responses will come via WebSocket
+        # STEP 5: Branch based on transport mode for the response
+        # Now we can choose the appropriate response method after ensuring the message is in the queue
         if transport_mode == "websocket":
-            logger.info("WebSocket client detected - returning compatible HTTP response")
+            # Create background task to handle WebSocket streaming without blocking response
+            asyncio.create_task(process_streaming_for_websocket())
             
-            # Create a proper message response format that the frontend expects
+            # Return quick HTTP response for WebSocket client
             response_data = {
-                "id": assistant_message_id,  # Use the assistant message ID as the message ID
+                "id": assistant_message_id,
                 "conversation_id": conversation_id,
-                "content": "",  # Empty content since actual content will come via WebSocket
+                "content": "",
                 "created_at": datetime.now().isoformat(),
                 "role": "assistant",
-                "status": "streaming",  # Indicate streaming status
-                "websocket_mode": True,  # Custom flag to indicate WebSocket delivery
-                "success": True,  # Indicate success to prevent frontend error handling
-                "assistant_message_id": assistant_message_id,  # Explicitly include assistant ID again for clarity
-                "queue_position": queue_position  # Include the queue position
+                "status": "streaming",
+                "websocket_mode": True,
+                "success": True,
+                "queue_position": queue_position
             }
             
-            # Start the WebSocket streaming process in background without awaiting
-            # This ensures the streaming happens even though we're returning HTTP response
-            asyncio.create_task(event_stream())
-            
-            logger.info(f"Created background task for WebSocket streaming, returning HTTP response for message ID: {assistant_message_id}")
+            logger.info(f"Created background task for WebSocket streaming, returning HTTP response with ID: {assistant_message_id}")
             
             async def response_stream():
                 yield json.dumps(response_data).encode('utf-8')
                 
             return StreamingResponse(response_stream(), media_type="application/json")
-        
-        # Return normal streaming response for SSE clients
-        logger.info("SSE client detected - returning streaming response")
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
+        else:
+            # SSE clients use traditional streaming response
+            logger.info("SSE client detected - returning streaming response")
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
     
     except Exception as e:
         logger.error(f"Error setting up streaming: {e}")
