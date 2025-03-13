@@ -184,6 +184,10 @@ export function useChatStream({
         });
       }
       
+      // Modify conversation ID for new conversations
+      const backendConversationId = state.activeConversationId ? conversationId : "new";
+      console.log(`[useChatStream] Using conversationId for backend: ${backendConversationId}, (active=${state.activeConversationId}, temp=${tempConversationId})`);
+      
       // Create user message with the determined conversationId
       const userMessage: Message = {
         id: userMessageId,
@@ -250,7 +254,7 @@ export function useChatStream({
       
       const response = await sendChatMessage(
         content,                  // message parameter
-        conversationId,           // conversationId parameter (never empty string now)
+        backendConversationId,    // conversationId parameter (using "new" for new conversations)
         file || null,             // file parameter
         {                         // handlers parameter
           onStatusUpdate: (status) => {

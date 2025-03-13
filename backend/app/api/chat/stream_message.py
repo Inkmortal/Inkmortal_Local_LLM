@@ -45,7 +45,9 @@ async def stream_message(
         print("STREAM_MESSAGE: Inside try block!")
         # Create or get conversation
         print(f"STREAM_MESSAGE: Checking conversation_id: {conversation_id}")
-        if conversation_id:
+        
+        # Check if this is a new conversation request (conversation_id == "new" or null)
+        if conversation_id and conversation_id.lower() != "new":
             print(f"STREAM_MESSAGE: Looking up conversation with ID {conversation_id} for user {user.id}")
             conversation = fresh_db.query(Conversation).filter(
                 Conversation.id == conversation_id,
@@ -61,23 +63,26 @@ async def stream_message(
                     yield json.dumps({"error": "Conversation not found"}).encode('utf-8')
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
         else:
-            # Create new conversation using the service which adds welcome message
-            print(f"STREAM_MESSAGE: Creating new conversation for user {user.id}")
-            from .conversation_service import create_conversation
-            result = create_conversation(fresh_db, user.id, message_text[:50] if message_text else "New Conversation")
-            print(f"STREAM_MESSAGE: Create conversation result: {result}")
-            
-            if not result.get("success", False):
-                print(f"STREAM_MESSAGE: Failed to create conversation: {result.get('error')}")
-                logger.error(f"Error creating conversation: {result.get('error')}")
-                async def error_stream():
-                    yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
-                return StreamingResponse(error_stream(), media_type="text/event-stream")
-            
-            # Use the conversation ID from the result
-            conversation_id = result["conversation_id"]
-            print(f"STREAM_MESSAGE: New conversation created with ID: {conversation_id}")
-            conversation = fresh_db.query(Conversation).filter(Conversation.id == conversation_id).first()
+            # Treat "new" or null conversation_id as a request to create a new conversation
+            print(f"STREAM_MESSAGE: Detected request for new conversation")
+        # This block now applies to both null/new conversation_id AND the else clause from above
+        # Create new conversation using the service which adds welcome message
+        print(f"STREAM_MESSAGE: Creating new conversation for user {user.id}")
+        from .conversation_service import create_conversation
+        result = create_conversation(fresh_db, user.id, message_text[:50] if message_text else "New Conversation")
+        print(f"STREAM_MESSAGE: Create conversation result: {result}")
+        
+        if not result.get("success", False):
+            print(f"STREAM_MESSAGE: Failed to create conversation: {result.get('error')}")
+            logger.error(f"Error creating conversation: {result.get('error')}")
+            async def error_stream():
+                yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
+            return StreamingResponse(error_stream(), media_type="text/event-stream")
+        
+        # Use the conversation ID from the result
+        conversation_id = result["conversation_id"]
+        print(f"STREAM_MESSAGE: New conversation created with ID: {conversation_id}")
+        conversation = fresh_db.query(Conversation).filter(Conversation.id == conversation_id).first()
         
         # Save user message
         print(f"STREAM_MESSAGE: Saving user message to conversation {conversation.id}")
