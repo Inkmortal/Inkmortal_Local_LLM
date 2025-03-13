@@ -241,6 +241,13 @@ export function useChatStream({
       
       // Send message to backend
       console.log(`[useChatStream] Sending message to backend with conversationId: ${conversationId}`);
+      console.log(`[useChatStream] Using assistantMessageId: ${assistantMessageId}`);
+      
+      // CRITICAL: Verify the assistantMessageId is defined before sending
+      if (!assistantMessageId) {
+        console.error(`[useChatStream] CRITICAL ERROR: assistantMessageId is undefined!`);
+      }
+      
       const response = await sendChatMessage(
         content,                  // message parameter
         conversationId,           // conversationId parameter (never empty string now)
@@ -250,7 +257,7 @@ export function useChatStream({
             console.log(`[useChatStream] Message status update: ${status}`);
           }
         },
-        assistantMessageId        // assistantMessageId parameter
+        assistantMessageId        // assistantMessageId parameter - ensure this is passed properly
       );
       
       // Handle backend response with real IDs

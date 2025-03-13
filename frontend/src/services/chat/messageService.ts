@@ -43,6 +43,10 @@ export async function sendChatMessage(
   handlers: MessageStreamHandlers = {},
   assistantMessageId?: string
 ): Promise<ChatResponse> {
+  console.log(`[sendChatMessage] Called with assistantMessageId: ${assistantMessageId}`);
+  if (!assistantMessageId) {
+    console.warn(`[sendChatMessage] WARNING: No assistantMessageId provided, this will cause streaming issues!`);
+  }
   // Extract handlers with defaults
   const { 
     onStart = () => {}, 
@@ -91,9 +95,16 @@ export async function sendChatMessage(
       // Add connection information to help backend distinguish WebSocket vs HTTP clients
       headers: useWebSocket ? {
         "Connection": "Upgrade",
-        "Upgrade": "websocket"
+        "Upgrade": "websocket",
+        "X-Client-Type": "react-web-client" // Add client type to help with debugging
       } : {}
     };
+    
+    // CRITICAL DEBUG: Log the full request data
+    console.log(`[sendChatMessage] Request data prepared:`, JSON.stringify({
+      ...requestData,
+      message: requestData.message.substring(0, 20) + "...", // Truncate message for readability
+    }));
     
     // Add debug logging to verify the assistant_message_id is properly set
     console.log(`[messageService] Request prepared with assistant_message_id: ${requestData.assistant_message_id}`);
@@ -127,16 +138,34 @@ export async function sendChatMessage(
       // For WebSocket clients, handle differently to ensure message state maintenance
       if (useWebSocket) {
         try {
-          // Send message request but don't care about detailed response content
+          // CRITICAL: Use the correct format that the backend is expecting
+          // Log the exact payload we're sending
+          console.log('[messageService] Sending request payload to backend:', 
+            JSON.stringify({
+              ...requestData,
+              message: requestData.message.substring(0, 20) + "..." // Truncate for readability
+            })
+          );
+          
+          // Make sure these fields explicitly match what router_endpoints.py is expecting
+          const backendPayload = {
+            message: message,
+            conversation_id: conversationId,
+            assistant_message_id: requestData.assistant_message_id,
+            transport_mode: 'websocket',
+            mode: 'streaming',
+            headers: requestData.headers
+          };
+          
           await fetchApi<ChatResponse>('/api/chat/message', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestData),
+            body: JSON.stringify(backendPayload),
           });
           
-          console.log('WebSocket client - bypassing standard response processing');
+          console.log('[messageService] WebSocket client request sent successfully');
         } catch (error) {
           // For WebSocket clients, log but continue - we want to maintain message state
           console.warn('HTTP error for WebSocket client, continuing with WebSocket streaming:', error);

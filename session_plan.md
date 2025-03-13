@@ -188,3 +188,10 @@ Split large files to maintain 400-line limit:
    - Created SYNC_CONVERSATION_ID action to properly update all state when backend responds
    - Fixed message visibility by ensuring proper conversation ID synchronization
    - Enhanced logging for better debugging of the conversation lifecycle
+   
+7. ✅ **Fixed WebSocket Message Processing**: Resolved connection to queue
+   - Fixed request format to match what the backend expects in router_endpoints.py
+   - Enhanced logging to track message flow from frontend to backend
+   - Ensured assistantMessageId is consistently passed through the system
+   - Standardized field names between frontend and backend APIs
+   - Added explicit validation of assistantMessageId to prevent null values
