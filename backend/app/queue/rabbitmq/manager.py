@@ -105,9 +105,14 @@ class RabbitMQManager(QueueManagerInterface):
             
             # Bind queues to exchange using priority values, not enum instances
             for priority in RequestPriority:
-                queue_name = self.queue_handler.queue_names[priority]
+                priority_value = priority.value
+                queue_name = self.queue_handler.queue_names.get(priority_value)
+                if not queue_name:
+                    logger.warning(f"No queue name found for priority value {priority_value}")
+                    continue
+                    
                 # Use priority.value to ensure we bind with integer values consistently 
-                routing_key = f"priority_{priority.value}"
+                routing_key = f"priority_{priority_value}"
                 logger.info(f"Binding queue {queue_name} to exchange with routing key: {routing_key}")
                 await self.queue_handler.bind_queue(
                     queue_name,
@@ -152,6 +157,14 @@ class RabbitMQManager(QueueManagerInterface):
     async def add_request(self, request: QueuedRequest) -> int:
         """Add a request to the queue"""
         try:
+            logger.info(f"Adding request to queue - type: {type(request)}, endpoint: {request.endpoint}")
+            
+            # Debug log the request priority type and value
+            if hasattr(request.priority, 'value'):
+                logger.info(f"Request priority is enum type: {type(request.priority)}, value: {request.priority.value}, name: {request.priority.name}")
+            else:
+                logger.info(f"Request priority is not enum type: {type(request.priority)}, value: {request.priority}")
+                
             await self.ensure_connected()
             
             # Check if processor is initialized
@@ -160,6 +173,11 @@ class RabbitMQManager(QueueManagerInterface):
                 
             # Update statistics
             self.processor.stats.total_requests += 1
+            
+            # Debug log connection status
+            logger.info(f"Connection status: {self.connection.is_connected}")
+            logger.info(f"Exchange manager initialized: {self.exchange_manager is not None}")
+            logger.info(f"Queue handler initialized: {self.queue_handler is not None}")
             
             # Publish request
             exchange = await self.exchange_manager.get_exchange("llm_requests_exchange")
@@ -175,28 +193,44 @@ class RabbitMQManager(QueueManagerInterface):
             
             # Log queue names to verify routing will work
             logger.info(f"Available queue names: {self.queue_handler.queue_names}")
-            target_queue = self.queue_handler.queue_names.get(request.priority)
+            # Use priority_value as the key for queue_names, not the enum instance
+            target_queue = self.queue_handler.queue_names.get(priority_value)
             logger.info(f"Target queue for priority {request.priority} is: {target_queue}, routing key={routing_key}")
             
             # Publish message with extra logging
-            await self.queue_handler.publish_message(
-                exchange,
-                routing_key,
-                json.dumps(request.to_dict()).encode(),
-                {"x-original-priority": request.original_priority}
-            )
+            logger.info(f"About to publish message with routing_key={routing_key} to exchange {exchange.name}")
+            try:
+                await self.queue_handler.publish_message(
+                    exchange,
+                    routing_key,
+                    json.dumps(request.to_dict()).encode(),
+                    {"x-original-priority": request.original_priority}
+                )
+                logger.info(f"Message published successfully with routing_key={routing_key}")
+            except Exception as e:
+                logger.error(f"Error publishing message: {e}")
+                raise
             
             # Small delay to ensure message is queued
             await asyncio.sleep(0.1)
             
+            # Check queue sizes after publishing to verify the message went through
+            new_sizes = await self.get_queue_size()
+            logger.info(f"Queue sizes after publishing: {new_sizes}")
+            
             # Get queue position (approximate)
             sizes = await self.get_queue_size()
             position = 0
+            
+            # Get priority value from request
+            req_priority_value = request.priority.value if hasattr(request.priority, 'value') else request.priority
+            
             for p in sorted(RequestPriority):
-                if p < request.priority:
-                    position += sizes.get(p, 0)
-                elif p == request.priority:
-                    position += sizes.get(p, 0) - 1 # Decrement to account for this new message
+                p_value = p.value
+                if p_value < req_priority_value:
+                    position += sizes.get(p_value, 0)
+                elif p_value == req_priority_value:
+                    position += sizes.get(p_value, 0) - 1 # Decrement to account for this new message
             
             return position
         except Exception as e:
@@ -213,7 +247,12 @@ class RabbitMQManager(QueueManagerInterface):
             await self.ensure_connected()
             
             for priority in sorted(RequestPriority):
-                queue_name = self.queue_handler.queue_names[priority]
+                priority_value = priority.value
+                queue_name = self.queue_handler.queue_names.get(priority_value)
+                if not queue_name:
+                    logger.warning(f"No queue found for priority value {priority_value}")
+                    continue
+                    
                 message = await self.queue_handler.get_next_message(queue_name)
                 
                 if message:
@@ -337,11 +376,18 @@ class RabbitMQManager(QueueManagerInterface):
     async def promote_request(self, request: QueuedRequest, new_priority: int) -> None:
         """Promote a request to higher priority"""
         try:
-            if new_priority >= request.priority:
+            # Get priority value from request
+            req_priority_value = request.priority.value if hasattr(request.priority, 'value') else request.priority
+            
+            if new_priority >= req_priority_value:
                 raise ValueError("New priority must be higher (lower number)")
             
-            # Get the original message
-            queue_name = self.queue_handler.queue_names[request.priority]
+            # Get the original message using priority value as key
+            queue_name = self.queue_handler.queue_names.get(req_priority_value)
+            if not queue_name:
+                logger.error(f"No queue found for priority value {req_priority_value}")
+                return
+                
             message = await self.queue_handler.get_next_message(queue_name, no_ack=False)
     
             if message:
@@ -400,14 +446,18 @@ class RabbitMQManager(QueueManagerInterface):
             # searching for a specific message in a queue without consuming it
             position = 1  # Start at 1 since position 0 is the currently processing request
             
+            # Get the priority value from the request
+            req_priority_value = request.priority.value if hasattr(request.priority, 'value') else request.priority
+            
             # Add count of all higher priority queues
             for priority in sorted(RequestPriority):
-                if priority < request.priority:
-                    position += queue_sizes.get(priority, 0)
+                priority_value = priority.value
+                if priority_value < req_priority_value:
+                    position += queue_sizes.get(priority_value, 0)
             
             # For the same priority level, we can only approximate
             # We assume the request is halfway through its own priority queue
-            same_priority_count = queue_sizes.get(request.priority, 0)
+            same_priority_count = queue_sizes.get(req_priority_value, 0)
             if same_priority_count > 0:
                 position += same_priority_count // 2
             

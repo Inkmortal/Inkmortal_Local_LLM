@@ -62,6 +62,10 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
             priorities_checked = []
             from ..queue.models import RequestPriority
             
+            # Get queue sizes to verify each priority queue
+            queue_sizes = await queue_manager.get_queue_size()
+            logger.info(f"Queue sizes before get_next_request: {queue_sizes}")
+            
             # Get next message from highest priority queue that has messages
             request = await queue_manager.get_next_request()
             
@@ -69,7 +73,16 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
             if request:
                 # Calculate age of message
                 age_seconds = (datetime.utcnow() - request.timestamp).total_seconds()
-                logger.info(f"Processing message with age {age_seconds:.1f}s from priority {request.priority.name}")
+                
+                # Get priority info for clearer logging
+                if hasattr(request.priority, 'name'):
+                    priority_info = f"{request.priority.name} (value: {request.priority.value})"
+                else:
+                    priority_info = str(request.priority)
+                    
+                logger.info(f"Processing message with age {age_seconds:.1f}s from priority {priority_info}")
+            else:
+                logger.debug("No message found in any priority queue")
             
             if request:
                 # Generate a unique identifier for this request
