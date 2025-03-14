@@ -30,6 +30,9 @@ class MessageHandler {
   // Track message ID mappings
   private messageIdMappings: MessageIdMapping[] = [];
   
+  // Store message content for completion handling
+  private messageContent: Map<string, string> = new Map();
+  
   // Interval timer reference
   private cleanupInterval: number | null = null;
   
@@ -42,6 +45,16 @@ class MessageHandler {
     this.cleanupInterval = window.setInterval(this.cleanupOldMappings.bind(this), 60000);
   }
   
+  // Store message content during streaming
+  private storeMessageContent(messageId: string, content: string): void {
+    this.messageContent.set(messageId, content);
+  }
+  
+  // Get stored message content
+  private getStoredMessageContent(messageId: string): string | undefined {
+    return this.messageContent.get(messageId);
+  }
+  
   // Method to clean up resources
   public cleanup(): void {
     // Clear the cleanup interval
@@ -49,6 +62,9 @@ class MessageHandler {
       window.clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+    
+    // Clear stored message content
+    this.messageContent.clear();
     
     // Unsubscribe from message events
     eventEmitter.off('message_received', this.handleMessage.bind(this));
@@ -98,7 +114,7 @@ class MessageHandler {
       .find(mapping => mapping.conversationId === conversationId);
   }
   
-  // Clean up old mappings
+  // Clean up old mappings and content
   private cleanupOldMappings(): void {
     const now = Date.now();
     const oldMappings = this.messageIdMappings.filter(
@@ -106,10 +122,17 @@ class MessageHandler {
     );
     
     if (oldMappings.length > 0) {
+      // Clean up old mappings
       this.messageIdMappings = this.messageIdMappings.filter(
         mapping => now - mapping.timestamp <= 3600000
       );
-      console.log(`Cleaned up ${oldMappings.length} old message ID mappings`);
+      
+      // Also remove content for these old messages
+      oldMappings.forEach(mapping => {
+        this.messageContent.delete(mapping.frontendId);
+      });
+      
+      console.log(`Cleaned up ${oldMappings.length} old message ID mappings and their content`);
     }
   }
   
@@ -197,6 +220,10 @@ class MessageHandler {
       console.log(`No mapping found for message: ${message.message_id}, using as-is`);
     }
     
+    // This section has been moved to where the content is extracted and processed
+    // at the core of the message handling flow. This ensures all messages are properly
+    // cleaned of JSON metadata at their source, at the point where content is extracted.
+    
     // Extract message status
     let status: MessageStatus = MessageStatus.STREAMING;
     if (message.status) {
@@ -213,14 +240,48 @@ class MessageHandler {
                      message.done === true || 
                      status === MessageStatus.COMPLETE;
     
-    // Extract content
+    // Extract content - with special handling for completion messages
     let content = '';
-    if (message.assistant_content !== undefined) {
-      content = typeof message.assistant_content === 'string' 
-        ? message.assistant_content 
-        : String(message.assistant_content);
-    } else if (message.message?.content !== undefined) {
-      content = message.message.content;
+    
+    // COMPLETION MESSAGES: Handle differently than streaming messages
+    if (isComplete) {
+      // For completion messages, we want the clean accumulated content
+      // Look for stored content first - this skips Ollama's metadata JSON
+      const storedContent = this.getStoredMessageContent(frontendMessageId);
+      if (storedContent) {
+        // Use the content we've been accumulating instead of the final message
+        // This avoids the JSON metadata problem entirely
+        console.log(`[messageHandler] Using accumulated content for complete message: ${frontendMessageId}`);
+        content = storedContent;
+      } else if (message.assistant_content) {
+        // If we don't have stored content, extract from message but handle JSON carefully
+        content = typeof message.assistant_content === 'string' 
+          ? message.assistant_content 
+          : String(message.assistant_content);
+        
+        // Check if content contains JSON and remove it
+        if (content.includes('{"model":')) {
+          const jsonIndex = content.indexOf('{"model":');
+          if (jsonIndex > 0) {
+            content = content.substring(0, jsonIndex).trim();
+            console.log(`[messageHandler] Removed JSON metadata from completion message`);
+          }
+        }
+      }
+    } 
+    // STREAMING MESSAGES: Normal processing
+    else {
+      if (message.assistant_content !== undefined) {
+        content = typeof message.assistant_content === 'string' 
+          ? message.assistant_content 
+          : String(message.assistant_content);
+        
+        // Store the content for this message ID for completion handling
+        this.storeMessageContent(frontendMessageId, content);
+      } else if (message.message?.content !== undefined) {
+        content = message.message.content;
+        this.storeMessageContent(frontendMessageId, content);
+      }
     }
     
     // Create normalized update object
