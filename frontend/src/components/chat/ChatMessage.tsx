@@ -113,6 +113,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   // Use the helper function to get content to display
   const contentToShow = getMessageContent(message);
   
+  // Debug the message content being passed to StreamingResponseRenderer
+  useEffect(() => {
+    if (isStreaming) {
+      console.log(`[ChatMessage] Streaming message content for ${message.id}: ${contentToShow.substring(0, 30)}... (length: ${contentToShow.length})`);
+    }
+  }, [isStreaming, message.id, contentToShow]);
+  
   // Animate message entrance
   useEffect(() => {
     const timer = setTimeout(() => {
