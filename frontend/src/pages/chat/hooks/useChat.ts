@@ -22,6 +22,7 @@ import { useChatConversations } from './useChatConversations';
 import { useChatMessages } from './useChatMessages';
 import { useRegisterMessageId } from '../../../services/chat/StreamingContext';
 import { MessageUpdate } from '../../../services/chat/types';
+import { sendChatMessage } from '../../../services/chat/messageService';
 
 /**
  * Options for the useChat hook
@@ -282,11 +283,12 @@ export const useChat = ({
         }
       });
       
-      // Use existing sendChatMessage function from messageHandlers
-      const response = await messageHandlers.sendChatMessage(
+      // Use sendChatMessage from the imported service
+      const response = await sendChatMessage(
         content,
         backendConversationId,
         file,
+        {}, // empty handlers
         assistantMessageId
       );
       
@@ -313,7 +315,7 @@ export const useChat = ({
       // Reset generating state
       dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
     }
-  }, [state.activeConversationId, registerMessage, messageHandlers.sendChatMessage]);
+  }, [state.activeConversationId, registerMessage]);
   
   // Use other message handlers
   const { regenerateMessage } = messageHandlers;
