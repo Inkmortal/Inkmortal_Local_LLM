@@ -106,8 +106,10 @@ async def stream_message(
         except Exception as e:
             db.rollback()
             logger.error(f"Database transaction failed: {str(e)}")
+            # Capture error message to avoid scope issues
+            error_message = str(e)
             async def db_error_stream():
-                error_data = {"error": f"Database error: {str(e)}"}
+                error_data = {"error": f"Database error: {error_message}"}
                 if transport_mode == "sse":
                     yield f"data: {json.dumps(error_data)}\n\n".encode('utf-8')
                 else:
@@ -199,14 +201,20 @@ async def stream_message(
                         "error": error_message
                     })
                     
+                    # Capture error message to avoid scope issues
+                    captured_error = error_message
+                    
                     # Return JSON response for WebSocket client
                     async def error_response_stream():
-                        yield json.dumps({"error": error_message, "success": False}).encode('utf-8')
+                        yield json.dumps({"error": captured_error, "success": False}).encode('utf-8')
                     return StreamingResponse(error_response_stream(), media_type="application/json")
                 else:
+                    # Capture error message to avoid scope issues
+                    captured_error = error_message
+                    
                     # Return SSE formatted error
                     async def error_sse_stream():
-                        yield f"data: {json.dumps({'error': error_message})}\n\n".encode('utf-8')
+                        yield f"data: {json.dumps({'error': captured_error})}\n\n".encode('utf-8')
                     return StreamingResponse(error_sse_stream(), media_type="text/event-stream")
             
             # Successfully added to queue
@@ -218,6 +226,9 @@ async def stream_message(
         except Exception as e:
             logger.error(f"Error adding request to queue: {e}")
             
+            # Capture error message to avoid scope issues
+            error_message = str(e)
+            
             # Handle error based on transport mode
             if transport_mode == "websocket":
                 # Send error via WebSocket
@@ -226,17 +237,17 @@ async def stream_message(
                     "message_id": assistant_message_id,
                     "conversation_id": conversation_id,
                     "status": "ERROR",
-                    "error": str(e)
+                    "error": error_message
                 })
                 
                 # Return JSON response
                 async def exception_response_stream():
-                    yield json.dumps({"error": str(e), "success": False}).encode('utf-8')
+                    yield json.dumps({"error": error_message, "success": False}).encode('utf-8')
                 return StreamingResponse(exception_response_stream(), media_type="application/json")
             else:
                 # Return SSE formatted error
                 async def exception_sse_stream():
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
+                    yield f"data: {json.dumps({'error': error_message})}\n\n".encode('utf-8')
                 return StreamingResponse(exception_sse_stream(), media_type="text/event-stream")
         
         # STEP 5: Define WebSocket streaming handler
@@ -649,10 +660,13 @@ async def stream_message(
         except:
             pass
         
+        # Capture error message to avoid scope issues
+        error_message = str(e)
+        
         # Return error in appropriate format based on transport mode
         if transport_mode == "websocket":
             # Return JSON error for WebSocket clients
-            error_data = {"error": str(e), "success": False}
+            error_data = {"error": error_message, "success": False}
             
             async def json_error_stream():
                 yield json.dumps(error_data).encode('utf-8')
@@ -661,6 +675,6 @@ async def stream_message(
         else:
             # Return SSE formatted error
             async def sse_error_stream():
-                yield f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
+                yield f"data: {json.dumps({'error': error_message})}\n\n".encode('utf-8')
             
             return StreamingResponse(sse_error_stream(), media_type="text/event-stream")
