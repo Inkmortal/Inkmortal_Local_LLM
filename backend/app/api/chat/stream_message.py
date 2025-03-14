@@ -80,7 +80,7 @@ async def stream_message(
         # Update conversation timestamp
         conversation.updated_at = datetime.now()
         
-        # Save user message
+        # Save user message (without status/model to ensure compatibility)
         user_message = Message(
             id=user_message_id,
             conversation_id=conversation_id,
@@ -90,13 +90,24 @@ async def stream_message(
         db.add(user_message)
         
         # Create assistant message placeholder
-        assistant_message = Message(
-            id=assistant_message_id,
-            conversation_id=conversation_id,
-            role="assistant",
-            content="",
-            status="streaming"
-        )
+        # Only include core fields (in case status and model columns don't exist)
+        try:
+            assistant_message = Message(
+                id=assistant_message_id,
+                conversation_id=conversation_id,
+                role="assistant",
+                content="",
+                status="streaming"  # Add status if column exists
+            )
+        except Exception as column_error:
+            # Fallback - create without status if column doesn't exist
+            logger.warning(f"Creating message without status column: {column_error}")
+            assistant_message = Message(
+                id=assistant_message_id,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=""
+            )
         db.add(assistant_message)
         
         # Commit all database changes in one transaction
