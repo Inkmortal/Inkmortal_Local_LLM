@@ -297,14 +297,16 @@
 
 @keyframes text-fade-in {
   from { 
-    opacity: 0.5; 
+    opacity: 0.7; 
     color: var(--accent-primary);
-    background-color: rgba(var(--accent-primary-rgb), 0.05);
+    background-color: rgba(var(--accent-primary-rgb), 0.1);
+    text-shadow: 0 0 3px rgba(var(--accent-primary-rgb), 0.3);
   }
   to { 
     opacity: 1;
     color: inherit;
     background-color: transparent;
+    text-shadow: none;
   }
 }
 
@@ -315,11 +317,14 @@
 }
 
 .streaming-text .new-token {
-  animation: text-fade-in 0.5s ease-in-out;
+  animation: text-fade-in 0.15s ease-in-out;
   animation-fill-mode: forwards;
   opacity: 1;
   color: inherit;
   display: inline;
+  /* Force hardware acceleration for smoother rendering */
+  transform: translateZ(0);
+  will-change: opacity, color, background-color;
 }
 
 .streaming-text.with-cursor:after {

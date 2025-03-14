@@ -80,13 +80,18 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
       const callbacks = messageCallbacks.current.get(messageId);
       if (callbacks) {
         console.log(`[StreamingContext] Notifying ${callbacks.size} subscribers for message ${messageId}`);
-        callbacks.forEach(callback => {
-          try {
-            callback(newContent, isComplete === true);
-          } catch (error) {
-            console.error(`Error in streaming callback for message ${messageId}:`, error);
-          }
-        });
+        
+        // For better streaming performance, add a small delay to callbacks
+        // This helps prevent React from batching too many updates together
+        setTimeout(() => {
+          callbacks.forEach(callback => {
+            try {
+              callback(newContent, isComplete === true);
+            } catch (error) {
+              console.error(`Error in streaming callback for message ${messageId}:`, error);
+            }
+          });
+        }, 0); // Microtask delay to break batch processing
       } else {
         console.log(`[StreamingContext] No subscribers for message ${messageId}`);
       }

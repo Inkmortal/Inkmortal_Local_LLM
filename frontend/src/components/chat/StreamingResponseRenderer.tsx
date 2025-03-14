@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { useMessageStreaming } from '../../services/chat/StreamingContext';
 
 /**
@@ -60,26 +61,33 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
       console.log(`[StreamingResponseRenderer] New token text: "${newTokenText.substring(0, 20)}${newTokenText.length > 20 ? '...' : ''}"`);
       
       // Add the new token to our tokens array
-      setTokens(prevTokens => {
-        const newTokens = [
-          ...prevTokens,
-          { text: newTokenText, isNew: true }
-        ];
-        console.log(`[StreamingResponseRenderer] Updated tokens array, now has ${newTokens.length} tokens`);
-        return newTokens;
+      // Using flushSync to ensure React updates the DOM immediately after this update
+      // This prevents React from batching all streaming tokens into a single render
+      flushSync(() => {
+        setTokens(prevTokens => {
+          const newTokens = [
+            ...prevTokens,
+            { text: newTokenText, isNew: true }
+          ];
+          console.log(`[StreamingResponseRenderer] Updated tokens array, now has ${newTokens.length} tokens`);
+          return newTokens;
+        });
       });
       
       // Set a timer to transition this token to normal state after animation
       const timerId = window.setTimeout(() => {
-        setTokens(currentTokens => 
-          currentTokens.map((token, idx) => 
-            idx === currentTokens.length - 1 ? { ...token, isNew: false } : token
-          )
-        );
+        // Also use flushSync here to ensure the token state update is visible immediately
+        flushSync(() => {
+          setTokens(currentTokens => 
+            currentTokens.map((token, idx) => 
+              idx === currentTokens.length - 1 ? { ...token, isNew: false } : token
+            )
+          );
+        });
         
         // Remove this timer ID from our ref once it completes
         timerRef.current = timerRef.current.filter(id => id !== timerId);
-      }, 500); // Match this to CSS animation duration
+      }, 150); // Reduced animation time for better responsiveness
       
       // Store the timer ID in our ref
       timerRef.current.push(timerId);
@@ -105,16 +113,23 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
       // Only reset when streaming STARTS (not during streaming)
       // This avoids resetting tokens that have already been accumulated
       if (tokens.length === 0) {
-        setTokens([]);
+        // Force immediate render with flushSync
+        flushSync(() => {
+          setTokens([]);
+        });
         prevContentRef.current = '';
+        console.log('[StreamingResponseRenderer] Reset tokens and prevContent for new streaming message');
       }
     } else if (effectiveContent) {
       // Only update when streaming ENDS if content is not empty
       // This preserves content that was accumulated during streaming
-      setTokens([{ text: effectiveContent, isNew: false }]);
+      flushSync(() => {
+        setTokens([{ text: effectiveContent, isNew: false }]);
+      });
       
       // Update our reference to the complete content
       prevContentRef.current = effectiveContent;
+      console.log('[StreamingResponseRenderer] Streaming ended, setting final content');
       
       // Clear any pending transitions
       timerRef.current.forEach(timerId => clearTimeout(timerId));
