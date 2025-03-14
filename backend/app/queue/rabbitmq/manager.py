@@ -222,29 +222,12 @@ class RabbitMQManager(QueueManagerInterface):
                 logger.error(f"Error publishing message: {e}")
                 raise
             
-            # Small delay to ensure message is queued
+            # Small delay to ensure message is queued before we calculate position
             await asyncio.sleep(0.1)
             
-            # Check queue sizes after publishing to verify the message went through
+            # Log queue sizes for monitoring purposes only
             new_sizes = await self.get_queue_size()
             logger.info(f"Queue sizes after publishing: {new_sizes}")
-            
-            # DETAILED DEBUG: Verify if message exists in queue
-            try:
-                # Check if message was actually added by examining the queue
-                queue_name = self.queue_handler.queue_names.get(priority_value)
-                queue = await self.queue_handler.get_queue(queue_name)
-                if queue:
-                    message = await queue.get(no_ack=False)
-                    if message:
-                        logger.info(f"QUEUE VERIFICATION: Successfully found message in queue {queue_name}")
-                        # Put it back
-                        await message.reject(requeue=True)
-                    else:
-                        logger.warning(f"QUEUE VERIFICATION: No message found in queue {queue_name} immediately after publishing")
-            except Exception as e:
-                logger.error(f"QUEUE VERIFICATION ERROR: {str(e)}")
-                # Continue anyway, don't block the main flow
             
             # Get queue position (approximate)
             sizes = await self.get_queue_size()
@@ -258,8 +241,16 @@ class RabbitMQManager(QueueManagerInterface):
                 if p_value < req_priority_value:
                     position += sizes.get(p_value, 0)
                 elif p_value == req_priority_value:
-                    position += sizes.get(p_value, 0) - 1 # Decrement to account for this new message
+                    # Get count of messages in this priority's queue
+                    queue_count = sizes.get(p_value, 0)
+                    # If the queue already has messages, our position is behind them
+                    if queue_count > 0:
+                        position += queue_count - 1  # Decrement to account for this new message
             
+            # Position can never be negative
+            if position < 0:
+                position = 0
+                
             return position
         except Exception as e:
             # Enhanced error logging with stack trace

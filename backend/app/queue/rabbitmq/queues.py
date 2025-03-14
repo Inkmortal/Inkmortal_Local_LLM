@@ -208,37 +208,6 @@ class QueueManager:
             # Confirm successful publish
             logger.info(f"Successfully published message to exchange '{exchange.name}' with routing key '{routing_key}'")
             
-            # DETAILED DEBUG: Verify message was published by checking queue sizes immediately
-            try:
-                # Wait briefly to ensure message reaches queue
-                import asyncio
-                await asyncio.sleep(0.05)
-                
-                # Direct count of messages in each queue
-                for queue_name in self.queue_names.values():
-                    try:
-                        queue_info = await self.channel.declare_queue(queue_name, passive=True)
-                        if hasattr(queue_info, 'message_count'):
-                            count = queue_info.message_count
-                        else:
-                            count = "unknown"
-                        logger.info(f"QUEUE PUBLISH VERIFY: Queue '{queue_name}' has {count} messages after publish")
-                        
-                        # Try to peek at a message if there are any
-                        if hasattr(queue_info, 'message_count') and queue_info.message_count > 0:
-                            queue = await self.get_queue(queue_name)
-                            message = await queue.get(no_ack=False)
-                            if message:
-                                logger.info(f"QUEUE PUBLISH VERIFY: Successfully peeked at message in queue '{queue_name}'")
-                                # Put it back
-                                await message.reject(requeue=True)
-                            else:
-                                logger.warning(f"QUEUE PUBLISH VERIFY: No message found in queue '{queue_name}' despite reported count > 0")
-                    except Exception as e:
-                        logger.warning(f"QUEUE PUBLISH VERIFY: Error checking queue '{queue_name}': {str(e)}")
-            except Exception as e:
-                logger.error(f"QUEUE PUBLISH VERIFY ERROR: {str(e)}")
-            
             # Log queue names and bindings
             logger.info(f"Available queues: {list(self.queues.keys())}")
         except Exception as e:
