@@ -6,6 +6,8 @@ import CodeEditor from './editors/CodeEditor';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
+  onStopGeneration?: () => void;
+  onFileSelect?: (file: File) => void; // Added for file attachment
   disabled?: boolean;
   placeholder?: string;
   inputRef?: React.RefObject<HTMLTextAreaElement>;
@@ -18,7 +20,9 @@ interface ChatInputProps {
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
-  onSend, 
+  onSend,
+  onStopGeneration, 
+  onFileSelect,
   disabled = false, 
   placeholder = "Type a message...",
   isGenerating = false,
@@ -37,6 +41,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // State for editor popups
   const [showMathEditor, setShowMathEditor] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
+  // Format menu no longer needed since we're using direct buttons
   const [showFormatMenu, setShowFormatMenu] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -272,10 +277,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setShowFormatMenu(false);
   };
 
-  // Toggle the format menu
-  const toggleFormatMenu = () => {
-    setShowFormatMenu(!showFormatMenu);
-  };
+  // The format menu is no longer needed since we have direct buttons
+  // This function is kept for possible future use
 
   return (
     <div className="w-full relative z-50">
@@ -327,8 +330,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onBlur={handleBlur}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
-            disabled={false} // We never disable the textarea to allow typing during generation
-            placeholder={isGenerating ? "AI is generating..." : placeholder}
+            disabled={false} // Always enabled to allow typing during generation
+            placeholder={placeholder}
             rows={1}
             className="w-full px-4 pt-3.5 pb-2 resize-none overflow-auto focus:outline-none z-10 relative"
             style={{ 
@@ -341,96 +344,134 @@ const ChatInput: React.FC<ChatInputProps> = ({
           />
           
           <div className="px-3 pb-2.5 flex justify-between items-center relative z-10">
-            {/* Format button that opens the menu */}
-            <button
-              type="button"
-              onClick={toggleFormatMenu}
-              className="p-2 rounded-full transition-colors"
-              style={{
-                backgroundColor: showFormatMenu ? `${currentTheme.colors.accentPrimary}20` : 'transparent',
-                color: currentTheme.colors.textSecondary
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
-            
-            {/* Format menu with floating options */}
-            {showFormatMenu && (
-              <div 
-                className="absolute bottom-full left-2 mb-2 bg-white rounded-lg shadow-lg overflow-hidden z-20"
+            {/* Direct format buttons - no menu needed */}
+            <div className="flex space-x-2 items-center">
+              {/* Add Code Block button */}
+              <button
+                type="button"
+                onClick={() => setShowCodeEditor(true)}
+                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
                 style={{
-                  backgroundColor: currentTheme.colors.bgSecondary,
-                  border: `1px solid ${currentTheme.colors.borderColor}40`,
+                  backgroundColor: 'transparent',
+                  color: currentTheme.colors.textSecondary,
                 }}
+                title="Insert code block"
               >
-                <div className="p-1 flex flex-col">
-                  <button
-                    type="button"
-                    onClick={convertSelectedToMath}
-                    className="flex items-center px-3 py-2 hover:bg-opacity-10 rounded-md text-sm"
-                    style={{
-                      color: currentTheme.colors.textPrimary,
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                    </svg>
-                    Math Expression
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={convertSelectedToCode}
-                    className="flex items-center px-3 py-2 hover:bg-opacity-10 rounded-md text-sm"
-                    style={{
-                      color: currentTheme.colors.textPrimary,
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    Code Block
-                  </button>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+              </button>
+              
+              {/* Add Math Expression button */}
+              <button
+                type="button"
+                onClick={() => setShowMathEditor(true)}
+                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: currentTheme.colors.textSecondary,
+                }}
+                title="Insert math expression"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 6h16M4 12h4m6 0h6M4 18h8M16 18h4" />
+                </svg>
+              </button>
+              
+              {/* Convert Selected Text To Code */}
+              <button
+                type="button"
+                onClick={convertSelectedToCode}
+                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: currentTheme.colors.textSecondary,
+                }}
+                title="Convert selection to code block"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 17l6-6-6-6M12 21h8" />
+                </svg>
+              </button>
+              
+              {/* Convert Selected Text To Math */}
+              <button
+                type="button"
+                onClick={convertSelectedToMath}
+                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: currentTheme.colors.textSecondary,
+                }}
+                title="Convert selection to math expression"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 9h16M4 15h10" />
+                </svg>
+              </button>
+              
+              {/* Attach File button */}
+              <label className="cursor-pointer">
+                <input 
+                  type="file" 
+                  className="hidden"
+                  onChange={(e) => e.target.files && e.target.files[0] && onFileSelect && onFileSelect(e.target.files[0])}
+                />
+                <div
+                  className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: currentTheme.colors.textSecondary,
+                  }}
+                  title="Attach file"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                  </svg>
                 </div>
-              </div>
-            )}
+              </label>
+            </div>
             
+            {/* Show Stop button if generating */}
+            {isGenerating && onStopGeneration ? (
+              <button
+                type="button"
+                onClick={onStopGeneration}
+                className="mr-2 rounded-full p-2 transition-all hover:scale-[1.05] hover:bg-red-500/10"
+                style={{ 
+                  backgroundColor: `${currentTheme.colors.textMuted}10`,
+                  color: currentTheme.colors.textMuted,
+                }}
+                title="Stop generation"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            ) : null}
+            
+            {/* Send button - always visible but conditionally enabled */}
             <Button
-              disabled={!message.trim() || isGenerating || isComposing}
+              disabled={!message.trim() || isComposing || (isGenerating && !message.trim())}
               type="submit"
               size="sm"
               className={`rounded-full py-2 px-4 transition-all ${
-                !message.trim() || isGenerating || isComposing ? 'opacity-50' : 'opacity-100 hover:scale-[1.03] hover:shadow-lg active:scale-[0.97]'
+                !message.trim() || (isGenerating && !message.trim()) || isComposing ? 'opacity-50' : 'opacity-100 hover:scale-[1.03] hover:shadow-lg active:scale-[0.97]'
               }`}
               style={{ 
-                background: message.trim() && !isGenerating && !isComposing
+                background: message.trim() && (!isGenerating || message.trim()) && !isComposing
                   ? `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})` 
                   : `${currentTheme.colors.bgTertiary}`,
-                color: message.trim() && !isGenerating && !isComposing ? '#fff' : currentTheme.colors.textMuted,
-                boxShadow: message.trim() && !isGenerating && !isComposing ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+                color: message.trim() && (!isGenerating || message.trim()) && !isComposing ? '#fff' : currentTheme.colors.textMuted,
+                boxShadow: message.trim() && (!isGenerating || message.trim()) && !isComposing ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
                 transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)'
               }}
             >
               <div className="flex items-center text-sm font-medium">
-                {isGenerating ? (
-                  <>
-                    <span className="mr-1.5">Generating</span>
-                    <div className="flex space-x-1 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s' }}></div>
-                      <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s', animationDelay: '0.15s' }}></div>
-                      <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'currentColor', animationDuration: '1s', animationDelay: '0.3s' }}></div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span>Send</span>
-                    <svg className="ml-1.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
-                  </>
-                )}
+                <span>Send</span>
+                <svg className="ml-1.5 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
               </div>
             </Button>
           </div>

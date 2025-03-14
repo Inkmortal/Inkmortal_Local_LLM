@@ -19,7 +19,6 @@ import { chatReducer, initialChatState, ChatActionType } from '../reducers/chatR
 import { Message, Conversation, MessageRole, MessageStatus, ContentUpdateMode } from '../types/message';
 import { useChatConnection } from './useChatConnection';
 import { useChatConversations } from './useChatConversations';
-import { useChatMessages } from './useChatMessages';
 import { useRegisterMessageId } from '../../../services/chat/StreamingContext';
 import { MessageUpdate } from '../../../services/chat/types';
 import { sendChatMessage } from '../../../services/chat/messageService';
@@ -161,15 +160,12 @@ export const useChat = ({
   // Message and connection handling are interdependent, so we need to initialize
   // them in a specific order to avoid circular dependencies
   
-  // First, create message handlers without WebSocket specifics
-  const messageHandlers = useChatMessages(state, dispatch, isMounted, tokenRef);
-
-  // Then create connection management using message handlers
+  // Create connection management only for connecting to WebSocket
+  // We don't need the message handlers from useChatMessages since we use StreamingContext
   const { connectWebSocket } = useChatConnection(
     tokenRef,
     dispatch,
-    state,
-    messageHandlers.handleWebSocketMessage
+    state
   );
   
   // Conversation management is independent
@@ -317,8 +313,23 @@ export const useChat = ({
     }
   }, [state.activeConversationId, registerMessage]);
   
-  // Use other message handlers
-  const { regenerateMessage } = messageHandlers;
+  // Implement regenerate message functionality directly
+  const regenerateMessage = useCallback(async () => {
+    // Find the last user message
+    const userMessages = Object.values(state.messages)
+      .filter((msg: Message) => msg.role === MessageRole.USER)
+      .sort((a: Message, b: Message) => b.timestamp - a.timestamp);
+    
+    if (userMessages.length === 0) {
+      return;
+    }
+    
+    // Get the most recent user message
+    const lastUserMessage = userMessages[0];
+    
+    // Send it again to regenerate the response
+    await sendMessage(lastUserMessage.content);
+  }, [state.messages, sendMessage]);
   
   // Improved stop generation function
   const stopGeneration = useCallback(() => {

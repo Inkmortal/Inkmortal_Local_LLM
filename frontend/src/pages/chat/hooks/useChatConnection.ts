@@ -10,24 +10,23 @@ import {
   initializeWebSocket,
   isWebSocketConnected,
   waitForWebSocketConnection,
-  addConnectionListener,
-  registerGlobalMessageHandler
+  addConnectionListener
 } from '../../../services/chat/websocketService';
 
 /**
  * Hook for managing WebSocket connections in chat interface
+ * Simplified to focus only on connection management, not message handling.
+ * Message handling is now done through StreamingContext.
  * 
  * @param tokenRef Reference to auth token
  * @param dispatch Reducer dispatch function
  * @param state Current chat state
- * @param handleWebSocketMessage Function to handle incoming messages
  * @returns WebSocket connection management functions
  */
 export function useChatConnection(
   tokenRef: React.MutableRefObject<string | null>,
   dispatch: React.Dispatch<any>,
-  state: any,
-  handleWebSocketMessage: (update: any, assistantMessageId: string | null) => void
+  state: any
 ) {
   const wsConnectedRef = useRef(false);
   
@@ -87,13 +86,9 @@ export function useChatConnection(
           });
         });
         
-        // Register a global message handler for messages without IDs (like from Ollama)
-        const unregisterGlobalHandler = registerGlobalMessageHandler((update) => {
-          console.log('Global message handler received update:', update);
-          
-          // Handle the message through the provided callback
-          handleWebSocketMessage(update, null);
-        });
+        // No need to register a global message handler at all
+        // StreamingContext now handles all WebSocket updates directly
+        const unregisterGlobalHandler = () => {};
         
         console.log("WebSocket connection listeners and handlers registered");
       } else {

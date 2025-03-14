@@ -4,6 +4,7 @@ import ChatInput from './ChatInput';
 interface ChatInputAdapterProps {
   onSendMessage: (message: string) => void;
   onStopGeneration?: () => void;
+  onFileSelect?: (file: File) => void;
   placeholder?: string;
   isGenerating?: boolean;
   codeInsertRef?: React.MutableRefObject<((code: string) => void) | undefined>;
@@ -11,11 +12,13 @@ interface ChatInputAdapterProps {
 }
 
 /**
- * Enhanced adapter component that supports the stop generation feature
+ * Enhanced adapter component that passes through to the improved ChatInput
+ * which now supports typing during generation and a subtle stop button
  */
 const ChatInputAdapterWithStop: React.FC<ChatInputAdapterProps> = ({
   onSendMessage,
   onStopGeneration,
+  onFileSelect,
   placeholder = "Type a message...",
   isGenerating = false,
   codeInsertRef,
@@ -23,31 +26,15 @@ const ChatInputAdapterWithStop: React.FC<ChatInputAdapterProps> = ({
 }) => {
   return (
     <div className="chat-input">
-      {isGenerating ? (
-        // Show stop button when generating
-        <div className="w-full">
-          <button
-            onClick={onStopGeneration}
-            className="w-full rounded-xl py-3 px-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium 
-                     hover:from-red-600 hover:to-red-700 active:scale-[0.97] transition-all duration-200
-                     shadow-md hover:shadow-lg flex items-center justify-center"
-          >
-            <span className="mr-2">Stop Generating</span>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      ) : (
-        // Show normal chat input when not generating
-        <ChatInput
-          onSend={onSendMessage}
-          placeholder={placeholder}
-          isGenerating={isGenerating}
-          codeInsertRef={codeInsertRef}
-          mathInsertRef={mathInsertRef}
-        />
-      )}
+      <ChatInput
+        onSend={onSendMessage}
+        onStopGeneration={onStopGeneration}
+        onFileSelect={onFileSelect}
+        placeholder={placeholder}
+        isGenerating={isGenerating}
+        codeInsertRef={codeInsertRef}
+        mathInsertRef={mathInsertRef}
+      />
     </div>
   );
 };
