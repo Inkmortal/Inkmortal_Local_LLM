@@ -344,92 +344,107 @@ const ChatInput: React.FC<ChatInputProps> = ({
           />
           
           <div className="px-3 pb-2.5 flex justify-between items-center relative z-10">
-            {/* Direct format buttons - no menu needed */}
-            <div className="flex space-x-2 items-center">
-              {/* Add Code Block button */}
-              <button
-                type="button"
-                onClick={() => setShowCodeEditor(true)}
-                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: currentTheme.colors.textSecondary,
-                }}
-                title="Insert code block"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
-              </button>
-              
-              {/* Add Math Expression button */}
-              <button
-                type="button"
-                onClick={() => setShowMathEditor(true)}
-                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: currentTheme.colors.textSecondary,
-                }}
-                title="Insert math expression"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 6h16M4 12h4m6 0h6M4 18h8M16 18h4" />
-                </svg>
-              </button>
-              
-              {/* Convert Selected Text To Code */}
-              <button
-                type="button"
-                onClick={convertSelectedToCode}
-                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: currentTheme.colors.textSecondary,
-                }}
-                title="Convert selection to code block"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 17l6-6-6-6M12 21h8" />
-                </svg>
-              </button>
-              
-              {/* Convert Selected Text To Math */}
-              <button
-                type="button"
-                onClick={convertSelectedToMath}
-                className="p-2 rounded-full transition-colors hover:bg-opacity-10"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: currentTheme.colors.textSecondary,
-                }}
-                title="Convert selection to math expression"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 9h16M4 15h10" />
-                </svg>
-              </button>
-              
-              {/* Attach File button */}
-              <label className="cursor-pointer">
-                <input 
-                  type="file" 
-                  className="hidden"
-                  onChange={(e) => e.target.files && e.target.files[0] && onFileSelect && onFileSelect(e.target.files[0])}
-                />
-                <div
+            {/* Format buttons with visual separation */}
+            <div className="flex items-center">
+              {/* Insert buttons group */}
+              <div className="flex space-x-2 items-center">
+                {/* Add Code Block button */}
+                <button
+                  type="button"
+                  onClick={() => setShowCodeEditor(true)}
                   className="p-2 rounded-full transition-colors hover:bg-opacity-10"
                   style={{
                     backgroundColor: 'transparent',
                     color: currentTheme.colors.textSecondary,
                   }}
-                  title="Attach file"
+                  title="Insert code block"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                </button>
+                
+                {/* Add Math Expression button */}
+                <button
+                  type="button"
+                  onClick={() => setShowMathEditor(true)}
+                  className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: currentTheme.colors.textSecondary,
+                  }}
+                  title="Insert math expression"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                    <path d="M4 6h16M4 12h4m6 0h6M4 18h8M16 18h4" />
                   </svg>
-                </div>
-              </label>
+                </button>
+                
+                {/* Attach File button */}
+                <label className="cursor-pointer">
+                  <input 
+                    type="file" 
+                    className="hidden"
+                    onChange={(e) => e.target.files && e.target.files[0] && onFileSelect && onFileSelect(e.target.files[0])}
+                  />
+                  <div
+                    className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: currentTheme.colors.textSecondary,
+                    }}
+                    title="Attach file"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </div>
+                </label>
+              </div>
+              
+              {/* Separator */}
+              <div 
+                className="mx-2 h-6" 
+                style={{
+                  width: '1px', 
+                  backgroundColor: `${currentTheme.colors.borderColor}40`
+                }}
+              />
+              
+              {/* Convert/Highlight buttons group */}
+              <div className="flex space-x-2 items-center">
+                {/* Convert Selected Text To Code */}
+                <button
+                  type="button"
+                  onClick={convertSelectedToCode}
+                  className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: currentTheme.colors.textSecondary,
+                  }}
+                  title="Convert selection to code block"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 17l6-6-6-6M12 21h8" />
+                  </svg>
+                </button>
+                
+                {/* Convert Selected Text To Math */}
+                <button
+                  type="button"
+                  onClick={convertSelectedToMath}
+                  className="p-2 rounded-full transition-colors hover:bg-opacity-10"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: currentTheme.colors.textSecondary,
+                  }}
+                  title="Convert selection to math expression"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 9h16M4 15h10" />
+                  </svg>
+                </button>
+              </div>
             </div>
             
             {/* Show Stop button if generating */}

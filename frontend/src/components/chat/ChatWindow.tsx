@@ -22,107 +22,128 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Animation frame ref for performance
-  const scrollRAFRef = useRef<number | null>(null);
-  const prevMessagesCountRef = useRef<number>(messages.length);
-  
-  // Track when user has manually scrolled up
-  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  // Scroll state tracking
+  const [atBottom, setAtBottom] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   
-  // More reliable scroll to bottom function using requestAnimationFrame
-  const scrollToBottom = useCallback((force = false) => {
-    // Cancel any previous animation frame
-    if (scrollRAFRef.current) {
-      window.cancelAnimationFrame(scrollRAFRef.current);
+  // Performance optimization - track last scroll position
+  const lastScrollPositionRef = useRef(0);
+  const scrollTresholdRef = useRef(150); // Distance from bottom to be considered "at bottom"
+  const userHasScrolledRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Check if user is at bottom of chat
+  const isAtBottom = useCallback(() => {
+    if (!containerRef.current) return true;
+    
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    return scrollHeight - scrollTop - clientHeight < scrollTresholdRef.current;
+  }, []);
+  
+  // Smooth scroll to bottom with animation frame for performance
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (!messagesEndRef.current || !containerRef.current) return;
+    
+    // If already at bottom, no need to scroll
+    if (isAtBottom() && !showScrollButton) return;
+    
+    // Use requestAnimationFrame for better performance
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'end',
+      });
+      
+      // Hide scroll button after scrolling to bottom
+      setShowScrollButton(false);
+      setAtBottom(true);
+      
+      // Reset user scroll state after returning to bottom
+      setTimeout(() => {
+        userHasScrolledRef.current = false;
+      }, 100);
+    });
+  }, [isAtBottom, showScrollButton]);
+  
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current) return;
+    
+    // Get current scroll position
+    const { scrollTop } = containerRef.current;
+    const scrollingUp = scrollTop < lastScrollPositionRef.current;
+    lastScrollPositionRef.current = scrollTop;
+    
+    // Check if we're at the bottom
+    const bottom = isAtBottom();
+    
+    // If the user has scrolled manually
+    if (Math.abs(scrollTop - lastScrollPositionRef.current) > 10) {
+      userHasScrolledRef.current = true;
     }
     
-    // If user has scrolled up and we're not forcing, show the button instead
-    if (userScrolledUp && !force) {
+    // Update state only if there's a change to reduce renders
+    if (bottom !== atBottom) {
+      setAtBottom(bottom);
+    }
+    
+    // Show/hide scroll button with a slight delay to prevent flashing
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    scrollTimeoutRef.current = setTimeout(() => {
+      // Only show button if we're not at the bottom
+      setShowScrollButton(!bottom);
+      scrollTimeoutRef.current = null;
+    }, 200);
+  }, [atBottom, isAtBottom]);
+  
+  // Add message change auto-scrolling effect
+  useEffect(() => {
+    // If no messages, don't scroll
+    if (messages.length === 0) return;
+    
+    // If user has scrolled up and we have a new message, show the button
+    if (messages.length > 0 && !atBottom && !userHasScrolledRef.current) {
       setShowScrollButton(true);
       return;
     }
     
-    // Otherwise scroll to bottom
-    scrollRAFRef.current = window.requestAnimationFrame(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'end' 
-        });
-      }
-      scrollRAFRef.current = null;
-      
-      // Hide the scroll button since we've scrolled to bottom
-      if (showScrollButton) {
-        setShowScrollButton(false);
-      }
-    });
-  }, [userScrolledUp, showScrollButton]);
-  
-  // Handle scrolling when messages change
-  useEffect(() => {
-    // If there are no messages, do not do anything
-    if (messages.length === 0) return;
-    
-    // Always force scroll to bottom for new messages
-    const forceScroll = true; // Force scroll for better user experience
-    
-    // Delay scrolling slightly to ensure DOM is updated
-    const timeoutId = setTimeout(() => {
-      scrollToBottom(forceScroll);
-    }, 100);
-    
-  }, [messages, scrollToBottom]);
-  
-  // When new message starts generating, always scroll to it
-  useEffect(() => {
-    if (isGenerating) {
-      // Force scroll with slight delay to ensure all components have rendered
+    // Auto-scroll on new messages or if we're at the bottom
+    if (atBottom || !userHasScrolledRef.current) {
+      // Small delay to ensure DOM is updated
       const timeoutId = setTimeout(() => {
         scrollToBottom(true);
-      }, 100);
-      
+      }, 50);
       return () => clearTimeout(timeoutId);
     }
-  }, [isGenerating, scrollToBottom]);
+  }, [messages, atBottom, scrollToBottom]);
   
-  // This effect tracks streaming updates to keep the chat scrolled down
-  // We need this to ensure smooth scrolling during streaming
+  // Auto-scroll during message generation
   useEffect(() => {
-    // Create an interval to check for new content and scroll
+    if (!isGenerating) return;
+    
+    // Don't auto-scroll if user has manually scrolled up
+    if (userHasScrolledRef.current && !atBottom) {
+      return;
+    }
+    
+    // Create a debounced interval to smooth out scrolling during generation
     const intervalId = setInterval(() => {
-      if (isGenerating && !userScrolledUp) {
-        scrollToBottom(true);
+      if (isGenerating && atBottom) {
+        scrollToBottom(false); // Use non-smooth scrolling for better performance during streaming
       }
-    }, 500); // Check every 500ms during generation
+    }, 300);
     
     return () => clearInterval(intervalId);
-  }, [isGenerating, userScrolledUp, scrollToBottom]);
+  }, [isGenerating, atBottom, scrollToBottom]);
   
-  // Monitor scroll position to detect when user scrolls up
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    // Consider "scrolled up" when more than 100px from bottom
-    const isScrolledToBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 100;
-    
-    setUserScrolledUp(!isScrolledToBottom);
-    
-    // Show scroll button if not at bottom
-    if (!isScrolledToBottom) {
-      setShowScrollButton(true);
-    } else {
-      setShowScrollButton(false);
-    }
-  }, []);
-  
-  // Clean up animation frame on unmount
+  // Clean up timeouts on unmount
   useEffect(() => {
     return () => {
-      if (scrollRAFRef.current) {
-        window.cancelAnimationFrame(scrollRAFRef.current);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
       }
     };
   }, []);
@@ -329,23 +350,38 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         <div ref={messagesEndRef} className="h-4" />
       </div>
       
-      {/* Scroll to bottom button */}
-      {showScrollButton && (
+      {/* New subtle scroll to bottom button with fade-in animation */}
+      <div 
+        className={`fixed bottom-24 right-4 z-50 transition-opacity duration-300 ease-in-out ${
+          showScrollButton ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
         <button
-          className="fixed bottom-24 right-8 z-50 p-3 rounded-full shadow-lg transition-all transform hover:scale-105"
+          className="flex items-center space-x-1 px-3 py-1.5 rounded-full shadow-md backdrop-blur-md transition-all transform hover:scale-105 active:scale-95"
           style={{
-            background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}, ${currentTheme.colors.accentSecondary})`,
-            color: '#fff',
-            boxShadow: `0 4px 12px ${currentTheme.colors.accentPrimary}40`
+            backgroundColor: `${currentTheme.colors.bgSecondary}CC`,
+            color: currentTheme.colors.textSecondary,
+            border: `1px solid ${currentTheme.colors.borderColor}60`,
+            boxShadow: `0 2px 8px rgba(0,0,0,0.15)`
           }}
           onClick={() => scrollToBottom(true)}
-          aria-label="Scroll to newest messages"
+          aria-label="New messages"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
+          <div className="relative">
+            <div 
+              className="absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse" 
+              style={{ 
+                backgroundColor: currentTheme.colors.accentPrimary,
+                boxShadow: `0 0 6px ${currentTheme.colors.accentPrimary}`
+              }}
+            />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </div>
+          <span className="text-xs font-medium whitespace-nowrap">New messages</span>
         </button>
-      )}
+      </div>
     </div>
   );
 };
