@@ -34,46 +34,37 @@ async def stream_message(
     assistant_message_id: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None
 ) -> StreamingResponse:
-    print("STREAM_MESSAGE: Function called!")
-    print(f"STREAM_MESSAGE: message_text={message_text[:20]}..., queue_manager={queue_manager}")
+    """Process a message with true token-by-token streaming from Ollama"""
     """Process a message with true token-by-token streaming from Ollama"""
     # Create a new conversation if needed
-    print("STREAM_MESSAGE: About to create fresh_db")
     fresh_db = SessionLocal()
-    print("STREAM_MESSAGE: fresh_db created")
     try:
-        print("STREAM_MESSAGE: Inside try block!")
         # Create or get conversation
-        print(f"STREAM_MESSAGE: Checking conversation_id: {conversation_id}")
+        logger.info(f"Processing request with conversation_id: {conversation_id}")
         
         # Check if this is a new conversation request (conversation_id == "new" or null)
         if conversation_id and conversation_id.lower() != "new":
-            print(f"STREAM_MESSAGE: Looking up conversation with ID {conversation_id} for user {user.id}")
+            logger.info(f"Looking up conversation with ID {conversation_id} for user {user.id}")
             conversation = fresh_db.query(Conversation).filter(
                 Conversation.id == conversation_id,
                 Conversation.user_id == user.id
             ).first()
             
-            print(f"STREAM_MESSAGE: Conversation found: {conversation is not None}")
-            
             if not conversation:
-                print(f"STREAM_MESSAGE: Conversation not found, returning error")
+                logger.warning(f"Conversation not found: {conversation_id}")
                 # Cannot use HTTP exceptions in streaming response
                 async def error_stream():
                     yield json.dumps({"error": "Conversation not found"}).encode('utf-8')
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
         else:
             # Treat "new" or null conversation_id as a request to create a new conversation
-            print(f"STREAM_MESSAGE: Detected request for new conversation")
+            logger.info(f"Detected request for new conversation")
         # This block now applies to both null/new conversation_id AND the else clause from above
         # Create new conversation using the service which adds welcome message
-        print(f"STREAM_MESSAGE: Creating new conversation for user {user.id}")
         from .conversation_service import create_conversation
         result = create_conversation(fresh_db, user.id, message_text[:50] if message_text else "New Conversation")
-        print(f"STREAM_MESSAGE: Create conversation result: {result}")
         
         if not result.get("success", False):
-            print(f"STREAM_MESSAGE: Failed to create conversation: {result.get('error')}")
             logger.error(f"Error creating conversation: {result.get('error')}")
             async def error_stream():
                 yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
@@ -81,13 +72,11 @@ async def stream_message(
         
         # Use the conversation ID from the result
         conversation_id = result["conversation_id"]
-        print(f"STREAM_MESSAGE: New conversation created with ID: {conversation_id}")
+        logger.info(f"New conversation created with ID: {conversation_id}")
         conversation = fresh_db.query(Conversation).filter(Conversation.id == conversation_id).first()
         
         # Save user message
-        print(f"STREAM_MESSAGE: Saving user message to conversation {conversation.id}")
         message_id = generate_id()
-        print(f"STREAM_MESSAGE: Generated message_id: {message_id}")
         message = Message(
             id=message_id,
             conversation_id=conversation.id,
@@ -98,12 +87,10 @@ async def stream_message(
         
         # Update timestamp
         conversation.updated_at = datetime.now()
-        print(f"STREAM_MESSAGE: Committing message to database")
         try:
             fresh_db.commit()
-            print(f"STREAM_MESSAGE: Database commit successful")
         except Exception as e:
-            print(f"STREAM_MESSAGE: Database commit failed: {str(e)}")
+            logger.error(f"Database commit failed: {str(e)}")
             raise
         
         # Create request object with model name (required by Ollama)
@@ -129,9 +116,6 @@ async def stream_message(
             request_body["headers"] = headers
             logger.info(f"Client headers: {headers}")
             
-        print("STREAM_MESSAGE: About to create request_obj")
-        print(f"STREAM_MESSAGE: Values - priority={RequestPriority.WEB_INTERFACE}, user_id={user.id}")
-        
         # Create the request object with our complete body
         request_obj = QueuedRequest(
             priority=RequestPriority.WEB_INTERFACE,
@@ -139,7 +123,6 @@ async def stream_message(
             body=request_body,
             user_id=user.id
         )
-        print("STREAM_MESSAGE: request_obj created successfully")
         
         # STEP 1: Extract assistant_message_id ONCE for consistency
         assistant_message_id = request_obj.body.get("assistant_message_id")
@@ -179,33 +162,8 @@ async def stream_message(
             else:
                 logger.warning(f"Priority is not an enum: {request_obj.priority}")
             
-            # DETAILED DEBUG: Check if queue manager is properly connected
-            try:
-                is_connected = queue_manager.connection.is_connected
-                logger.info(f"STREAM MESSAGE DEBUG: Queue manager connection status: {is_connected}")
-                
-                if is_connected:
-                    # Test queue connectivity
-                    queue_sizes = await queue_manager.get_queue_size()
-                    logger.info(f"STREAM MESSAGE DEBUG: Current queue sizes: {queue_sizes}")
-                    
-                    # Test RabbitMQ connection with direct query
-                    channel = await queue_manager.connection.get_channel()
-                    for queue_name in queue_manager.queue_handler.queue_names.values():
-                        try:
-                            result = await channel.queue_declare(queue=queue_name, passive=True)
-                            logger.info(f"STREAM MESSAGE DEBUG: Queue '{queue_name}' exists with {result.message_count} messages")
-                        except Exception as e:
-                            logger.error(f"STREAM MESSAGE DEBUG: Error checking queue '{queue_name}': {str(e)}")
-                else:
-                    logger.warning("STREAM MESSAGE DEBUG: Queue manager is not connected")
-            except Exception as e:
-                logger.error(f"STREAM MESSAGE DEBUG: Error checking queue manager status: {str(e)}")
-            
-            # Add the request to the queue - THIS NOW HAPPENS FOR ALL CLIENTS
-            logger.info(f"STREAM MESSAGE DEBUG: Calling add_request with payload: priority={request_obj.priority}, endpoint={request_obj.endpoint}")
+            # Add the request to the queue
             queue_position = await queue_manager.add_request(request_obj)
-            logger.info(f"STREAM MESSAGE DEBUG: add_request returned position: {queue_position}")
             
             # Check if request was added to queue successfully
             if queue_position < 0:
@@ -214,8 +172,7 @@ async def stream_message(
                     logger.warning(f"Message is already being processed: message_id={assistant_message_id}")
                     error_message = "This message is already being processed."
                 else:
-                    logger.error(f"Failed to add message to queue: position={queue_position}")
-                    logger.error(f"STREAM MESSAGE DEBUG: Queue failure details - position={queue_position}, conversation_id={conversation_id}")
+                    logger.error(f"Failed to add message to queue: position={queue_position}, conversation_id={conversation_id}")
                     error_message = "Failed to add message to queue. Please try again."
                 
                 if transport_mode == "websocket":
@@ -716,7 +673,6 @@ async def stream_message(
             return StreamingResponse(event_stream(), media_type="text/event-stream")
     
     except Exception as e:
-        print(f"STREAM_MESSAGE: Exception caught: {str(e)}")
         logger.error(f"Error setting up streaming: {e}")
         
         # Cleanup

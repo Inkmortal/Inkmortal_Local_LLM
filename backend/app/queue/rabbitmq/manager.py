@@ -274,15 +274,6 @@ class RabbitMQManager(QueueManagerInterface):
         try:
             await self.ensure_connected()
             
-            # DETAILED DEBUG: Get queue sizes before checking
-            queue_sizes = {}
-            try:
-                sizes = await self.get_queue_size()
-                logger.info(f"QUEUE GET: Current queue sizes before retrieval: {sizes}")
-                queue_sizes = sizes
-            except Exception as e:
-                logger.error(f"QUEUE GET: Error getting queue sizes: {e}")
-            
             for priority in sorted(RequestPriority):
                 priority_value = priority.value
                 queue_name = self.queue_handler.queue_names.get(priority_value)
@@ -290,55 +281,26 @@ class RabbitMQManager(QueueManagerInterface):
                     logger.warning(f"No queue found for priority value {priority_value}")
                     continue
                 
-                # DETAILED DEBUG: Log before attempting to get message
-                logger.info(f"QUEUE GET: Attempting to get message from queue '{queue_name}' with priority {priority.name}")
-                
                 message = await self.queue_handler.get_next_message(queue_name)
                 
                 if message:
-                    logger.info(f"QUEUE GET: Successfully retrieved message from queue '{queue_name}'")
-                    
-                    # DETAILED DEBUG: Log message details
-                    try:
-                        # Decode without fully parsing as JSON first to preserve original
-                        raw_body = message.body.decode('utf-8', errors='replace')
-                        logger.info(f"QUEUE GET: Raw message body (first 100 chars): {raw_body[:100]}...")
-                    except Exception as e:
-                        logger.error(f"QUEUE GET: Error decoding message body: {e}")
+                    logger.info(f"Retrieved message from queue '{queue_name}' with priority {priority.name}")
                     
                     try:
-                        # Now parse as JSON
+                        # Parse as JSON
                         request_dict = json.loads(message.body.decode())
-                        logger.info(f"QUEUE GET: Parsed message, keys: {list(request_dict.keys())}")
-                        logger.info(f"QUEUE GET: Message endpoint: {request_dict.get('endpoint')}, user_id: {request_dict.get('user_id')}")
                         
                         # Acknowledge message
                         await message.ack()
-                        logger.info(f"QUEUE GET: Message acknowledged from queue '{queue_name}'")
-                        
-                        # DETAILED DEBUG: Check queue size after retrieval
-                        try:
-                            new_sizes = await self.get_queue_size()
-                            logger.info(f"QUEUE GET: Queue sizes after message retrieval: {new_sizes}")
-                            
-                            # Check expected change
-                            if priority_value in queue_sizes and priority_value in new_sizes:
-                                old_size = queue_sizes.get(priority_value, 0)
-                                new_size = new_sizes.get(priority_value, 0)
-                                logger.info(f"QUEUE GET: Queue '{queue_name}' size changed from {old_size} to {new_size}")
-                        except Exception as e:
-                            logger.error(f"QUEUE GET: Error checking queue sizes after retrieval: {e}")
                         
                         return QueuedRequest.from_dict(request_dict)
                     except json.JSONDecodeError as e:
-                        logger.error(f"QUEUE GET: Error parsing message as JSON: {e}")
+                        logger.error(f"Error parsing message as JSON: {e}")
                         # Acknowledge to avoid blocking the queue, even though we can't process it
                         await message.ack()
-                        logger.warning(f"QUEUE GET: Acknowledged unparseable message from queue '{queue_name}'")
-                else:
-                    logger.info(f"QUEUE GET: No message found in queue '{queue_name}'")
+                        logger.warning(f"Acknowledged unparseable message from queue '{queue_name}'")
             
-            logger.info("QUEUE GET: No messages found in any priority queue")
+            # No messages found
             return None
         except Exception as e:
             logger.error(f"Error getting next request: {e}")
