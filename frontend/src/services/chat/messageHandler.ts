@@ -163,8 +163,21 @@ class MessageHandler {
     
     if (mapping) {
       frontendMessageId = mapping.frontendId;
-    } else if (message.conversation_id) {
-      // Try to find by conversation as fallback
+      console.log(`Found direct mapping for message ID: ${message.message_id} -> ${frontendMessageId}`);
+    } else if (message.assistant_message_id) {
+      // Try using assistant_message_id first if available (more reliable)
+      mapping = this.findMappingByBackendId(message.assistant_message_id);
+      if (mapping) {
+        frontendMessageId = mapping.frontendId;
+        console.log(`Found mapping via assistant_message_id: ${message.assistant_message_id} -> ${frontendMessageId}`);
+        
+        // Register this mapping for future messages
+        this.registerMessageIdMapping(frontendMessageId, message.message_id, message.conversation_id);
+      } 
+    }
+    
+    // Try conversation ID as a last resort
+    if (!mapping && message.conversation_id) {
       const conversationMapping = this.findMappingByConversationId(message.conversation_id);
       if (conversationMapping) {
         frontendMessageId = conversationMapping.frontendId;
@@ -177,6 +190,11 @@ class MessageHandler {
           message.conversation_id
         );
       }
+    }
+    
+    // If we still don't have a mapping, log it and use message_id directly
+    if (!mapping && frontendMessageId === message.message_id) {
+      console.log(`No mapping found for message: ${message.message_id}, using as-is`);
     }
     
     // Extract message status

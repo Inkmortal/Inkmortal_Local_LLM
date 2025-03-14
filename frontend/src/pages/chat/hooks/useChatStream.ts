@@ -230,9 +230,6 @@ export function useChatStream({
       
       console.log('[useChatStream] WebSocket connected:', isConnected);
       
-      // Register assistant message ID for tracking through context system
-      registerMessage(assistantMessageId, assistantMessageId, conversationId);
-      
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
       
@@ -240,7 +237,8 @@ export function useChatStream({
       console.log(`[useChatStream] Sending message to backend with conversationId: ${conversationId}`);
       console.log(`[useChatStream] Using assistantMessageId: ${assistantMessageId}`);
       
-      // Register message ID with streaming context
+      // Register message ID with streaming context - only register once
+      // This maps frontend and backend message IDs for the streaming context
       registerMessage(assistantMessageId, assistantMessageId, conversationId);
       
       // CRITICAL: Verify the assistantMessageId is defined before sending

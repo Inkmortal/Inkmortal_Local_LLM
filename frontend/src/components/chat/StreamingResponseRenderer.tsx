@@ -20,8 +20,18 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   const streamingData = messageId ? useMessageStreaming(messageId) : null;
   
   // Use streaming data if available, otherwise use props
-  const effectiveContent = streamingData?.content || content;
-  const effectiveIsStreaming = streamingData?.isStreaming || isStreaming;
+  // Important: Check for undefined/null instead of falsy values to handle empty strings properly
+  const effectiveContent = streamingData !== null && streamingData.content !== undefined ? 
+    streamingData.content : content;
+  const effectiveIsStreaming = streamingData !== null && streamingData.isStreaming !== undefined ? 
+    streamingData.isStreaming : isStreaming;
+    
+  // Debug streaming data
+  useEffect(() => {
+    if (messageId && streamingData) {
+      console.log(`[StreamingResponseRenderer] Updates for message ${messageId}: content length=${streamingData.content.length}, isStreaming=${streamingData.isStreaming}`);
+    }
+  }, [messageId, streamingData]);
   
   // Track previous content to identify new tokens
   const [prevContent, setPrevContent] = useState("");
@@ -34,8 +44,11 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   
   // Calculate new tokens when content changes
   useEffect(() => {
+    console.log(`[StreamingResponseRenderer] Effect triggered: streaming=${effectiveIsStreaming}, contentLength=${effectiveContent.length}, prevLength=${prevContent.length}`);
+    
     // Only update when streaming and content has changed
     if (!effectiveIsStreaming || effectiveContent === prevContent) {
+      console.log('[StreamingResponseRenderer] Skipping update - no change or not streaming');
       return;
     }
     
@@ -44,11 +57,17 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
     
     // If there are new tokens
     if (newTokenText.length > 0) {
+      console.log(`[StreamingResponseRenderer] New token text: "${newTokenText.substring(0, 20)}${newTokenText.length > 20 ? '...' : ''}"`);
+      
       // Add the new token to our tokens array
-      setTokens(prevTokens => [
-        ...prevTokens,
-        { text: newTokenText, isNew: true }
-      ]);
+      setTokens(prevTokens => {
+        const newTokens = [
+          ...prevTokens,
+          { text: newTokenText, isNew: true }
+        ];
+        console.log(`[StreamingResponseRenderer] Updated tokens array, now has ${newTokens.length} tokens`);
+        return newTokens;
+      });
       
       // Set a timer to transition this token to normal state after animation
       const timerId = window.setTimeout(() => {
@@ -64,6 +83,8 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
       
       // Store the timer ID in our ref
       timerRef.current.push(timerId);
+    } else {
+      console.log('[StreamingResponseRenderer] No new token content detected');
     }
     
     // Update previous content reference

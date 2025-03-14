@@ -52,6 +52,11 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
     
     if (!messageId) return;
     
+    // Debug messages to help diagnose streaming issues
+    console.log(`[StreamingContext] Received update for message ${messageId}: ` +
+      `content=${content ? content.substring(0, 10) + '...' : '[empty]'}, ` +
+      `mode=${contentUpdateMode}, status=${status}, isComplete=${isComplete}`);
+    
     // Update stored content based on update mode
     if (content !== undefined) {
       const currentContent = messageContents.current.get(messageId) || '';
@@ -64,6 +69,8 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
       // Store the new content
       messageContents.current.set(messageId, newContent);
       
+      console.log(`[StreamingContext] Updated content for ${messageId}, total length: ${newContent.length}`);
+      
       // Update status
       if (status) {
         messageStatus.current.set(messageId, status);
@@ -72,6 +79,7 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
       // Notify all callbacks for this message ID
       const callbacks = messageCallbacks.current.get(messageId);
       if (callbacks) {
+        console.log(`[StreamingContext] Notifying ${callbacks.size} subscribers for message ${messageId}`);
         callbacks.forEach(callback => {
           try {
             callback(newContent, isComplete === true);
@@ -79,6 +87,8 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
             console.error(`Error in streaming callback for message ${messageId}:`, error);
           }
         });
+      } else {
+        console.log(`[StreamingContext] No subscribers for message ${messageId}`);
       }
     }
   }, []);
@@ -208,6 +218,7 @@ export const useRegisterMessageId = () => {
   const streaming = useContext(StreamingContext);
   
   return useCallback((frontendId: string, backendId: string, conversationId: string) => {
+    console.log(`[useRegisterMessageId] Registering mapping: frontend=${frontendId}, backend=${backendId}, conversation=${conversationId}`);
     streaming.registerMessageIdMapping(frontendId, backendId, conversationId);
   }, [streaming]);
 };

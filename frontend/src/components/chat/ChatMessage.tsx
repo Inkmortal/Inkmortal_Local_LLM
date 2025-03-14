@@ -4,6 +4,7 @@ import MessageParser from './MessageParser';
 import StreamingResponseRenderer from './StreamingResponseRenderer';
 import Button from '../ui/Button';
 import { MessageRole, MessageStatus, MessageSection } from '../../pages/chat/types/message';
+import { useMessageStreaming } from '../../services/chat/StreamingContext';
 
 const LoadingDots = () => (
   <span className="loading-dots">
@@ -69,6 +70,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const [thinkingVisible, setThinkingVisible] = useState(showThinking);
   
+  // Use streaming data from context if this is an assistant message
+  const streamingInfo = message.role === MessageRole.ASSISTANT ? 
+    useMessageStreaming(message.id) : null;
+    
+  useEffect(() => {
+    if (streamingInfo && message.role === MessageRole.ASSISTANT) {
+      console.log(`[ChatMessage] Streaming info for ${message.id}: isStreaming=${streamingInfo.isStreaming}, contentLength=${streamingInfo.content.length}`);
+    }
+  }, [message.id, message.role, streamingInfo]);
+  
   const isAssistant = message.role === MessageRole.ASSISTANT;
   const isSystem = message.role === MessageRole.SYSTEM;
   const isUser = message.role === MessageRole.USER;
@@ -84,7 +95,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                       message.sections.thinking.content.trim().length > 0;
   
   // Determine if this message is currently streaming
-  const isStreaming = message.status === MessageStatus.STREAMING;
+  // Use the streaming context data if available, otherwise fall back to message status
+  const isStreaming = streamingInfo ? 
+    streamingInfo.isStreaming : 
+    message.status === MessageStatus.STREAMING;
   
   // Get message content using a clear, consistent approach
   const getMessageContent = (msg: ChatMessageProps['message']) => {
