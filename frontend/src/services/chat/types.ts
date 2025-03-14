@@ -116,6 +116,9 @@ export interface MessageUpdateEvent extends WebSocketMessage {
   assistant_message_id?: string;
   assistant_content?: string;
   error?: string;
+  content_update_mode?: string;  // 'APPEND' or 'REPLACE'
+  is_final_message?: boolean;    // Indicates if this is the final message in a stream
+  metadata?: MessageMetadata;    // Metadata about the message/generation
 }
 
 /**

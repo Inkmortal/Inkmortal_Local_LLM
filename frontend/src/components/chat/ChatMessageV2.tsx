@@ -66,11 +66,21 @@ export const ChatMessageV2: React.FC<ChatMessageProps> = React.memo(
     
     // Render loading indicator for appropriate states
     const renderLoadingIndicator = useMemo(() => {
-      if (
-        message.status === MessageStatus.PENDING ||
-        message.status === MessageStatus.SENDING ||
-        (message.status === MessageStatus.STREAMING && isStreaming)
-      ) {
+      // Only show "Sending..." for user messages that are in SENDING state
+      if (message.role === MessageRole.USER && message.status === MessageStatus.SENDING) {
+        return (
+          <div className="loading-indicator">
+            <span className="dot"></span>
+            <span className="dot"></span>
+            <span className="dot"></span>
+          </div>
+        );
+      }
+      
+      // For assistant messages, show indicator when streaming
+      if (message.role === MessageRole.ASSISTANT && 
+          message.status === MessageStatus.STREAMING && 
+          isStreaming) {
         return (
           <div className="loading-indicator">
             <span className="dot"></span>
@@ -81,7 +91,7 @@ export const ChatMessageV2: React.FC<ChatMessageProps> = React.memo(
       }
       
       return null;
-    }, [message.status, isStreaming]);
+    }, [message.role, message.status, isStreaming]);
     
     // Render error state with retry button
     const renderError = useMemo(() => {

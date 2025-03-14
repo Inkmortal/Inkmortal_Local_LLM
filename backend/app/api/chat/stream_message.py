@@ -396,7 +396,9 @@ async def stream_message(
                         "conversation_id": conversation_id,
                         "status": "COMPLETE",
                         "assistant_content": assistant_content,
-                        "is_complete": True
+                        "is_complete": True,
+                        "content_update_mode": "REPLACE",  # Mark this as a replace operation
+                        "is_final_message": True  # Additional flag to identify final message
                     }
                     
                     logger.info(f"Sending final completion message to WebSocket clients, id={assistant_message_id}")
@@ -645,7 +647,9 @@ async def stream_message(
                             "conversation_id": conversation_id,
                             "status": "COMPLETE",
                             "assistant_content": assistant_content,
-                            "is_complete": True
+                            "is_complete": True,
+                            "content_update_mode": "REPLACE",  # Mark this as a replace operation
+                            "is_final_message": True  # Additional flag to identify final message
                         }
                         
                         # Log the final message ID to verify consistency

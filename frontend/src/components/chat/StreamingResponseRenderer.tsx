@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useMessageStreaming } from '../../services/chat/StreamingContext';
-import MessageParser from './MessageParser';
+import TokenAnimator from './TokenAnimator';
 
 /**
- * Simplified streaming text renderer that directly displays content
- * received from StreamingContext
+ * Simplified streaming text renderer that displays content
+ * received from StreamingContext with smooth character-by-character animation
  */
 interface StreamingResponseRendererProps {
   content: string;
   isStreaming: boolean;
   messageId?: string;
+  animationSpeed?: number; // Characters per second
 }
 
 const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({ 
   content, 
   isStreaming,
-  messageId
+  messageId,
+  animationSpeed = 50 // Default 50 characters per second
 }) => {
   // Subscribe to streaming updates for this message ID
   const streamingData = messageId ? useMessageStreaming(messageId) : null;
@@ -45,9 +47,11 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   
   return (
     <div className="smooth-streaming-container">
-      <div className={`smooth-streaming-text ${isCurrentlyStreaming ? 'with-cursor' : ''}`}>
-        <MessageParser content={displayContent} isStreaming={false} />
-      </div>
+      <TokenAnimator 
+        content={displayContent} 
+        isStreaming={isCurrentlyStreaming}
+        animationSpeed={animationSpeed}
+      />
     </div>
   );
 };

@@ -168,7 +168,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       
       // Update status if provided
       if (status !== undefined) {
-        updatedMessage.status = status;
+        // For user messages transitioning to COMPLETE, make it high priority
+        if (updatedMessage.role === MessageRole.USER && status === MessageStatus.COMPLETE) {
+          console.log(`[chatReducer] Setting user message ${messageId} status to COMPLETE - high priority`);
+          // Force the status update for user messages going to COMPLETE
+          updatedMessage.status = status;
+        } else {
+          updatedMessage.status = status;
+        }
       }
       
       // Update content if provided

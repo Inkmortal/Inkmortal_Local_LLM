@@ -327,7 +327,8 @@
   will-change: opacity, color, background-color;
 }
 
-.streaming-text.with-cursor:after {
+.streaming-text.with-cursor:after,
+.token-animation.with-cursor:after {
   content: '';
   display: inline-block;
   width: 2px;
@@ -336,6 +337,33 @@
   margin-left: 1px;
   animation: cursor-blink 0.8s infinite;
   vertical-align: middle;
+}
+
+/* Token animation styling */
+.token-animation-container {
+  position: relative;
+}
+
+.token-animation {
+  position: relative;
+  white-space: pre-wrap;
+}
+
+@keyframes char-appear {
+  from {
+    opacity: 0;
+    color: var(--accent-primary);
+    text-shadow: 0 0 3px rgba(var(--accent-primary-rgb), 0.3);
+  }
+  to {
+    opacity: 1;
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+.animated-char {
+  animation: char-appear 0.1s ease-out forwards;
 }
 
 /* Simplified streaming styles - no animations */

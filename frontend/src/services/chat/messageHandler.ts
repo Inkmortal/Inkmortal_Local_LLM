@@ -306,8 +306,18 @@ class MessageHandler {
     const currentContent = this.getStoredMessageContent(frontendMessageId) || '';
     
     // Use a proper content update based on mode
-    const contentUpdateMode = message.content_update_type === 'replace' ? 
-      ContentUpdateMode.REPLACE : ContentUpdateMode.APPEND;
+    let contentUpdateMode = ContentUpdateMode.APPEND;
+    
+    // Check for explicit content update mode from backend
+    if (message.content_update_mode === 'REPLACE') {
+      contentUpdateMode = ContentUpdateMode.REPLACE;
+    } else if (message.content_update_type === 'replace') {
+      contentUpdateMode = ContentUpdateMode.REPLACE;
+    } else if (message.is_final_message === true) {
+      // If this is marked as a final message, use REPLACE mode to prevent duplication
+      contentUpdateMode = ContentUpdateMode.REPLACE;
+      console.log(`Final message detected for ${frontendMessageId}, using REPLACE mode`);
+    }
       
     // Update our stored content
     const newContent = contentUpdateMode === ContentUpdateMode.REPLACE ? 

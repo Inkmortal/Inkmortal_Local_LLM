@@ -43,6 +43,8 @@ export function useChatMessages(
   // Refs for debouncing WebSocket updates
   const contentBufferRef = useRef<Record<string, string>>({});
   const debounceTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  // Ref for message status update timeouts
+  const messageTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
   
   /**
    * Handler for WebSocket message updates
@@ -314,13 +316,32 @@ export function useChatMessages(
       }
       
       // Update user message to show it's been sent
-      dispatch({
-        type: ChatActionType.UPDATE_MESSAGE,
-        payload: {
-          messageId,
-          status: MessageStatus.COMPLETE
-        }
-      });
+      // Use a guaranteed approach to update user message status
+      setTimeout(() => {
+        dispatch({
+          type: ChatActionType.UPDATE_MESSAGE,
+          payload: {
+            messageId,
+            status: MessageStatus.COMPLETE
+          }
+        });
+        console.log(`[useChatMessages] Updated user message ${messageId} status to COMPLETE`);
+      }, 0);
+      
+      // Also set a safety timeout to ensure status is updated even if something else fails
+      const safetyTimeout = setTimeout(() => {
+        dispatch({
+          type: ChatActionType.UPDATE_MESSAGE,
+          payload: {
+            messageId,
+            status: MessageStatus.COMPLETE
+          }
+        });
+        console.log(`[useChatMessages] SAFETY: Forced update of user message ${messageId} status to COMPLETE`);
+      }, 1000);
+      
+      // Store timeout for cleanup
+      messageTimeoutsRef.current[messageId] = safetyTimeout;
       
       // Check if file is provided
       let fileData = null;
