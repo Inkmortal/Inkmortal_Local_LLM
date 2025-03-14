@@ -94,8 +94,8 @@ const TokenAnimator: React.FC<TokenAnimatorProps> = ({
   
   return (
     <div className="token-animation-container">
-      <div className={`token-animation ${isStreaming ? 'with-cursor' : ''}`}>
-        <MessageParser content={visibleContent} isStreaming={isStreaming} />
+      <div className="token-animation">
+        <MessageParser content={visibleContent} isStreaming={false} />
       </div>
     </div>
   );

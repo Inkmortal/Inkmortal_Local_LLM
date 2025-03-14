@@ -5,11 +5,10 @@ import MessageParser from './MessageParser';
 interface ChatMessageProps {
   message: Message;
   isStreaming?: boolean;
-  onRetry?: () => void;
 }
 
 export const ChatMessageV2: React.FC<ChatMessageProps> = React.memo(
-  ({ message, isStreaming = false, onRetry }) => {
+  ({ message, isStreaming = false }) => {
     // Compute CSS classes for the message container
     const messageClasses = useMemo(() => {
       const classes = ['chat-message'];
@@ -64,56 +63,24 @@ export const ChatMessageV2: React.FC<ChatMessageProps> = React.memo(
       );
     }, [message.sections?.response?.content, message.content, message.status, isStreaming]);
     
-    // Render loading indicator for appropriate states
+    // No loading indicators at all
     const renderLoadingIndicator = useMemo(() => {
-      // Only show "Sending..." for user messages that are in SENDING state
-      if (message.role === MessageRole.USER && message.status === MessageStatus.SENDING) {
-        return (
-          <div className="loading-indicator">
-            <span className="dot"></span>
-            <span className="dot"></span>
-            <span className="dot"></span>
-          </div>
-        );
-      }
-      
-      // For assistant messages, show indicator when streaming
-      if (message.role === MessageRole.ASSISTANT && 
-          message.status === MessageStatus.STREAMING && 
-          isStreaming) {
-        return (
-          <div className="loading-indicator">
-            <span className="dot"></span>
-            <span className="dot"></span>
-            <span className="dot"></span>
-          </div>
-        );
-      }
-      
       return null;
-    }, [message.role, message.status, isStreaming]);
+    }, []);
     
-    // Render error state with retry button
+    // Render error state without retry button
     const renderError = useMemo(() => {
       if (message.status === MessageStatus.ERROR) {
         return (
           <div className="error-indicator">
             <span className="error-icon">⚠️</span>
             <span className="error-message">Failed to generate response</span>
-            {onRetry && (
-              <button 
-                className="retry-button"
-                onClick={onRetry}
-              >
-                Retry
-              </button>
-            )}
           </div>
         );
       }
       
       return null;
-    }, [message.status, onRetry]);
+    }, [message.status]);
     
     // Determine avatar based on role
     const renderAvatar = useMemo(() => {
