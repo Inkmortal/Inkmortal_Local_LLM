@@ -94,44 +94,79 @@ class QueueManager:
     async def get_queue_size(self) -> Dict[int, int]:
         """Get the size of each priority queue"""
         result = {}
+        logger.info("QUEUE SIZE: Checking message counts for all queues")
+        
+        # DETAILED DEBUG: Check channel status first
+        if self.channel.is_closed:
+            logger.error("QUEUE SIZE: Channel is closed, queue sizes cannot be retrieved")
+            # Default to 0 for all queues
+            return {p: 0 for p in self.queue_names.keys()}
+            
         for priority_value, queue_name in self.queue_names.items():
+            logger.info(f"QUEUE SIZE: Checking size of queue '{queue_name}' for priority {priority_value}")
             try:
                 queue = await self.get_queue(queue_name)
                 if queue:
+                    logger.info(f"QUEUE SIZE: Successfully got queue object for '{queue_name}'")
                     # Get the queue information with message count
                     try:
+                        logger.info(f"QUEUE SIZE: Declaring queue '{queue_name}' with passive=True to get message count")
                         queue_info = await self.channel.declare_queue(
                             queue_name,
                             durable=True,
                             passive=True  # Just check if queue exists, don't create if not
                         )
                         
+                        # DETAILED DEBUG: Log queue_info
+                        logger.info(f"QUEUE SIZE: Queue info type: {type(queue_info)}")
+                        logger.info(f"QUEUE SIZE: Queue info dir: {dir(queue_info)}")
+                        
                         # Handle message count attribute safely
                         try:
                             # Try different ways to access message count based on aio_pika version
                             if hasattr(queue_info, 'message_count'):
-                                result[priority_value] = queue_info.message_count
+                                message_count = queue_info.message_count
+                                logger.info(f"QUEUE SIZE: Queue '{queue_name}' has {message_count} messages (via message_count attribute)")
+                                result[priority_value] = message_count
                             elif hasattr(queue_info, 'declaration_result') and hasattr(queue_info.declaration_result, 'message_count'):
-                                result[priority_value] = queue_info.declaration_result.message_count
+                                message_count = queue_info.declaration_result.message_count
+                                logger.info(f"QUEUE SIZE: Queue '{queue_name}' has {message_count} messages (via declaration_result.message_count)")
+                                result[priority_value] = message_count
                             elif isinstance(queue_info, dict) and 'message_count' in queue_info:
-                                result[priority_value] = queue_info['message_count']
+                                message_count = queue_info['message_count']
+                                logger.info(f"QUEUE SIZE: Queue '{queue_name}' has {message_count} messages (via dict['message_count'])")
+                                result[priority_value] = message_count
                             else:
                                 # If we can't determine message count, default to 0
-                                logger.warning(f"Could not determine message count format for queue {queue_name}, defaulting to 0")
+                                logger.warning(f"QUEUE SIZE: Could not determine message count format for queue {queue_name}, defaulting to 0")
                                 result[priority_value] = 0
+                                
+                                # DETAILED DEBUG: Try to directly access queue via aio_pika
+                                try:
+                                    # Attempt to peek at queue contents using basic_get with no_ack
+                                    message = await self.channel.basic_get(queue=queue_name, no_ack=True)
+                                    if message:
+                                        logger.info(f"QUEUE SIZE: Successfully peeked at message in queue '{queue_name}' using basic_get")
+                                    else:
+                                        logger.info(f"QUEUE SIZE: No messages found in queue '{queue_name}' using basic_get")
+                                except Exception as peek_err:
+                                    logger.error(f"QUEUE SIZE: Error peeking at queue '{queue_name}': {str(peek_err)}")
+                                
                         except Exception as e:
-                            logger.error(f"Error extracting message count for queue {queue_name}: {e}")
+                            logger.error(f"QUEUE SIZE: Error extracting message count for queue {queue_name}: {e}")
                             result[priority_value] = 0
                             
                     except Exception as e:
-                        logger.error(f"Error getting message count for queue {queue_name}: {e}")
+                        logger.error(f"QUEUE SIZE: Error getting message count for queue {queue_name}: {e}")
                         result[priority_value] = 0
                 else:
+                    logger.warning(f"QUEUE SIZE: Could not get queue object for '{queue_name}'")
                     result[priority_value] = 0
             except Exception as e:
-                logger.error(f"Error getting queue {queue_name}: {e}")
+                logger.error(f"QUEUE SIZE: Error getting queue {queue_name}: {e}")
                 result[priority_value] = 0
-                
+        
+        logger.info(f"QUEUE SIZE: Final result: {result}")
         return result
     
     async def purge_queue(self, name: str) -> None:
@@ -205,6 +240,37 @@ class QueueManager:
             
             # Confirm successful publish
             logger.info(f"Successfully published message to exchange '{exchange.name}' with routing key '{routing_key}'")
+            
+            # DETAILED DEBUG: Verify message was published by checking queue sizes immediately
+            try:
+                # Wait briefly to ensure message reaches queue
+                import asyncio
+                await asyncio.sleep(0.05)
+                
+                # Direct count of messages in each queue
+                for queue_name in self.queue_names.values():
+                    try:
+                        queue_info = await self.channel.declare_queue(queue_name, passive=True)
+                        if hasattr(queue_info, 'message_count'):
+                            count = queue_info.message_count
+                        else:
+                            count = "unknown"
+                        logger.info(f"QUEUE PUBLISH VERIFY: Queue '{queue_name}' has {count} messages after publish")
+                        
+                        # Try to peek at a message if there are any
+                        if hasattr(queue_info, 'message_count') and queue_info.message_count > 0:
+                            queue = await self.get_queue(queue_name)
+                            message = await queue.get(no_ack=False)
+                            if message:
+                                logger.info(f"QUEUE PUBLISH VERIFY: Successfully peeked at message in queue '{queue_name}'")
+                                # Put it back
+                                await message.reject(requeue=True)
+                            else:
+                                logger.warning(f"QUEUE PUBLISH VERIFY: No message found in queue '{queue_name}' despite reported count > 0")
+                    except Exception as e:
+                        logger.warning(f"QUEUE PUBLISH VERIFY: Error checking queue '{queue_name}': {str(e)}")
+            except Exception as e:
+                logger.error(f"QUEUE PUBLISH VERIFY ERROR: {str(e)}")
             
             # Log queue names and bindings
             logger.info(f"Available queues: {list(self.queues.keys())}")

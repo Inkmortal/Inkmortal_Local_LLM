@@ -179,8 +179,33 @@ async def stream_message(
             else:
                 logger.warning(f"Priority is not an enum: {request_obj.priority}")
             
+            # DETAILED DEBUG: Check if queue manager is properly connected
+            try:
+                is_connected = queue_manager.connection.is_connected
+                logger.info(f"STREAM MESSAGE DEBUG: Queue manager connection status: {is_connected}")
+                
+                if is_connected:
+                    # Test queue connectivity
+                    queue_sizes = await queue_manager.get_queue_size()
+                    logger.info(f"STREAM MESSAGE DEBUG: Current queue sizes: {queue_sizes}")
+                    
+                    # Test RabbitMQ connection with direct query
+                    channel = await queue_manager.connection.get_channel()
+                    for queue_name in queue_manager.queue_handler.queue_names.values():
+                        try:
+                            result = await channel.queue_declare(queue=queue_name, passive=True)
+                            logger.info(f"STREAM MESSAGE DEBUG: Queue '{queue_name}' exists with {result.message_count} messages")
+                        except Exception as e:
+                            logger.error(f"STREAM MESSAGE DEBUG: Error checking queue '{queue_name}': {str(e)}")
+                else:
+                    logger.warning("STREAM MESSAGE DEBUG: Queue manager is not connected")
+            except Exception as e:
+                logger.error(f"STREAM MESSAGE DEBUG: Error checking queue manager status: {str(e)}")
+            
             # Add the request to the queue - THIS NOW HAPPENS FOR ALL CLIENTS
+            logger.info(f"STREAM MESSAGE DEBUG: Calling add_request with payload: priority={request_obj.priority}, endpoint={request_obj.endpoint}")
             queue_position = await queue_manager.add_request(request_obj)
+            logger.info(f"STREAM MESSAGE DEBUG: add_request returned position: {queue_position}")
             
             # Check if request was added to queue successfully
             if queue_position < 0:
@@ -190,6 +215,7 @@ async def stream_message(
                     error_message = "This message is already being processed."
                 else:
                     logger.error(f"Failed to add message to queue: position={queue_position}")
+                    logger.error(f"STREAM MESSAGE DEBUG: Queue failure details - position={queue_position}, conversation_id={conversation_id}")
                     error_message = "Failed to add message to queue. Please try again."
                 
                 if transport_mode == "websocket":

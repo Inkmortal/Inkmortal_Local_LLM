@@ -62,6 +62,15 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
             priorities_checked = []
             from ..queue.models import RequestPriority
             
+            # DETAILED DEBUG: Log detailed queue state before trying to get message
+            try:
+                queue_sizes = await queue_manager.get_queue_size()
+                logger.info(f"QUEUE PEEK: Queue sizes before get_next_request: {queue_sizes}")
+                if sum(queue_sizes.values()) == 0:
+                    logger.debug("QUEUE PEEK: All queues empty, nothing to process")
+            except Exception as e:
+                logger.error(f"QUEUE PEEK ERROR: {str(e)}")
+            
             # Get next message from highest priority queue that has messages
             request = await queue_manager.get_next_request()
             
@@ -77,8 +86,10 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
                     priority_info = str(request.priority)
                     
                 logger.info(f"Processing message with age {age_seconds:.1f}s from priority {priority_info}")
+                logger.info(f"QUEUE GOT MESSAGE: Request ID: {request.timestamp.timestamp()}-{request.user_id}, endpoint: {request.endpoint}")
             else:
                 logger.debug("No message found in any priority queue")
+                logger.debug("QUEUE GOT MESSAGE: No message returned from get_next_request")
             
             if request:
                 # Generate a unique identifier for this request
