@@ -33,6 +33,8 @@ class Message(Base):
     role = Column(String(50), nullable=False)  # 'user', 'assistant', 'system'
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=func.now())
+    status = Column(String(50), nullable=True)  # 'streaming', 'complete', 'error'
+    model = Column(String(255), nullable=True)  # Store which model was used
     
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")

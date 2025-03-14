@@ -35,17 +35,19 @@ async def stream_message(
     headers: Optional[Dict[str, str]] = None
 ) -> StreamingResponse:
     """Process a message with true token-by-token streaming from Ollama"""
-    """Process a message with true token-by-token streaming from Ollama"""
-    # Create a new conversation if needed
-    fresh_db = SessionLocal()
+    # Use a single database session for the entire request
+    if not assistant_message_id:
+        assistant_message_id = generate_id()
+        logger.info(f"No assistant_message_id provided, generated: {assistant_message_id}")
+    
+    logger.info(f"Processing request with conversation_id: {conversation_id}, assistant_message_id: {assistant_message_id}")
+    
+    # STEP 1: Create or get conversation - Critical database operation
     try:
-        # Create or get conversation
-        logger.info(f"Processing request with conversation_id: {conversation_id}")
-        
         # Check if this is a new conversation request (conversation_id == "new" or null)
         if conversation_id and conversation_id.lower() != "new":
             logger.info(f"Looking up conversation with ID {conversation_id} for user {user.id}")
-            conversation = fresh_db.query(Conversation).filter(
+            conversation = db.query(Conversation).filter(
                 Conversation.id == conversation_id,
                 Conversation.user_id == user.id
             ).first()
@@ -58,24 +60,22 @@ async def stream_message(
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
         else:
             # Treat "new" or null conversation_id as a request to create a new conversation
-            logger.info(f"Detected request for new conversation")
-        # This block now applies to both null/new conversation_id AND the else clause from above
-        # Create new conversation using the service which adds welcome message
-        from .conversation_service import create_conversation
-        result = create_conversation(fresh_db, user.id, message_text[:50] if message_text else "New Conversation")
+            logger.info(f"Creating new conversation for user {user.id}")
+            from .conversation_service import create_conversation
+            result = create_conversation(db, user.id, message_text[:50] if message_text else "New Conversation")
+            
+            if not result.get("success", False):
+                logger.error(f"Error creating conversation: {result.get('error')}")
+                async def error_stream():
+                    yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
+                return StreamingResponse(error_stream(), media_type="text/event-stream")
+            
+            # Use the conversation ID from the result
+            conversation_id = result["conversation_id"]
+            logger.info(f"New conversation created with ID: {conversation_id}")
+            conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
         
-        if not result.get("success", False):
-            logger.error(f"Error creating conversation: {result.get('error')}")
-            async def error_stream():
-                yield f"data: {json.dumps({'error': 'Failed to create conversation'})}\n\n".encode('utf-8')
-            return StreamingResponse(error_stream(), media_type="text/event-stream")
-        
-        # Use the conversation ID from the result
-        conversation_id = result["conversation_id"]
-        logger.info(f"New conversation created with ID: {conversation_id}")
-        conversation = fresh_db.query(Conversation).filter(Conversation.id == conversation_id).first()
-        
-        # Save user message
+        # STEP 2: Save user message - Critical database operation
         message_id = generate_id()
         message = Message(
             id=message_id,
@@ -83,25 +83,72 @@ async def stream_message(
             role="user",
             content=message_text
         )
-        fresh_db.add(message)
+        db.add(message)
         
         # Update timestamp
         conversation.updated_at = datetime.now()
+        
+        # STEP 3: Pre-create the assistant message with empty content
+        # This ensures the message exists in the database even if streaming fails
+        assistant_message = Message(
+            id=assistant_message_id,
+            conversation_id=conversation.id,
+            role="assistant",
+            content="",  # Empty content that will be updated during streaming
+            status="streaming"  # Add a status field to track progress
+        )
+        db.add(assistant_message)
+        
+        # Commit both user message and assistant message placeholder
         try:
-            fresh_db.commit()
+            db.commit()
+            logger.info(f"Successfully saved user message and assistant placeholder: user={message_id}, assistant={assistant_message_id}")
         except Exception as e:
             logger.error(f"Database commit failed: {str(e)}")
+            db.rollback()
             raise
+        
+        # Get previous messages for conversation context (up to 32k context)
+        # 1. First get all messages for this conversation
+        previous_messages = db.query(Message).filter(
+            Message.conversation_id == conversation_id
+        ).order_by(Message.created_at).all()
+        
+        # 2. Format messages for the context window
+        formatted_messages = []
+        
+        # 3. Add system message first
+        formatted_messages.append({
+            "role": "system", 
+            "content": "You are a helpful AI assistant that answers questions accurately and concisely. You have access to the complete conversation history for context."
+        })
+        
+        # 4. Add previous messages (excluding the current user message which we'll add last)
+        for prev_msg in previous_messages:
+            if prev_msg.id != message_id:  # Skip the current message
+                formatted_messages.append({
+                    "role": prev_msg.role,
+                    "content": strip_editor_html(prev_msg.content)
+                })
+        
+        # 5. Add the current message last
+        formatted_messages.append({
+            "role": "user",
+            "content": strip_editor_html(message_text)
+        })
+        
+        # Log conversation length
+        logger.info(f"Including {len(formatted_messages)} messages in conversation context")
         
         # Create request object with model name (required by Ollama)
         request_body = {
-            "messages": [{"role": "user", "content": strip_editor_html(message_text)}],
+            "messages": formatted_messages,
             "model": settings.default_model,  # Use the model configured in settings
             "stream": True,
             "temperature": settings.temperature,
             "conversation_id": conversation_id,
             "message_id": message_id,
-            "system": "You are a helpful AI assistant that answers questions accurately and concisely.",
+            "assistant_message_id": assistant_message_id,  # Ensure this is included
             # Include tools if enabled in settings
             **({"tools": []} if settings.tool_calling_enabled else {})
         }
@@ -225,6 +272,10 @@ async def stream_message(
         async def process_streaming_for_websocket():
             """Process streaming for WebSocket clients without blocking HTTP response"""
             assistant_content = ""
+            model_used = settings.default_model
+            is_first_update = True  # Track first token for periodic updates
+            last_db_update_time = time.time()
+            update_frequency = 5.0  # Update database every 5 seconds during streaming
             
             try:
                 # First update to show processing has started
@@ -241,6 +292,7 @@ async def stream_message(
                 token_count = 0
                 logger.info(f"Starting to process streaming chunks from queue manager for WebSocket client")
                 
+                # Process streaming request
                 async for chunk in queue_manager.process_streaming_request(request_obj):
                     chunks_processed += 1
                     
@@ -278,6 +330,10 @@ async def stream_message(
                         elif "content" in data:
                             token = data["content"]
                         
+                        # Extract model information if available
+                        if "model" in data:
+                            model_used = data["model"]
+                        
                         # Handle the case where we don't have a token
                         if not token and isinstance(data, dict):
                             # If this appears to be a metadata message (for completion)
@@ -286,6 +342,10 @@ async def stream_message(
                                 
                                 # Store metadata separately instead of as content
                                 metadata = data.copy()
+                                
+                                # Extract model if available
+                                if "model" in metadata:
+                                    model_used = metadata["model"]
                                 
                                 # Create a properly structured message with metadata separate from content
                                 websocket_message = {
@@ -312,6 +372,7 @@ async def stream_message(
                         
                         # Accumulate content
                         assistant_content += token
+                        token_count += 1
                         
                         # Create WebSocket update message
                         websocket_message = {
@@ -348,6 +409,55 @@ async def stream_message(
                                 is_complete=is_complete,
                                 operation=APPEND
                             )
+                        
+                        # Periodically update the database with current content
+                        # This ensures partial messages are saved even if interrupted
+                        current_time = time.time()
+                        if is_first_update or is_complete or (current_time - last_db_update_time > update_frequency):
+                            is_first_update = False
+                            last_db_update_time = current_time
+                            
+                            # Use get_db to get a fresh session for each update
+                            update_db = SessionLocal()
+                            try:
+                                # Try to find existing message first
+                                existing_message = update_db.query(Message).filter(
+                                    Message.id == assistant_message_id
+                                ).first()
+                                
+                                if existing_message:
+                                    # Update existing message
+                                    existing_message.content = assistant_content
+                                    existing_message.status = "complete" if is_complete else "streaming"
+                                    existing_message.model = model_used
+                                else:
+                                    # Create new message if it doesn't exist (shouldn't happen, but as a fallback)
+                                    new_message = Message(
+                                        id=assistant_message_id,
+                                        conversation_id=conversation_id,
+                                        role="assistant",
+                                        content=assistant_content,
+                                        status="complete" if is_complete else "streaming",
+                                        model=model_used
+                                    )
+                                    update_db.add(new_message)
+                                
+                                # Update conversation last modified time
+                                conversation_record = update_db.query(Conversation).filter(
+                                    Conversation.id == conversation_id
+                                ).first()
+                                
+                                if conversation_record:
+                                    conversation_record.updated_at = datetime.now()
+                                
+                                # Commit the changes
+                                update_db.commit()
+                                logger.debug(f"Updated assistant message in database, id={assistant_message_id}, length={len(assistant_content)}")
+                            except Exception as db_error:
+                                logger.error(f"Error updating message in database: {db_error}")
+                                update_db.rollback()
+                            finally:
+                                update_db.close()
                     except json.JSONDecodeError:
                         # Not JSON, probably raw text
                         logger.warning(f"[Chunk #{chunks_processed}] Failed to parse as JSON")
@@ -377,17 +487,42 @@ async def stream_message(
                     except Exception as e:
                         logger.error(f"Error processing chunk: {e}")
                 
-                # Save final message to database
-                db = SessionLocal()
+                # Final message save to database
+                final_db = SessionLocal()
                 try:
-                    assistant_message = Message(
-                        id=assistant_message_id,
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=assistant_content
-                    )
-                    db.add(assistant_message)
-                    db.commit()
+                    # First try to find the message
+                    existing_message = final_db.query(Message).filter(
+                        Message.id == assistant_message_id
+                    ).first()
+                    
+                    if existing_message:
+                        # Update existing message with final content
+                        existing_message.content = assistant_content
+                        existing_message.status = "complete"
+                        existing_message.model = model_used
+                    else:
+                        # Create new message if it doesn't exist somehow
+                        final_message = Message(
+                            id=assistant_message_id,
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content=assistant_content,
+                            status="complete",
+                            model=model_used
+                        )
+                        final_db.add(final_message)
+                    
+                    # Update conversation last modified time
+                    conversation_record = final_db.query(Conversation).filter(
+                        Conversation.id == conversation_id
+                    ).first()
+                    
+                    if conversation_record:
+                        conversation_record.updated_at = datetime.now()
+                    
+                    # Commit the final changes
+                    final_db.commit()
+                    logger.info(f"Saved final assistant message to database, id={assistant_message_id}, length={len(assistant_content)}")
                     
                     # Final update to WebSocket clients
                     final_websocket_message = {
@@ -398,15 +533,41 @@ async def stream_message(
                         "assistant_content": assistant_content,
                         "is_complete": True,
                         "content_update_mode": "REPLACE",  # Mark this as a replace operation
-                        "is_final_message": True  # Additional flag to identify final message
+                        "is_final_message": True,  # Additional flag to identify final message
+                        "model": model_used  # Include the model used
                     }
                     
                     logger.info(f"Sending final completion message to WebSocket clients, id={assistant_message_id}")
                     await manager.send_update(user.id, final_websocket_message)
+                except Exception as final_db_error:
+                    logger.error(f"Error saving final message to database: {final_db_error}")
+                    final_db.rollback()
                 finally:
-                    db.close()
+                    final_db.close()
             except Exception as e:
                 logger.error(f"Streaming error in background task: {e}")
+                
+                # Try to update the message status in the database
+                error_db = SessionLocal()
+                try:
+                    # Try to find the message
+                    error_message = error_db.query(Message).filter(
+                        Message.id == assistant_message_id
+                    ).first()
+                    
+                    if error_message:
+                        # Mark as error with current content
+                        error_message.status = "error"
+                        error_message.content = assistant_content or f"Error: {str(e)}"
+                        error_db.commit()
+                        logger.info(f"Updated message status to error in database, id={assistant_message_id}")
+                except Exception as db_error:
+                    logger.error(f"Error updating message status in database: {db_error}")
+                    error_db.rollback()
+                finally:
+                    error_db.close()
+                
+                # Send error to WebSocket client
                 await manager.send_update(user.id, {
                     "type": "message_update",
                     "message_id": assistant_message_id,
@@ -421,8 +582,12 @@ async def stream_message(
         
         # STEP 4: Simplified event_stream function for SSE clients
         async def event_stream():
-            """Stream response for SSE clients only"""
+            """Stream response for SSE clients"""
             assistant_content = ""
+            model_used = settings.default_model
+            is_first_update = True
+            last_db_update_time = time.time()
+            update_frequency = 5.0  # Update database every 5 seconds during streaming
             
             try:
                 # Stream from Ollama via queue manager
@@ -439,7 +604,6 @@ async def stream_message(
                         "assistant_content": ""
                     })
                 
-                
                 # Stream from Ollama via queue manager
                 chunks_processed = 0
                 token_count = 0
@@ -448,25 +612,111 @@ async def stream_message(
                 async for chunk in queue_manager.process_streaming_request(request_obj):
                     chunks_processed += 1
                     
-                    # Log the raw chunk for debugging with chunk number
-                    logger.info(f"[Chunk #{chunks_processed}] Received streaming chunk: {chunk[:200]}...")
-                    
-                    # For SSE clients only - send in SSE format
+                    # For SSE clients - send in SSE format
                     if transport_mode == "sse":
                         yield f"data: {chunk}\n\n".encode('utf-8')
                     
+                    # Parse and process chunk content for database updates
+                    try:
+                        data = json.loads(chunk)
+                        
+                        # Extract token from various formats
+                        token = ""
+                        is_complete = False
+                        
+                        # Extract model information if available
+                        if "model" in data:
+                            model_used = data["model"]
+                        
+                        # Extract token from various formats
+                        if "choices" in data and len(data["choices"]) > 0:
+                            choice = data["choices"][0]
+                            if "delta" in choice and "content" in choice["delta"]:
+                                token = choice["delta"]["content"]
+                            elif "text" in choice:
+                                token = choice["text"]
+                            elif "message" in choice and "content" in choice["message"]:
+                                token = choice["message"]["content"]
+                            
+                            if "finish_reason" in choice and choice["finish_reason"] is not None:
+                                is_complete = True
+                        # Handle Ollama direct format (commonly used with Chinese models)
+                        elif "message" in data and "content" in data["message"]:
+                            token = data["message"]["content"]
+                            if "done" in data and data["done"] == True:
+                                is_complete = True
+                        # Try other formats
+                        elif "response" in data:
+                            token = data["response"]
+                        elif "content" in data:
+                            token = data["content"]
+                        
+                        # Skip empty tokens
+                        if token:
+                            # Accumulate content for database
+                            assistant_content += token
+                            token_count += 1
+                            
+                            # Periodically update the database with current content
+                            # This ensures partial messages are saved even if interrupted
+                            current_time = time.time()
+                            if is_first_update or is_complete or (current_time - last_db_update_time > update_frequency):
+                                is_first_update = False
+                                last_db_update_time = current_time
+                                
+                                # Use a fresh session for each update
+                                update_db = SessionLocal()
+                                try:
+                                    # Try to find existing message first
+                                    existing_message = update_db.query(Message).filter(
+                                        Message.id == assistant_message_id
+                                    ).first()
+                                    
+                                    if existing_message:
+                                        # Update existing message
+                                        existing_message.content = assistant_content
+                                        existing_message.status = "complete" if is_complete else "streaming"
+                                        existing_message.model = model_used
+                                    else:
+                                        # Create new message if it doesn't exist (shouldn't happen, but as a fallback)
+                                        new_message = Message(
+                                            id=assistant_message_id,
+                                            conversation_id=conversation_id,
+                                            role="assistant",
+                                            content=assistant_content,
+                                            status="complete" if is_complete else "streaming",
+                                            model=model_used
+                                        )
+                                        update_db.add(new_message)
+                                    
+                                    # Update conversation last modified time
+                                    conversation_record = update_db.query(Conversation).filter(
+                                        Conversation.id == conversation_id
+                                    ).first()
+                                    
+                                    if conversation_record:
+                                        conversation_record.updated_at = datetime.now()
+                                    
+                                    # Commit the changes
+                                    update_db.commit()
+                                    logger.debug(f"Updated assistant message in database, id={assistant_message_id}, length={len(assistant_content)}")
+                                except Exception as db_error:
+                                    logger.error(f"Error updating message in database: {db_error}")
+                                    update_db.rollback()
+                                finally:
+                                    update_db.close()
+                    except json.JSONDecodeError:
+                        # For non-JSON data, still try to update the database
+                        # Non-JSON data is usually plain text or malformed JSON
+                        assistant_content += chunk
+                    except Exception as parse_error:
+                        logger.error(f"Error parsing chunk: {parse_error}")
+                        
                     # Process and send via WebSocket only for WebSocket clients
                     if transport_mode == "websocket":
                         try:
                             # Parse the JSON data with detailed logging
-                            logger.info(f"[Chunk #{chunks_processed}] Parsing WebSocket chunk as JSON")
-                            try:
-                                data = json.loads(chunk)
-                                logger.info(f"[Chunk #{chunks_processed}] JSON parsed successfully: {list(data.keys())}")
-                            except Exception as json_err:
-                                logger.error(f"[Chunk #{chunks_processed}] JSON parse error: {str(json_err)}")
-                                logger.error(f"[Chunk #{chunks_processed}] Raw chunk: {chunk}")
-                                raise
+                            data = json.loads(chunk)
                             
                             token = ""
                             is_complete = False
@@ -621,17 +871,42 @@ async def stream_message(
                         
                         # No need to yield to HTTP client again, already done above
                 
-                # Save final message
-                db = SessionLocal()
+                # Final message save to database
+                final_db = SessionLocal()
                 try:
-                    assistant_message = Message(
-                        id=assistant_message_id,
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=assistant_content
-                    )
-                    db.add(assistant_message)
-                    db.commit()
+                    # First try to find the message
+                    existing_message = final_db.query(Message).filter(
+                        Message.id == assistant_message_id
+                    ).first()
+                    
+                    if existing_message:
+                        # Update existing message with final content
+                        existing_message.content = assistant_content
+                        existing_message.status = "complete"
+                        existing_message.model = model_used
+                    else:
+                        # Create new message if it doesn't exist somehow
+                        final_message = Message(
+                            id=assistant_message_id,
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content=assistant_content,
+                            status="complete",
+                            model=model_used
+                        )
+                        final_db.add(final_message)
+                    
+                    # Update conversation last modified time
+                    conversation_record = final_db.query(Conversation).filter(
+                        Conversation.id == conversation_id
+                    ).first()
+                    
+                    if conversation_record:
+                        conversation_record.updated_at = datetime.now()
+                    
+                    # Commit the final changes
+                    final_db.commit()
+                    logger.info(f"Saved final assistant message to database, id={assistant_message_id}, length={len(assistant_content)}")
                     
                     # Final update to WebSocket clients - clean format without SSE
                     if transport_mode == "websocket":
@@ -649,7 +924,8 @@ async def stream_message(
                             "assistant_content": assistant_content,
                             "is_complete": True,
                             "content_update_mode": "REPLACE",  # Mark this as a replace operation
-                            "is_final_message": True  # Additional flag to identify final message
+                            "is_final_message": True,  # Additional flag to identify final message
+                            "model": model_used  # Include model used
                         }
                         
                         # Log the final message ID to verify consistency
@@ -657,8 +933,11 @@ async def stream_message(
                         
                         logger.info("Sending final completion message to WebSocket clients")
                         await manager.send_update(user.id, final_websocket_message)
+                except Exception as final_db_error:
+                    logger.error(f"Error saving final message to database: {final_db_error}")
+                    final_db.rollback()
                 finally:
-                    db.close()
+                    final_db.close()
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 

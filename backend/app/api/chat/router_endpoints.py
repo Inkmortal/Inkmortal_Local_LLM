@@ -192,6 +192,52 @@ async def delete_conversation_endpoint(
     
     return {"success": True}
 
+# Endpoint to get available models (accessible to all users)
+@router.get("/models")
+async def get_available_models(
+    current_user: User = Depends(get_current_user)
+):
+    """Get a list of available models for regular users"""
+    try:
+        import requests
+        from ...config import settings
+        
+        # Try to get available models from Ollama API
+        response = requests.get(f"{settings.ollama_api_url}/api/tags")
+        
+        if response.status_code == 200:
+            models_data = response.json()
+            
+            # Format the response for frontend
+            models = [
+                {
+                    "id": model["name"],
+                    "name": model["name"],
+                    "size": model.get("size", 0),
+                    "modified_at": model.get("modified_at", "")
+                }
+                for model in models_data.get("models", [])
+            ]
+            
+            # If no models found from Ollama, use the default model
+            if not models:
+                models = [{"id": settings.default_model, "name": settings.default_model}]
+            
+            return {"models": models, "default_model": settings.default_model}
+        else:
+            # If Ollama request fails, return just the default model
+            return {
+                "models": [{"id": settings.default_model, "name": settings.default_model}],
+                "default_model": settings.default_model
+            }
+    except Exception as e:
+        logger.error(f"Error fetching models: {str(e)}")
+        # Return just the default model as fallback
+        return {
+            "models": [{"id": settings.default_model, "name": settings.default_model}],
+            "default_model": settings.default_model
+        }
+
 # Endpoint to send a message with file upload
 @router.post("/message")
 async def send_message_endpoint(

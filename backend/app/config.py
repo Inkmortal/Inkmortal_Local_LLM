@@ -46,32 +46,30 @@ class Settings:
         # Try to load model settings from database if not in testing mode
         if env_name != "testing" and "pytest" not in os.getenv("PYTHONPATH", "") and not os.getenv("PYTEST_CURRENT_TEST"):
             try:
-                # Import needed for database access, but avoid circular imports
-                import sqlite3
-                from pathlib import Path
+                # Import here to avoid circular imports
+                from sqlalchemy import create_engine, text
+                from sqlalchemy.exc import SQLAlchemyError
                 
-                # Determine database path based on DATABASE_URL
-                db_url = os.getenv("DATABASE_URL", "sqlite:///./test.db")
-                if db_url.startswith("sqlite:///"):
-                    db_path = db_url.replace("sqlite:///", "")
+                # Create a direct engine connection
+                engine = create_engine(self.db_url)
+                
+                # Try to get the default model from the config table
+                with engine.connect() as connection:
+                    # Check if config table exists by querying information_schema
+                    result = connection.execute(text(
+                        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'config')"
+                    ))
+                    table_exists = result.scalar()
                     
-                    # Make sure the DB file exists
-                    if Path(db_path).exists():
-                        # Connect to the database
-                        conn = sqlite3.connect(db_path)
-                        cursor = conn.cursor()
-                        
-                        # Check if config table exists
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='config'")
-                        if cursor.fetchone():
-                            # Get the default model from config
-                            cursor.execute("SELECT value FROM config WHERE key = 'default_model'")
-                            result = cursor.fetchone()
-                            if result:
-                                self._default_model = result[0]
-                                print(f"Loaded default model from database: {self._default_model}")
-                        
-                        conn.close()
+                    if table_exists:
+                        # Get the default model from config
+                        result = connection.execute(text(
+                            "SELECT value FROM config WHERE key = 'default_model'"
+                        ))
+                        row = result.fetchone()
+                        if row and row[0]:
+                            self._default_model = row[0]
+                            print(f"Loaded default model from database: {self._default_model}")
             except Exception as e:
                 print(f"Warning: Failed to load default model from database: {str(e)}")
                 print("Using default model from environment variable instead")
