@@ -278,9 +278,37 @@ async def stream_message(
                         elif "content" in data:
                             token = data["content"]
                         
-                        # If we couldn't find a token, use the entire chunk as fallback
+                        # Handle the case where we don't have a token
                         if not token and isinstance(data, dict):
-                            token = json.dumps(data)
+                            # If this appears to be a metadata message (for completion)
+                            if "model" in data or "done" in data or "total_duration" in data:
+                                logger.info(f"Received metadata message: {str(data)[:100]}")
+                                
+                                # Store metadata separately instead of as content
+                                metadata = data.copy()
+                                
+                                # Create a properly structured message with metadata separate from content
+                                websocket_message = {
+                                    "type": "message_update",
+                                    "message_id": assistant_message_id,
+                                    "conversation_id": conversation_id,
+                                    "status": "STREAMING" if not is_complete else "COMPLETE",
+                                    "assistant_content": "",  # No content in this update - it's just metadata
+                                    "is_complete": is_complete,
+                                    "metadata": metadata  # Include metadata in proper field
+                                }
+                                
+                                # Send update and continue to next iteration
+                                await manager.send_update(user.id, websocket_message)
+                                continue
+                            else:
+                                # If not metadata but still no token, log and continue
+                                logger.warning(f"Couldn't extract token from data: {str(data)[:100]}")
+                                token = ""
+                        
+                        # Skip empty tokens
+                        if not token:
+                            continue
                         
                         # Accumulate content
                         assistant_content += token
@@ -292,12 +320,13 @@ async def stream_message(
                             "conversation_id": conversation_id,
                             "status": "STREAMING",
                             "assistant_content": token,
-                            "is_complete": is_complete
+                            "is_complete": is_complete,
+                            "metadata": {}  # Always include metadata field for consistency
                         }
                         
-                        # For Ollama format, include model info when available
+                        # For Ollama format, include model info in metadata field
                         if "model" in data:
-                            websocket_message["model"] = data["model"]
+                            websocket_message["metadata"]["model"] = data["model"]
                         
                         # For completeness detection
                         if is_complete or (data.get("done") == True):
