@@ -33,8 +33,8 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
     }
   }, [messageId, streamingData]);
   
-  // Track previous content to identify new tokens
-  const [prevContent, setPrevContent] = useState("");
+  // Track previous content using a ref instead of state to ensure persistence across renders
+  const prevContentRef = useRef("");
   
   // Store tokens as an array of {text, isNew} objects
   const [tokens, setTokens] = useState<Array<{text: string, isNew: boolean}>>([]);
@@ -44,16 +44,16 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   
   // Calculate new tokens when content changes
   useEffect(() => {
-    console.log(`[StreamingResponseRenderer] Effect triggered: streaming=${effectiveIsStreaming}, contentLength=${effectiveContent.length}, prevLength=${prevContent.length}`);
+    console.log(`[StreamingResponseRenderer] Effect triggered: streaming=${effectiveIsStreaming}, contentLength=${effectiveContent.length}, prevLength=${prevContentRef.current.length}`);
     
     // Only update when streaming and content has changed
-    if (!effectiveIsStreaming || effectiveContent === prevContent) {
+    if (!effectiveIsStreaming || effectiveContent === prevContentRef.current) {
       console.log('[StreamingResponseRenderer] Skipping update - no change or not streaming');
       return;
     }
     
     // Get new content since last update
-    const newTokenText = effectiveContent.substring(prevContent.length);
+    const newTokenText = effectiveContent.substring(prevContentRef.current.length);
     
     // If there are new tokens
     if (newTokenText.length > 0) {
@@ -87,9 +87,9 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
       console.log('[StreamingResponseRenderer] No new token content detected');
     }
     
-    // Update previous content reference
-    setPrevContent(effectiveContent);
-  }, [effectiveContent, effectiveIsStreaming, prevContent]);
+    // Update previous content reference - using the ref directly
+    prevContentRef.current = effectiveContent;
+  }, [effectiveContent, effectiveIsStreaming]);
   
   // Cleanup all transition timers on unmount
   useEffect(() => {
@@ -106,12 +106,15 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
       // This avoids resetting tokens that have already been accumulated
       if (tokens.length === 0) {
         setTokens([]);
-        setPrevContent('');
+        prevContentRef.current = '';
       }
     } else if (effectiveContent) {
       // Only update when streaming ENDS if content is not empty
       // This preserves content that was accumulated during streaming
       setTokens([{ text: effectiveContent, isNew: false }]);
+      
+      // Update our reference to the complete content
+      prevContentRef.current = effectiveContent;
       
       // Clear any pending transitions
       timerRef.current.forEach(timerId => clearTimeout(timerId));
