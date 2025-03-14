@@ -176,39 +176,64 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         // Use the specified update mode or default to append
         const mode = contentUpdateMode || ContentUpdateMode.APPEND;
         
-        // If we're updating a specific section
-        if (section && updatedMessage.sections) {
-          const sectionData = updatedMessage.sections[section as keyof typeof updatedMessage.sections];
+        // Update the main content field for all messages
+        updatedMessage.content = mode === ContentUpdateMode.APPEND
+          ? (updatedMessage.content || '') + content
+          : content;
+        
+        // ARCHITECTURAL IMPROVEMENT: If this is an assistant message, ensure content
+        // is also mirrored to the response section that will be displayed
+        if (updatedMessage.role === MessageRole.ASSISTANT) {
+          // Ensure sections exist
+          if (!updatedMessage.sections) {
+            updatedMessage.sections = {
+              response: { content: '', visible: true },
+              thinking: { content: '', visible: false }
+            };
+          }
           
-          if (sectionData) {
-            // Create a new sections object to avoid mutation
-            updatedMessage.sections = {
-              ...updatedMessage.sections,
-              [section]: {
-                ...sectionData,
-                content: mode === ContentUpdateMode.APPEND
-                  ? sectionData.content + content
-                  : content
-              }
-            };
-          } else if (section === 'thinking' && !updatedMessage.sections.thinking) {
-            // Create thinking section if it doesn't exist
-            updatedMessage.sections = {
-              ...updatedMessage.sections,
-              thinking: {
-                content: content,
-                visible: true
-              }
-            };
-          } else if (section === 'response' && !updatedMessage.sections.response) {
-            // Create response section if it doesn't exist
-            updatedMessage.sections = {
-              ...updatedMessage.sections,
-              response: {
-                content: content,
-                visible: true
-              }
-            };
+          // If we're updating a specific section (like "thinking")
+          if (section && updatedMessage.sections) {
+            const sectionData = updatedMessage.sections[section as keyof typeof updatedMessage.sections];
+            
+            if (sectionData) {
+              // Create a new sections object to avoid mutation
+              updatedMessage.sections = {
+                ...updatedMessage.sections,
+                [section]: {
+                  ...sectionData,
+                  content: mode === ContentUpdateMode.APPEND
+                    ? (sectionData.content || '') + content
+                    : content
+                }
+              };
+            } else if (section === 'thinking' && !updatedMessage.sections.thinking) {
+              // Create thinking section if it doesn't exist
+              updatedMessage.sections = {
+                ...updatedMessage.sections,
+                thinking: {
+                  content: content,
+                  visible: true
+                }
+              };
+            } else if (section === 'response' && !updatedMessage.sections.response) {
+              // Create response section if it doesn't exist
+              updatedMessage.sections = {
+                ...updatedMessage.sections,
+                response: {
+                  content: content,
+                  visible: true
+                }
+              };
+            }
+          } else {
+            // No specific section provided, mirror content to response section
+            // This ensures content is always available where ChatMessage expects it
+            if (updatedMessage.sections.response) {
+              updatedMessage.sections.response.content = mode === ContentUpdateMode.APPEND
+                ? (updatedMessage.sections.response.content || '') + content
+                : content;
+            }
           }
         } else if (section && !updatedMessage.sections) {
           // Create sections object if it doesn't exist
@@ -226,11 +251,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
               visible: true
             };
           }
-        } else {
-          // Update main content - append to the current content to properly build up streaming tokens
-          updatedMessage.content = mode === ContentUpdateMode.APPEND
-            ? updatedMessage.content + content
-            : content;
         }
       }
       

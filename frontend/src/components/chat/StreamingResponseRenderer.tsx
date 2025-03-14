@@ -68,21 +68,26 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
     };
   }, []);
 
-  // Handle streaming state changes and content updates
+  // Handle streaming state changes and content transitions
   useEffect(() => {
     if (isStreaming) {
-      // Reset everything when streaming starts
-      setTokens([]);
-      setPrevContent('');
-    } else {
-      // Convert separate tokens to full content when streaming stops
+      // Only reset when streaming STARTS (not during streaming)
+      // This avoids resetting tokens that have already been accumulated
+      if (tokens.length === 0) {
+        setTokens([]);
+        setPrevContent('');
+      }
+    } else if (content) {
+      // Only update when streaming ENDS if content is not empty
+      // This preserves content that was accumulated during streaming
       setTokens([{ text: content, isNew: false }]);
       
       // Clear any pending transitions
       timerRef.current.forEach(timerId => clearTimeout(timerId));
       timerRef.current = [];
     }
-  }, [isStreaming, content]);
+    // Don't reset if streaming ends with empty content
+  }, [isStreaming, content, tokens.length]);
   
   // Render the tokens as React elements instead of using DOM manipulation
   const renderedContent = useMemo(() => {
