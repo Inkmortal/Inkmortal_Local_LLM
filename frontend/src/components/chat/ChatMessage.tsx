@@ -135,7 +135,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           {isStreaming ? (
             <StreamingResponseRenderer 
               content={contentToShow} 
-              isStreaming={isStreaming} 
+              isStreaming={isStreaming}
+              messageId={message.id}
             />
           ) : (
             <MessageParser 

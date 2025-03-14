@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import NotificationProvider from './components/ui/Notification';
 import { appRoutes } from './routes';
+import { StreamingProvider } from './services/chat/StreamingContext';
 
 // Clean up global window navigateTo function to avoid issues
 declare global {
@@ -29,7 +30,9 @@ function App() {
     <ThemeProvider>
       <NotificationProvider>
         <AuthProvider>
-          {routeElement}
+          <StreamingProvider>
+            {routeElement}
+          </StreamingProvider>
         </AuthProvider>
       </NotificationProvider>
     </ThemeProvider>

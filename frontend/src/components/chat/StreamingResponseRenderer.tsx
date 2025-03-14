@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useMessageStreaming } from '../../services/chat/StreamingContext';
 
 /**
  * Component for rendering streaming text with visible token-by-token updates
@@ -7,12 +8,21 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 interface StreamingResponseRendererProps {
   content: string;
   isStreaming: boolean;
+  messageId?: string; // Added message ID for direct subscription
 }
 
 const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({ 
   content, 
-  isStreaming 
+  isStreaming,
+  messageId
 }) => {
+  // Use the streaming context hook if messageId is provided
+  const streamingData = messageId ? useMessageStreaming(messageId) : null;
+  
+  // Use streaming data if available, otherwise use props
+  const effectiveContent = streamingData?.content || content;
+  const effectiveIsStreaming = streamingData?.isStreaming || isStreaming;
+  
   // Track previous content to identify new tokens
   const [prevContent, setPrevContent] = useState("");
   
@@ -25,12 +35,12 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   // Calculate new tokens when content changes
   useEffect(() => {
     // Only update when streaming and content has changed
-    if (!isStreaming || content === prevContent) {
+    if (!effectiveIsStreaming || effectiveContent === prevContent) {
       return;
     }
     
     // Get new content since last update
-    const newTokenText = content.substring(prevContent.length);
+    const newTokenText = effectiveContent.substring(prevContent.length);
     
     // If there are new tokens
     if (newTokenText.length > 0) {
@@ -57,8 +67,8 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
     }
     
     // Update previous content reference
-    setPrevContent(content);
-  }, [content, isStreaming, prevContent]);
+    setPrevContent(effectiveContent);
+  }, [effectiveContent, effectiveIsStreaming, prevContent]);
   
   // Cleanup all transition timers on unmount
   useEffect(() => {
@@ -70,24 +80,24 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
 
   // Handle streaming state changes and content transitions
   useEffect(() => {
-    if (isStreaming) {
+    if (effectiveIsStreaming) {
       // Only reset when streaming STARTS (not during streaming)
       // This avoids resetting tokens that have already been accumulated
       if (tokens.length === 0) {
         setTokens([]);
         setPrevContent('');
       }
-    } else if (content) {
+    } else if (effectiveContent) {
       // Only update when streaming ENDS if content is not empty
       // This preserves content that was accumulated during streaming
-      setTokens([{ text: content, isNew: false }]);
+      setTokens([{ text: effectiveContent, isNew: false }]);
       
       // Clear any pending transitions
       timerRef.current.forEach(timerId => clearTimeout(timerId));
       timerRef.current = [];
     }
     // Don't reset if streaming ends with empty content
-  }, [isStreaming, content, tokens.length]);
+  }, [effectiveIsStreaming, effectiveContent, tokens.length]);
   
   // Render the tokens as React elements instead of using DOM manipulation
   const renderedContent = useMemo(() => {
@@ -102,11 +112,11 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   }, [tokens]);
 
   return (
-    <div className={isStreaming ? 'streaming-container' : ''}>
-      <div className={`streaming-text ${isStreaming ? 'with-cursor' : ''}`}>
+    <div className={effectiveIsStreaming ? 'streaming-container' : ''}>
+      <div className={`streaming-text ${effectiveIsStreaming ? 'with-cursor' : ''}`}>
         {renderedContent}
       </div>
-      {isStreaming && <span className="streaming-cursor"></span>}
+      {effectiveIsStreaming && <span className="streaming-cursor"></span>}
     </div>
   );
 };

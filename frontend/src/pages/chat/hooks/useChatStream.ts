@@ -1,7 +1,7 @@
 /**
  * React hook for handling chat streaming with proper state management
  * 
- * Uses the streaming manager architecture for efficient updates without closure issues
+ * Uses React context for reliable streaming updates
  */
 import { useReducer, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,18 +15,16 @@ import {
   ContentUpdateMode
 } from '../types/message';
 
-// Import streaming manager
-import { 
-  streamingManager, 
-  useStreamingMessages, 
-  MessageUpdate 
-} from './streamingManager';
+// Import streaming context and types
+import { useRegisterMessageId } from '../../../services/chat/StreamingContext';
+import { MessageUpdate } from '../../../services/chat/types';
 
 // Import services
 import { sendChatMessage } from '../../../services/chat/messageService';
 import {
   ensureWebSocketConnection,
-  isWebSocketConnected
+  isWebSocketConnected,
+  subscribeToMessageUpdates
 } from '../../../services/chat/websocketService';
 
 // Import utils
@@ -68,8 +66,8 @@ export function useChatStream({
     activeConversationId: initialConversationId
   });
   
-  // Set up streaming messages
-  const { registerMessage, subscribeToMessages } = useStreamingMessages();
+  // Use register message ID from streaming context
+  const registerMessage = useRegisterMessageId();
   
   // Track component mount status
   const isMounted = useRef(true);
@@ -126,8 +124,8 @@ export function useChatStream({
       ensureWebSocketConnection(tokenRef.current);
     }
     
-    // Subscribe to streaming messages
-    const unsubscribe = subscribeToMessages(handleMessageUpdate);
+    // Subscribe to message updates directly
+    const unsubscribe = subscribeToMessageUpdates(handleMessageUpdate);
     
     // Cleanup on unmount
     return () => {
@@ -137,11 +135,6 @@ export function useChatStream({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
-      
-      // If this was the last component using the connection,
-      // we could potentially clean up all WebSocket resources here
-      // But this would depend on the requirements of the application
-      // For now, we'll leave the singleton instances running
     };
   }, [autoConnect, subscribeToMessages, handleMessageUpdate]);
   
@@ -237,7 +230,7 @@ export function useChatStream({
       
       console.log('[useChatStream] WebSocket connected:', isConnected);
       
-      // Register assistant message ID for tracking
+      // Register assistant message ID for tracking through context system
       registerMessage(assistantMessageId, assistantMessageId, conversationId);
       
       // Create abort controller for this request
@@ -246,6 +239,9 @@ export function useChatStream({
       // Send message to backend
       console.log(`[useChatStream] Sending message to backend with conversationId: ${conversationId}`);
       console.log(`[useChatStream] Using assistantMessageId: ${assistantMessageId}`);
+      
+      // Register message ID with streaming context
+      registerMessage(assistantMessageId, assistantMessageId, conversationId);
       
       // CRITICAL: Verify the assistantMessageId is defined before sending
       if (!assistantMessageId) {
