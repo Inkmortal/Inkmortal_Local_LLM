@@ -233,15 +233,15 @@ class RabbitMQManager(QueueManagerInterface):
             try:
                 # Check if message was actually added by examining the queue
                 queue_name = self.queue_handler.queue_names.get(priority_value)
-                channel = await self.connection.get_channel()
-                method_frame, header_frame, body = await channel.basic_get(queue=queue_name, auto_ack=False)
-                
-                if method_frame:
-                    logger.info(f"QUEUE VERIFICATION: Successfully found message in queue {queue_name}")
-                    # Put it back
-                    await channel.basic_reject(delivery_tag=method_frame.delivery_tag, requeue=True)
-                else:
-                    logger.warning(f"QUEUE VERIFICATION: No message found in queue {queue_name} immediately after publishing")
+                queue = await self.queue_handler.get_queue(queue_name)
+                if queue:
+                    message = await queue.get(no_ack=False)
+                    if message:
+                        logger.info(f"QUEUE VERIFICATION: Successfully found message in queue {queue_name}")
+                        # Put it back
+                        await message.reject(requeue=True)
+                    else:
+                        logger.warning(f"QUEUE VERIFICATION: No message found in queue {queue_name} immediately after publishing")
             except Exception as e:
                 logger.error(f"QUEUE VERIFICATION ERROR: {str(e)}")
                 # Continue anyway, don't block the main flow
