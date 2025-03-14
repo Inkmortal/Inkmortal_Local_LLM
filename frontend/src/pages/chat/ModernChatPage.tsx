@@ -67,10 +67,21 @@ const ModernChatPage: React.FC = () => {
   
   // Check if URL changed and load the corresponding conversation
   useEffect(() => {
-    if (isAuthenticated && conversationId) {
-      loadConversation(conversationId);
+    if (isAuthenticated) {
+      // Load conversation list on page load
+      loadConversations();
+      
+      // If we have a conversation ID, load that specific conversation
+      if (conversationId) {
+        loadConversation(conversationId);
+      } else {
+        // On /chat route with no ID, just show empty state
+        // Don't create a conversation yet - wait for first message
+        console.log('Empty chat state - waiting for first message');
+        startNewConversation();
+      }
     }
-  }, [isAuthenticated, conversationId, loadConversation]);
+  }, [isAuthenticated, conversationId, loadConversation, loadConversations, startNewConversation]);
   
   // Sidebar toggles
   const toggleHistorySidebar = () => {

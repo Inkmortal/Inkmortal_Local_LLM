@@ -177,60 +177,32 @@ export const useChat = ({
     updateConversationTitle
   } = useChatConversations(state, dispatch, isMounted);
   
-  // Use improved sendMessage function directly instead of from messageHandlers
-  // This ensures we get correct streaming behavior 
+  // Simplified sendMessage function that doesn't create temporary conversation IDs
+  // This ensures a clean flow where conversations are only created server-side
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
     if (!content.trim() && !file) {
       return; // Don't send empty messages without files
     }
     
     try {
-      // Generate temporary conversation ID if needed
-      const tempConversationId = state.activeConversationId || uuidv4();
-      
-      // Determine the conversation ID to use
-      const conversationId = state.activeConversationId || tempConversationId;
-      
       // Generate message IDs
       const userMessageId = uuidv4();
       const assistantMessageId = uuidv4();
       
-      // If we're creating a new conversation, set it as active immediately
-      if (!state.activeConversationId) {
-        dispatch({
-          type: ChatActionType.SET_ACTIVE_CONVERSATION,
-          payload: tempConversationId
-        });
-        
-        // Also add a temporary conversation object
-        dispatch({
-          type: ChatActionType.ADD_CONVERSATION,
-          payload: {
-            id: tempConversationId,
-            title: "New conversation",
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-          }
-        });
-      }
-      
-      // Modify conversation ID for new conversations
-      const backendConversationId = state.activeConversationId ? conversationId : "new";
-      
-      // Create user message with the determined conversationId
+      // Create user message
       const userMessage: Message = {
         id: userMessageId,
-        conversationId: conversationId,
+        conversationId: state.activeConversationId || 'new',
         role: MessageRole.USER,
         content,
         timestamp: Date.now(),
         status: MessageStatus.SENDING
       };
       
-      // Create placeholder assistant message with the same conversationId
+      // Create placeholder assistant message
       const assistantMessage: Message = {
         id: assistantMessageId,
-        conversationId: conversationId,
+        conversationId: state.activeConversationId || 'new',
         role: MessageRole.ASSISTANT,
         content: '',
         timestamp: Date.now(),
@@ -266,11 +238,11 @@ export const useChat = ({
       // Create abort controller for this request
       abortControllerRef.current = new AbortController();
       
-      // Register message ID with streaming context - only register once
-      // This maps frontend and backend message IDs for the streaming context
-      registerMessage(assistantMessageId, assistantMessageId, conversationId);
+      // Register message ID with streaming context
+      // If no conversation exists yet, we'll use 'new' as a placeholder
+      registerMessage(assistantMessageId, assistantMessageId, state.activeConversationId || 'new');
       
-      // Also update user message to complete status
+      // Update user message to complete status
       dispatch({
         type: ChatActionType.UPDATE_MESSAGE,
         payload: {
@@ -279,31 +251,48 @@ export const useChat = ({
         }
       });
       
-      // Use sendChatMessage from the imported service
+      // Send the message to the backend
+      // If no conversation exists, the backend will create one
       const response = await sendChatMessage(
         content,
-        backendConversationId,
+        state.activeConversationId || null, // null means create new conversation
         file,
         {}, // empty handlers
         assistantMessageId
       );
       
-      // Handle backend response with real IDs
-      if (response && response.conversation_id) {
-        // If the backend returned a different conversation ID than our temp one
-        if (!state.activeConversationId || 
-            (state.activeConversationId === tempConversationId && 
-             response.conversation_id !== tempConversationId)) {
-              
-          // Update our state with the real conversation ID
-          dispatch({
-            type: ChatActionType.SYNC_CONVERSATION_ID,
-            payload: {
-              oldId: conversationId,
-              newId: response.conversation_id
-            }
-          });
-        }
+      // If this is a new conversation, update our state with the real conversation ID
+      if (response && response.conversation_id && !state.activeConversationId) {
+        const newConversationId = response.conversation_id;
+        
+        // Update active conversation ID
+        dispatch({
+          type: ChatActionType.SET_ACTIVE_CONVERSATION,
+          payload: newConversationId
+        });
+        
+        // Update message conversation IDs
+        dispatch({
+          type: ChatActionType.UPDATE_MESSAGE,
+          payload: {
+            messageId: userMessageId,
+            metadata: { conversationId: newConversationId }
+          }
+        });
+        
+        dispatch({
+          type: ChatActionType.UPDATE_MESSAGE,
+          payload: {
+            messageId: assistantMessageId,
+            metadata: { conversationId: newConversationId }
+          }
+        });
+        
+        // Update URL without reloading the page
+        window.history.pushState({}, '', `/chat/${newConversationId}`);
+        
+        // Refresh the conversation list to include the new conversation
+        loadConversations();
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -311,7 +300,7 @@ export const useChat = ({
       // Reset generating state
       dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
     }
-  }, [state.activeConversationId, registerMessage]);
+  }, [state.activeConversationId, registerMessage, loadConversations]);
   
   // Implement regenerate message functionality directly
   const regenerateMessage = useCallback(async () => {

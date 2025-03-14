@@ -169,17 +169,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   ]);
   
   const emptyStateContent = (
-    <div className="w-full h-full flex items-center justify-center py-12">
+    <div className="w-full h-full flex items-center justify-center py-12 animate-fade-in">
       <div className="text-center max-w-md px-4">
         <div
-          className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center"
+          className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center"
           style={{
             background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}15, ${currentTheme.colors.accentSecondary}15)`,
-            border: `1px solid ${currentTheme.colors.borderColor}30`
+            border: `1px solid ${currentTheme.colors.borderColor}30`,
+            boxShadow: `0 0 30px ${currentTheme.colors.accentPrimary}10`
           }}
         >
           <svg 
-            className="w-8 h-8" 
+            className="w-10 h-10" 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24" 
@@ -190,20 +191,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </svg>
         </div>
         <h3 
-          className="text-lg font-medium mb-2"
+          className="text-xl font-medium mb-3"
           style={{ color: currentTheme.colors.textPrimary }}
         >
-          Start a new conversation
+          Welcome to Inkmortal Chat
         </h3>
         <p 
           className="mb-6 text-sm"
           style={{ color: currentTheme.colors.textSecondary }}
         >
-          Send a message to start chatting. You can ask questions,
-          share files, create math expressions, or work with code.
+          This is the start of a new conversation. Type a message below to begin.
+          Your conversation will be created automatically when you send your first message.
         </p>
         
-        <div className="grid grid-cols-2 gap-3 text-xs" style={{ color: currentTheme.colors.textMuted }}>
+        <div className="grid grid-cols-3 gap-3 text-xs mb-6" style={{ color: currentTheme.colors.textMuted }}>
+          <div 
+            className="p-3 rounded-md flex flex-col items-center text-center"
+            style={{ 
+              backgroundColor: `${currentTheme.colors.bgSecondary}50`,
+              border: `1px solid ${currentTheme.colors.borderColor}30`
+            }}
+          >
+            <svg className="w-5 h-5 mb-2 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Upload files
+          </div>
           <div 
             className="p-3 rounded-md flex flex-col items-center text-center"
             style={{ 
@@ -228,6 +241,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             </svg>
             Code blocks
           </div>
+        </div>
+        
+        <div 
+          className="text-xs py-3 px-4 rounded-lg"
+          style={{ 
+            backgroundColor: `${currentTheme.colors.accentPrimary}08`,
+            border: `1px solid ${currentTheme.colors.accentPrimary}15`,
+            color: currentTheme.colors.textSecondary
+          }}
+        >
+          <div className="flex items-center mb-2">
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-medium">Quick Tip</span>
+          </div>
+          <p>You can navigate between conversations using the sidebar. Your conversations will be saved automatically, and you can continue them later.</p>
         </div>
       </div>
     </div>

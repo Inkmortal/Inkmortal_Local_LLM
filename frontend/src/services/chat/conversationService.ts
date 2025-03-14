@@ -81,7 +81,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
 export async function listConversations(): Promise<ConversationSummary[]> {
   return executeServiceCall(
     async () => {
-      const response = await fetchApi<ConversationSummary[]>('/api/chat/conversations', {
+      const response = await fetchApi<{conversations: ConversationSummary[]}>('/api/chat/conversations', {
         method: 'GET',
       });
       

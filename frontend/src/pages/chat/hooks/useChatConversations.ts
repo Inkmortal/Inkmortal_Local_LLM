@@ -216,7 +216,8 @@ export function useChatConversations(
   }, [state.messages, state.isLoadingMessages, navigate, dispatch, isMounted]);
   
   /**
-   * Start a new conversation
+   * Start a new conversation - simplified to just clear state
+   * Conversation will only be created when the first message is sent
    */
   const startNewConversation = useCallback(() => {
     // Clear messages and active conversation ID
@@ -224,8 +225,12 @@ export function useChatConversations(
     dispatch({ type: ChatActionType.SET_ACTIVE_CONVERSATION, payload: null });
     
     // Navigate to base chat URL to reflect new conversation
-    navigate('/chat');
-  }, [navigate, dispatch]);
+    // Using replace state to avoid back button issues
+    window.history.pushState({}, '', '/chat');
+    
+    // Log to confirm start of new chat
+    console.log('Starting new conversation - waiting for first message to create in database');
+  }, [dispatch]);
   
   /**
    * Delete the current conversation
