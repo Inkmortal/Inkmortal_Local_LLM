@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { subscribeToMessageUpdates, registerMessageId } from './websocketService';
 import { MessageUpdate } from './types';
-import { ContentUpdateMode, MessageStatus } from '../chat/types/message';
+import { ContentUpdateMode, MessageStatus } from '../../pages/chat/types/message';
 
 // Define the context interface
 interface StreamingContextValue {
