@@ -91,8 +91,11 @@ export async function listConversations(): Promise<ConversationSummary[]> {
       
       // The backend returns {conversations: [...]} but we need the array directly
       if (result.success && result.data) {
-        return result.data.conversations || [];
+        const conversations = result.data.conversations || [];
+        console.log(`[conversationService] Received ${conversations.length} conversations from backend`);
+        return conversations;
       }
+      console.log('[conversationService] No conversations data received from backend');
       return [];
     },
     []

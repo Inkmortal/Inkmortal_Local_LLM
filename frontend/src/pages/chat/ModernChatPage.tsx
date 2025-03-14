@@ -65,23 +65,33 @@ const ModernChatPage: React.FC = () => {
   const codeInsertRef = useRef<((code: string) => void) | undefined>(undefined);
   const mathInsertRef = useRef<((formula: string) => void) | undefined>(undefined);
   
-  // Check if URL changed and load the corresponding conversation
+  // Track whether conversations have been loaded
+  const hasLoadedConversationsRef = useRef(false);
+  
+  // Effect to load conversations only once
+  useEffect(() => {
+    if (isAuthenticated && !hasLoadedConversationsRef.current) {
+      // Load conversation list only once
+      console.log('[ModernChatPage] Loading conversations list (one-time)');
+      loadConversations();
+      hasLoadedConversationsRef.current = true;
+    }
+  }, [isAuthenticated, loadConversations]);
+  
+  // Separate effect to handle conversation loading based on URL
   useEffect(() => {
     if (isAuthenticated) {
-      // Load conversation list on page load
-      loadConversations();
-      
       // If we have a conversation ID, load that specific conversation
       if (conversationId) {
+        console.log(`[ModernChatPage] Loading conversation from URL: ${conversationId}`);
         loadConversation(conversationId);
       } else {
         // On /chat route with no ID, just show empty state
-        // Don't create a conversation yet - wait for first message
-        console.log('Empty chat state - waiting for first message');
+        console.log('[ModernChatPage] Empty chat state - waiting for first message');
         startNewConversation();
       }
     }
-  }, [isAuthenticated, conversationId, loadConversation, loadConversations, startNewConversation]);
+  }, [isAuthenticated, conversationId, loadConversation, startNewConversation]);
   
   // Sidebar toggles
   const toggleHistorySidebar = () => {

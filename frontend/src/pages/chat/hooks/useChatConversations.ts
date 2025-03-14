@@ -55,6 +55,11 @@ export function useChatConversations(
           updatedAt: new Date(convRaw.updated_at).getTime()
         }));
         
+        console.log(`[useChatConversations] Processing ${conversations.length} conversations`);
+        if (conversations.length > 0) {
+          console.log(`[useChatConversations] First conversation: ${conversations[0].id} - ${conversations[0].title}`);
+        }
+        
         dispatch({ type: ChatActionType.SET_CONVERSATIONS, payload: conversations });
       }
     } catch (error) {
