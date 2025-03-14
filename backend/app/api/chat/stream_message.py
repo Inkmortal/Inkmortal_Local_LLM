@@ -147,20 +147,11 @@ async def stream_message(
             is_websocket_client = request_headers.get("Connection") == "Upgrade" and "Upgrade" in request_headers
             transport_mode = "websocket" if is_websocket_client else "sse"
         
-        print(f"Stream message transport mode: {transport_mode}, headers={request_obj.body.get('headers')}")
-        logger.info(f"Using transport mode: {transport_mode} for client")
+        logger.info(f"Using transport mode: {transport_mode}")
         
-        # STEP 2: Add request to queue regardless of transport mode
+        # Add request to queue
         try:
-            # Add request to queue with error handling - NOW HAPPENS FOR ALL CLIENTS
-            logger.info(f"Adding request to queue: user_id={user.id}, conversation_id={conversation_id}, message_id={assistant_message_id}")
-            logger.info(f"Request priority: {request_obj.priority}, endpoint: {request_obj.endpoint}")
-            
-            # Verify the type of the priority
-            if hasattr(request_obj.priority, 'name'):
-                logger.info(f"Priority is an enum: {request_obj.priority.name} (value: {request_obj.priority.value})")
-            else:
-                logger.warning(f"Priority is not an enum: {request_obj.priority}")
+            logger.info(f"Adding request to queue: user={user.id}, conversation={conversation_id}, priority={request_obj.priority.name if hasattr(request_obj.priority, 'name') else request_obj.priority}")
             
             # Add the request to the queue
             queue_position = await queue_manager.add_request(request_obj)
@@ -645,6 +636,10 @@ async def stream_message(
         # STEP 5: Branch based on transport mode for the response
         # Now we can choose the appropriate response method after ensuring the message is in the queue
         if transport_mode == "websocket":
+            # Verify headers for WebSocket usage
+            if not headers or not (headers.get("Connection") == "Upgrade" and "Upgrade" in headers):
+                logger.warning("Client requested WebSocket transport but didn't provide WebSocket headers - potential protocol mismatch")
+            
             # Create background task to handle WebSocket streaming without blocking response
             asyncio.create_task(process_streaming_for_websocket())
             
@@ -661,7 +656,7 @@ async def stream_message(
                 "queue_position": queue_position
             }
             
-            logger.info(f"Created background task for WebSocket streaming, returning HTTP response with ID: {assistant_message_id}")
+            logger.info(f"Created background task for WebSocket streaming")
             
             async def response_stream():
                 yield json.dumps(response_data).encode('utf-8')
@@ -669,7 +664,7 @@ async def stream_message(
             return StreamingResponse(response_stream(), media_type="application/json")
         else:
             # SSE clients use traditional streaming response
-            logger.info("SSE client detected - returning streaming response")
+            logger.info("Using SSE streaming response")
             return StreamingResponse(event_stream(), media_type="text/event-stream")
     
     except Exception as e:

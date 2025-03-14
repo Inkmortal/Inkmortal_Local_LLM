@@ -375,15 +375,11 @@ class RequestProcessor:
                 if "chat" in request.endpoint:
                     # Use the Ollama chat endpoint
                     url = f"{self.ollama_url}/api/chat"
-                    logger.info(f"Using Ollama chat endpoint for streaming: {url}")
+                    logger.info(f"Using Ollama chat endpoint")
                 else:
                     # Use the Ollama completion endpoint
                     url = f"{self.ollama_url}/api/generate"
-                    logger.info(f"Using Ollama generate endpoint for streaming: {url}")
-                
-                # Debug the URL and request body
-                logger.info(f"Sending streaming request to: {url}")
-                logger.info(f"Request body: {json.dumps(request.body)[:200]}...")
+                    logger.info(f"Using Ollama generate endpoint")
                 
                 # Use a manual timeout approach for streaming
                 start_time = asyncio.get_event_loop().time()
@@ -397,7 +393,7 @@ class RequestProcessor:
                             timeout=300.0
                         ) as response:
                             chunk_count = 0
-                            logger.info(f"Starting to receive streaming chunks from Ollama API...")
+                            logger.info(f"Started streaming request to Ollama")
                             
                             async for chunk in response.aiter_text():
                                 chunk_count += 1
@@ -409,30 +405,18 @@ class RequestProcessor:
                                     yield json.dumps({"error": f"Stream timed out after {timeout_seconds}s"})
                                     break
                                 
-                                # Log the chunk format with ID for debugging
-                                if chunk_count < 3 or chunk_count % 50 == 0:  # Log 1st, 2nd, and every 50th chunk
-                                    logger.info(f"Chunk #{chunk_count} raw format: {chunk[:200]}")
-                                    
-                                    # Try to parse as JSON for deeper inspection
+                                # Only log first chunk and milestone chunks
+                                if chunk_count == 1:
                                     try:
-                                        chunk_data = json.loads(chunk)
-                                        logger.info(f"Chunk #{chunk_count} JSON keys: {list(chunk_data.keys())}")
-                                        
-                                        # Log specific fields based on known patterns
-                                        if "delta" in chunk_data:
-                                            logger.info(f"Delta format detected: {chunk_data.get('delta')}")
-                                        if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
-                                            logger.info(f"Choices format: {json.dumps(chunk_data['choices'][0])[:200]}")
-                                        if "message" in chunk_data:
-                                            logger.info(f"Message format: {json.dumps(chunk_data.get('message'))[:200]}")
-                                        if "response" in chunk_data:
-                                            logger.info(f"Response format: {chunk_data.get('response')[:50]}")
+                                        # Try to parse to verify json format
+                                        json.loads(chunk)
+                                        logger.info(f"First chunk received (valid JSON)")
                                     except json.JSONDecodeError:
-                                        logger.info(f"Chunk #{chunk_count} is not valid JSON, raw length: {len(chunk)}")
-                                    except Exception as e:
-                                        logger.warning(f"Error inspecting chunk format: {str(e)}")
+                                        logger.info(f"First chunk received (raw text, length: {len(chunk)})")
+                                elif chunk_count % 1000 == 0:
+                                    logger.info(f"Received {chunk_count} chunks")
                                 
-                                # We're not modifying the chunk yet, just logging it
+                                # Pass the chunk through to the client
                                 yield chunk
                                 
                                 # Reset timeout timer on each chunk

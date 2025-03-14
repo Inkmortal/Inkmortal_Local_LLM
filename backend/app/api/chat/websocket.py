@@ -68,15 +68,7 @@ class ConnectionManager:
         content_update_type: str = APPEND
     ):
         """Send a message to all websockets for a specific user"""
-        # CRITICAL DEBUG: Log full data being sent to WebSocket
-        logger.info(f"WEBSOCKET DEBUG: Preparing to send update to user {user_id}")
-        logger.info(f"WEBSOCKET DEBUG: Data type: {data.get('type')}")
-        logger.info(f"WEBSOCKET DEBUG: Message ID: {data.get('message_id')}")
-        
-        if "assistant_content" in data:
-            content = data.get("assistant_content", "")
-            logger.info(f"WEBSOCKET DEBUG: Content length: {len(content)}, preview: {content[:50]}")
-        
+        # Basic check if we have connections for this user
         if user_id not in self.active_connections:
             logger.warning(f"No active connections for user {user_id}")
             return
@@ -106,55 +98,37 @@ class ConnectionManager:
         if "assistant_content" in data and "content_update_type" not in data:
             data["content_update_type"] = content_update_type
         
-        # Log what we're sending for debugging
-        update_type = data.get("type")
-        message_id = data.get("message_id", "unknown") # Updated with fallback if needed
-        conversation_id = data.get("conversation_id", "unknown")
-        status = data.get("status", "unknown")
-        is_complete = data.get("is_complete", False)
-        
-        # Track the number of tokens in each update
-        if "assistant_content" in data:
-            token_len = len(data.get("assistant_content", ""))
-            # Enhanced logging to include first few characters of token for tracing
-            token_preview = ""
-            if token_len > 0:
-                token_preview = data.get("assistant_content", "")[:10]
-                if token_len > 10:
-                    token_preview += "..."
-                token_preview = f", token_preview=\"{token_preview}\""
-            
-            logger.info(
-                f"WebSocket update: user={user_id}, type={update_type}, "
-                f"msg={message_id}, conv={conversation_id}, status={status}, "
-                f"update_type={content_update_type}, complete={is_complete}, tokens={token_len}{token_preview}"
-            )
+        # Log only key info for important updates
+        if data.get("status") in ["COMPLETE", "ERROR"] or data.get("is_complete", False):
+            # Log completion or error events more prominently
+            message_id = data.get("message_id", "unknown")
+            status = data.get("status", "unknown")
+            logger.info(f"WebSocket status update: user={user_id}, msg={message_id}, status={status}")
             
         # Send the message to all connections
         success_count = 0
         disconnected = []
         
-        # CRITICAL FIX: Make a copy of connections to avoid modifying while iterating
+        # Make a copy of connections to avoid modifying while iterating
         for connection in list(connections):
             try:
                 if connection.client_state == WebSocketState.CONNECTED:
-                    # Add diagnostic for each send
-                    logger.info(f"WEBSOCKET SEND: Sending data to client for user {user_id}, msg_id={data.get('message_id')}")
                     await connection.send_json(data)
-                    logger.info(f"WEBSOCKET SEND: Successfully sent update")
                     success_count += 1
                 else:
-                    logger.warning(f"Found disconnected WebSocket for user {user_id}, state={connection.client_state}")
+                    # Clean up disconnected connections
+                    logger.warning(f"Found disconnected WebSocket for user {user_id}")
                     disconnected.append(connection)
             except Exception as e:
                 logger.error(f"Error sending WebSocket update: {str(e)}")
-                # Add more detail for debugging
-                import traceback
-                logger.error(f"WebSocket send error details:\n{traceback.format_exc()}")
+                # Only log traceback for serious errors
+                if "is_complete" in data and data["is_complete"]:
+                    import traceback
+                    logger.error(f"WebSocket send error details:\n{traceback.format_exc()}")
                 # Add to disconnected list if there was an error sending
                 disconnected.append(connection)
         
-        # CRITICAL FIX: Clean up any disconnected connections we found
+        # Clean up any disconnected connections we found
         if disconnected:
             logger.info(f"Cleaning up {len(disconnected)} disconnected WebSockets for user {user_id}")
             for connection in disconnected:
@@ -166,17 +140,15 @@ class ConnectionManager:
                     ]
                 # Clean up connection time
                 if connection in self.connection_times:
-                    duration = time.time() - self.connection_times[connection]
                     del self.connection_times[connection]
-                    logger.info(f"Removed stale WebSocket connection for user {user_id} after {duration:.2f} seconds")
-        
-        if "assistant_content" in data:
-            logger.info(f"WebSocket update sent to {success_count}/{len(connections)} connections for user {user_id}")
+                    
+        # Only log on errors or completion status
+        if data.get("status") in ["ERROR", "COMPLETE"] and success_count < len(connections):
+            logger.warning(f"Important WebSocket update reached only {success_count}/{len(connections)} connections for user {user_id}")
     
     def track_request(self, request_id: str, user_id: int):
         """Associate a request with a user for status updates"""
         self.request_tracking[request_id] = user_id
-        logger.info(f"Tracking request {request_id} for user {user_id}")
     
     def get_user_for_request(self, request_id: str) -> Optional[int]:
         """Get the user_id associated with a request"""
@@ -185,9 +157,7 @@ class ConnectionManager:
     def untrack_request(self, request_id: str):
         """Remove a request from tracking when complete"""
         if request_id in self.request_tracking:
-            user_id = self.request_tracking[request_id]
             del self.request_tracking[request_id]
-            logger.info(f"Untracked request {request_id} for user {user_id}")
     
     async def send_section_update(
         self,
@@ -199,11 +169,8 @@ class ConnectionManager:
         is_complete: bool = False,
         operation: str = APPEND
     ):
-        """Send a section-specific update with improved structure"""
-        # Log the message ID to verify it's correct
-        logger.debug(f"Sending section update with message_id: {message_id}")
-        
-        # Create and validate our update data
+        """Send a section-specific update with improved structure"""        
+        # Create our update data
         update_data = {
             "type": "message_update",
             "message_id": message_id,
@@ -215,12 +182,11 @@ class ConnectionManager:
             "is_complete": is_complete
         }
         
-        # CRITICAL: Validate message ID is not empty
+        # Validate message ID is not empty
         if not message_id or message_id == "unknown" or message_id == "undefined":
-            logger.error(f"INVALID MESSAGE ID in section update: {message_id}")
-            # Try to use conversation ID + timestamp as fallback
+            # Use conversation ID + timestamp as fallback
             fallback_id = f"{conversation_id}_{int(time.time())}"
-            logger.warning(f"Using fallback ID: {fallback_id}")
+            logger.warning(f"Invalid message ID, using fallback: {fallback_id}")
             update_data["message_id"] = fallback_id
         
         await self.send_update(

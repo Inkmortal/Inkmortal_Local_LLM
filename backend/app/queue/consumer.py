@@ -62,29 +62,17 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
             priorities_checked = []
             from ..queue.models import RequestPriority
             
-            # Check for any messages in queues
-            try:
-                queue_sizes = await queue_manager.get_queue_size()
-            except Exception as e:
-                logger.error(f"Error checking queue sizes: {str(e)}")
-            
             # Get next message from highest priority queue that has messages
             request = await queue_manager.get_next_request()
             
-            # Log which priorities were checked
+            # Log only if we actually found a message
             if request:
                 # Calculate age of message
                 age_seconds = (datetime.utcnow() - request.timestamp).total_seconds()
                 
                 # Get priority info for clearer logging
-                if hasattr(request.priority, 'name'):
-                    priority_info = f"{request.priority.name} (value: {request.priority.value})"
-                else:
-                    priority_info = str(request.priority)
-                    
-                logger.info(f"Processing message with age {age_seconds:.1f}s from priority {priority_info}")
-            else:
-                logger.debug("No message found in any priority queue")
+                priority_name = request.priority.name if hasattr(request.priority, 'name') else str(request.priority)
+                logger.info(f"Processing message with age {age_seconds:.1f}s from priority {priority_name}")
             
             if request:
                 # Generate a unique identifier for this request
@@ -179,17 +167,18 @@ async def process_streaming_request(queue_manager, request):
         message_id = request.body.get("assistant_message_id") or request.body.get("message_id")
         
         # Log this processing event
-        logger.info(f"Processing streaming request for user {user_id}, message {message_id}")
+        logger.info(f"Processing streaming request for user {user_id}")
         
         # Process the streaming request
         chunk_count = 0
         async for chunk in queue_manager.process_streaming_request(request):
             chunk_count += 1
-            if chunk_count == 1 or chunk_count % 50 == 0:
-                logger.info(f"Processed {chunk_count} chunks for message {message_id}")
+            # Log only on significant milestones to reduce noise
+            if chunk_count == 1 or chunk_count % 1000 == 0:
+                logger.info(f"Processed {chunk_count} chunks")
         
         # Record successful completion in history
-        logger.info(f"Completed streaming request for message {message_id}, processed {chunk_count} chunks")
+        logger.info(f"Completed streaming request, processed {chunk_count} chunks")
         history_request.status = "completed"
         history_request.processing_end = datetime.utcnow()
         request_history.appendleft(history_request)
