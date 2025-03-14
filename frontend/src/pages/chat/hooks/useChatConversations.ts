@@ -44,8 +44,8 @@ export function useChatConversations(
       const conversationsData = await listConversations();
       
       if (isMounted.current) {
-        // The API returns {conversations: [...]} but we need the array
-        const conversationsArray = conversationsData?.conversations || [];
+        // The conversationService now returns the array directly
+        const conversationsArray = conversationsData || [];
         
         // Map API response to our Conversation type
         const conversations: Conversation[] = conversationsArray.map((convRaw: any) => ({

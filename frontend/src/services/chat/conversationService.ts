@@ -89,7 +89,11 @@ export async function listConversations(): Promise<ConversationSummary[]> {
         title: 'Failed to load conversations'
       });
       
-      return result.success && result.data ? result.data : [];
+      // The backend returns {conversations: [...]} but we need the array directly
+      if (result.success && result.data) {
+        return result.data.conversations || [];
+      }
+      return [];
     },
     []
   );
