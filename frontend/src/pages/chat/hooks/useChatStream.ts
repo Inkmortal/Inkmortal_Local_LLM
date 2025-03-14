@@ -136,7 +136,7 @@ export function useChatStream({
         abortControllerRef.current.abort();
       }
     };
-  }, [autoConnect, subscribeToMessages, handleMessageUpdate]);
+  }, [autoConnect, subscribeToMessageUpdates, handleMessageUpdate]);
   
   // Send a chat message with optimistic UI updates
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
