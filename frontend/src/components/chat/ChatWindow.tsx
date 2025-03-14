@@ -24,7 +24,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   
   // Animation frame ref for performance
   const scrollRAFRef = useRef<number | null>(null);
-  const prevMessagesCountRef = useRef<number>(0);
+  const prevMessagesCountRef = useRef<number>(messages.length);
   
   // Track when user has manually scrolled up
   const [userScrolledUp, setUserScrolledUp] = useState(false);
@@ -78,9 +78,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // When new message starts generating, always scroll to it
   useEffect(() => {
     if (isGenerating) {
-      scrollToBottom(true);
+      // Force scroll with slight delay to ensure all components have rendered
+      const timeoutId = setTimeout(() => {
+        scrollToBottom(true);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [isGenerating, scrollToBottom]);
+  
+  // This effect tracks streaming updates to keep the chat scrolled down
+  // We need this to ensure smooth scrolling during streaming
+  useEffect(() => {
+    // Create an interval to check for new content and scroll
+    const intervalId = setInterval(() => {
+      if (isGenerating && !userScrolledUp) {
+        scrollToBottom(true);
+      }
+    }, 500); // Check every 500ms during generation
+    
+    return () => clearInterval(intervalId);
+  }, [isGenerating, userScrolledUp, scrollToBottom]);
   
   // Monitor scroll position to detect when user scrolls up
   const handleScroll = useCallback(() => {

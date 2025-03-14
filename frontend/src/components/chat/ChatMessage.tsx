@@ -14,27 +14,9 @@ const LoadingDots = () => (
   </span>
 );
 
-const StatusIndicator = ({ status, error }: { 
-  status?: MessageStatus, 
-  error?: string
-}) => {
-  if (!status || status === MessageStatus.COMPLETE) return null;
-  
-  switch(status) {
-    case MessageStatus.SENDING:
-      return <div className="text-xs text-blue-400 animate-pulse mt-1">Sending<LoadingDots /></div>;
-    case MessageStatus.QUEUED:
-      return <div className="text-xs text-yellow-400 mt-1">Waiting in queue<LoadingDots /></div>;
-    case MessageStatus.PROCESSING:
-      return <div className="text-xs text-green-400 animate-pulse mt-1">Processing<LoadingDots /></div>;
-    case MessageStatus.STREAMING:
-      // Removed animate-pulse to prevent flickering during streaming
-      return <div className="text-xs text-green-400">Generating<LoadingDots /></div>;
-    case MessageStatus.ERROR:
-      return <div className="text-xs text-red-400 mt-1">{error || 'Error processing message'}</div>;
-    default:
-      return null;
-  }
+// Empty status indicator - we don't show any status indicators
+const StatusIndicator = () => {
+  return null;
 };
 
 export interface ChatMessageProps {
@@ -50,7 +32,6 @@ export interface ChatMessageProps {
     };
     metadata?: Record<string, any>;
   };
-  onRegenerate?: () => void;
   onStopGeneration?: () => void;
   isGenerating?: boolean;
   isLastMessage?: boolean;
@@ -59,7 +40,6 @@ export interface ChatMessageProps {
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ 
   message, 
-  onRegenerate, 
   onStopGeneration,
   isGenerating,
   isLastMessage,
@@ -188,36 +168,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         )}
         
-        {/* Status indicator positioned at bottom right for better visibility */}
-        <div className="flex justify-end mt-2">
-          <StatusIndicator 
-            status={message.status} 
-            error={message.metadata?.error}
-          />
-        </div>
+        {/* Status indicators removed */}
         
-        {/* Action buttons */}
-        {isAssistant && isLastMessage && (
+        {/* Action buttons - only stop button, no regenerate */}
+        {isAssistant && isLastMessage && isGenerating && onStopGeneration && (
           <div className="flex justify-end mt-3 space-x-2">
-            {isGenerating && onStopGeneration ? (
-              <Button 
-                onClick={onStopGeneration}
-                variant="danger"
-                size="sm"
-              >
-                Stop
-              </Button>
-            ) : (
-              onRegenerate && message.status === MessageStatus.COMPLETE && (
-                <Button 
-                  onClick={onRegenerate}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Regenerate
-                </Button>
-              )
-            )}
+            <Button 
+              onClick={onStopGeneration}
+              variant="danger"
+              size="sm"
+            >
+              Stop
+            </Button>
           </div>
         )}
       </div>

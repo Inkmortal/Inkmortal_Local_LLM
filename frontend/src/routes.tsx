@@ -23,7 +23,7 @@ import Unauthorized from './pages/auth/Unauthorized';
 
 // User Pages
 import Profile from './pages/user/Profile';
-import ChatPage from "./pages/chat/ModernChatPageFixed";
+import ChatPage from "./pages/chat/ModernChatPage";
 import ModernHomePage from './components/HomePage';
 import ThemeGallery from './pages/themes/ThemeGallery';
 

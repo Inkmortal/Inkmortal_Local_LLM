@@ -146,6 +146,19 @@ function parseAsPlainText(text: string, isStreaming = false, previousText = ""):
   let key = 0;
   const allMatches: MatchedElement[] = [];
   
+  // Helper function to preserve line breaks in text content
+  const preserveLineBreaks = (content: string): ReactNode => {
+    if (!content.includes('\n')) return content;
+    
+    // Split by newlines and create fragments with <br/> elements
+    return content.split('\n').map((line, i) => (
+      <React.Fragment key={`line-${i}`}>
+        {i > 0 && <br />}
+        {line}
+      </React.Fragment>
+    ));
+  };
+  
   // Find all special elements in a single pass
   findSpecialElements(text, allMatches, key);
   
@@ -167,21 +180,21 @@ function parseAsPlainText(text: string, isStreaming = false, previousText = ""):
         const commonLength = Math.min(previousTextSegment.length, textBeforeMatch.length);
         
         if (commonLength > 0) {
-          // Add previously rendered text
-          elements.push(textBeforeMatch.substring(0, commonLength));
+          // Add previously rendered text with preserved line breaks
+          elements.push(preserveLineBreaks(textBeforeMatch.substring(0, commonLength)));
         }
         
         if (commonLength < textBeforeMatch.length) {
-          // Add newly streamed text with highlight
+          // Add newly streamed text with highlight and preserved line breaks
           elements.push(
             <span key={`new-${match.start}`} className="new-token">
-              {textBeforeMatch.substring(commonLength)}
+              {preserveLineBreaks(textBeforeMatch.substring(commonLength))}
             </span>
           );
         }
       } else {
-        // Regular rendering without streaming effect
-        elements.push(textBeforeMatch);
+        // Regular rendering with preserved line breaks
+        elements.push(preserveLineBreaks(textBeforeMatch));
       }
     }
     
@@ -203,21 +216,21 @@ function parseAsPlainText(text: string, isStreaming = false, previousText = ""):
       const commonLength = Math.min(previousTextSegment.length, remainingText.length);
       
       if (commonLength > 0 && commonLength <= remainingText.length) {
-        // Add previously rendered text
-        elements.push(remainingText.substring(0, commonLength));
+        // Add previously rendered text with preserved line breaks
+        elements.push(preserveLineBreaks(remainingText.substring(0, commonLength)));
       }
       
       if (commonLength < remainingText.length) {
-        // Add newly streamed text with highlight
+        // Add newly streamed text with highlight and preserved line breaks
         elements.push(
           <span key="new-remaining" className="new-token">
-            {remainingText.substring(commonLength)}
+            {preserveLineBreaks(remainingText.substring(commonLength))}
           </span>
         );
       }
     } else {
-      // Regular rendering without streaming effect
-      elements.push(remainingText);
+      // Regular rendering with preserved line breaks
+      elements.push(preserveLineBreaks(remainingText));
     }
   }
   
@@ -229,13 +242,14 @@ function findSpecialElements(text: string, matches: MatchedElement[], startKey: 
   let key = startKey;
   
   // Find code blocks (most specific first to avoid inner matching)
-  // Regex patterns
+  // Regex patterns - improved to better preserve whitespace and line breaks
   const patterns = [
     {
       regex: /```([\w-]+)?\n([\s\S]*?)```/g,
       process: (match: RegExpExecArray) => {
         const language = match[1] || 'text';
-        const code = match[2];
+        // Preserve exact whitespace without trimming
+        const code = match[2].replace(/\n+$/, ''); // Only trim trailing newlines
         return <CodeBlock key={`code-${key++}`} code={code} language={language} className="my-2" />;
       }
     },
