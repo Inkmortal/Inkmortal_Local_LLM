@@ -282,6 +282,10 @@ async def stream_message(
                 chunks_processed = 0
                 logger.info(f"Starting WebSocket streaming for message {assistant_message_id}")
                 
+                # Initialize database update variables
+                last_db_update_time = time.time()
+                update_frequency = 2.0  # Update database every 2 seconds
+                
                 # Process each chunk from the LLM
                 async for chunk in queue_manager.process_streaming_request(request_obj):
                     chunks_processed += 1
