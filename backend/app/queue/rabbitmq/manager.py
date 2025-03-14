@@ -194,6 +194,16 @@ class RabbitMQManager(QueueManagerInterface):
             
             # Log queue names to verify routing will work
             logger.info(f"Available queue names: {self.queue_handler.queue_names}")
+            
+            # Generate a unique identifier for this request to check for duplicates
+            request_id = f"{request.timestamp.timestamp()}-{request.user_id}"
+            
+            # Import processed_requests from consumer to check for duplicates
+            from ..consumer import processed_requests
+            if request_id in processed_requests:
+                logger.warning(f"Request {request_id} is already being processed, skipping")
+                return -2  # Special return code for already being processed
+                
             # Use priority_value as the key for queue_names, not the enum instance
             target_queue = self.queue_handler.queue_names.get(priority_value)
             logger.info(f"Target queue for priority {request.priority} is: {target_queue}, routing key={routing_key}")

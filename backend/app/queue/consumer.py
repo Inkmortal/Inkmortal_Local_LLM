@@ -87,6 +87,28 @@ async def start_message_consumer(queue_manager: QueueManagerInterface):
                 # Skip if already processed (prevents double processing)
                 if request_id in processed_requests:
                     logger.warning(f"Skipping already processed request: {request_id}")
+                    
+                    # Instead of skipping completely, still tell the frontend we're handling it
+                    if request.body.get("assistant_message_id"):
+                        assistant_message_id = request.body.get("assistant_message_id")
+                        user_id = request.user_id
+                        conversation_id = request.body.get("conversation_id")
+                        
+                        try:
+                            # Send a confirmation message via WebSocket to prevent client waiting forever
+                            logger.info(f"Sending status update for duplicate request {request_id} to user {user_id}")
+                            await manager.send_update(user_id, {
+                                "type": "message_update",
+                                "message_id": assistant_message_id,
+                                "conversation_id": conversation_id,
+                                "status": "PROCESSING",
+                                "assistant_content": "",
+                                "processing": True,
+                                "message": "Your message is already being processed."
+                            })
+                        except Exception as ws_err:
+                            logger.error(f"Failed to send duplicate status update: {str(ws_err)}")
+                    
                     continue
                 
                 # Process the message based on request type

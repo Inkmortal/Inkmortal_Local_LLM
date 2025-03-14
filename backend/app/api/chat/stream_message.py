@@ -141,15 +141,6 @@ async def stream_message(
         )
         print("STREAM_MESSAGE: request_obj created successfully")
         
-        # TEMPORARY DEBUG - This is a simpler code path to test direct queue interaction
-        print("ATTEMPTING DIRECT QUEUE TEST")
-        try:
-            # Force add to queue without all the complex logic
-            queue_position = await queue_manager.add_request(request_obj)
-            print(f"DIRECT QUEUE TEST RESULT: {queue_position}")
-        except Exception as e:
-            print(f"DIRECT QUEUE TEST ERROR: {str(e)}")
-        
         # STEP 1: Extract assistant_message_id ONCE for consistency
         assistant_message_id = request_obj.body.get("assistant_message_id")
         
@@ -193,9 +184,13 @@ async def stream_message(
             
             # Check if request was added to queue successfully
             if queue_position < 0:
-                logger.error(f"Failed to add message to queue: position={queue_position}")
-                # Return error response to client
-                error_message = "Failed to add message to queue. Please try again."
+                # Distinguish between "already processing" (-2) and other errors
+                if queue_position == -2:
+                    logger.warning(f"Message is already being processed: message_id={assistant_message_id}")
+                    error_message = "This message is already being processed."
+                else:
+                    logger.error(f"Failed to add message to queue: position={queue_position}")
+                    error_message = "Failed to add message to queue. Please try again."
                 
                 if transport_mode == "websocket":
                     await manager.send_update(user.id, {
