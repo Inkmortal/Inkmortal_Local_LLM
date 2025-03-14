@@ -48,7 +48,7 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
   
   // Handler for WebSocket message updates
   const handleMessageUpdate = useCallback((update: MessageUpdate) => {
-    const { messageId, content, contentUpdateMode, status, isComplete } = update;
+    const { messageId, content, contentUpdateMode, status, isComplete, metadata } = update;
     
     if (!messageId) return;
     
@@ -57,15 +57,25 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
       `content=${content ? content.substring(0, 10) + '...' : '[empty]'}, ` +
       `mode=${contentUpdateMode}, status=${status}, isComplete=${isComplete}`);
     
-    // Update stored content based on update mode
+    // Skip empty content updates (likely metadata-only)
+    if (!content && !isComplete) {
+      console.log(`[StreamingContext] Skipping empty content update for message ${messageId}`);
+      return;
+    }
+    
+    // Update content based on update mode
     if (content !== undefined) {
       const currentContent = messageContents.current.get(messageId) || '';
       
-      // Update content based on append/replace mode
-      const newContent = contentUpdateMode === ContentUpdateMode.REPLACE
-        ? content
-        : currentContent + content;
-        
+      // Update content based on the specified update mode
+      let newContent;
+      if (contentUpdateMode === ContentUpdateMode.REPLACE) {
+        newContent = content;
+      } else {
+        // For append mode, add the new content
+        newContent = currentContent + content;
+      }
+      
       // Store the new content
       messageContents.current.set(messageId, newContent);
       
@@ -81,8 +91,8 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
       if (callbacks) {
         console.log(`[StreamingContext] Notifying ${callbacks.size} subscribers for message ${messageId}`);
         
-        // For better streaming performance, add a small delay to callbacks
-        // This helps prevent React from batching too many updates together
+        // Use setTimeout to break React's update batching
+        // This ensures each update is rendered independently
         setTimeout(() => {
           callbacks.forEach(callback => {
             try {
@@ -91,9 +101,29 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
               console.error(`Error in streaming callback for message ${messageId}:`, error);
             }
           });
-        }, 0); // Microtask delay to break batch processing
+        }, 0);
       } else {
         console.log(`[StreamingContext] No subscribers for message ${messageId}`);
+      }
+    } else if (isComplete) {
+      // Handle completion messages that might not have content
+      // but need to update the completion status
+      const currentContent = messageContents.current.get(messageId) || '';
+      
+      // Update status
+      messageStatus.current.set(messageId, status);
+      
+      // Notify subscribers of completion
+      const callbacks = messageCallbacks.current.get(messageId);
+      if (callbacks) {
+        console.log(`[StreamingContext] Notifying completion for message ${messageId}`);
+        callbacks.forEach(callback => {
+          try {
+            callback(currentContent, true);
+          } catch (error) {
+            console.error(`Error in completion callback for message ${messageId}:`, error);
+          }
+        });
       }
     }
   }, []);

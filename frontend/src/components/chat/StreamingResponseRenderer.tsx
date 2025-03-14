@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMessageStreaming } from '../../services/chat/StreamingContext';
 import MessageParser from './MessageParser';
 
 /**
- * Improved streaming text renderer with smoother animation
- * and proper JSON handling for model metadata
+ * Simplified streaming text renderer that directly displays content
+ * received from StreamingContext
  */
 interface StreamingResponseRendererProps {
   content: string;
@@ -17,43 +17,36 @@ const StreamingResponseRenderer: React.FC<StreamingResponseRendererProps> = ({
   isStreaming,
   messageId
 }) => {
-  // Use direct streaming data or fallback to props
+  // Subscribe to streaming updates for this message ID
   const streamingData = messageId ? useMessageStreaming(messageId) : null;
   
-  // Local state for the processed content we're displaying
+  // Local state for the content we're displaying
   const [displayContent, setDisplayContent] = useState(content);
   
   // Track if we're showing streaming content
   const [isCurrentlyStreaming, setIsCurrentlyStreaming] = useState(isStreaming);
   
-  // Ref to track previous content length for smooth animation
-  const prevContentLengthRef = useRef(0);
-  
-  // No longer needed - JSON metadata is handled at the messageHandler level
-  
-  // Update local state when streaming data or props change
+  // Update local state when streaming data changes
   useEffect(() => {
-    // If we have streaming data, use it
     if (streamingData) {
-      // Only update if content has actually changed
-      if (streamingData.content.length !== prevContentLengthRef.current) {
-        setDisplayContent(streamingData.content);
-        prevContentLengthRef.current = streamingData.content.length;
-      }
+      // Log content updates for debugging
+      console.log(`[StreamingResponseRenderer] Received update for ${messageId}: ` +
+        `length=${streamingData.content.length}, streaming=${streamingData.isStreaming}`);
       
+      // Update our state with the streaming data
+      setDisplayContent(streamingData.content);
       setIsCurrentlyStreaming(streamingData.isStreaming);
     } else {
-      // Otherwise fall back to props
+      // Fall back to props if no streaming data
       setDisplayContent(content);
       setIsCurrentlyStreaming(isStreaming);
-      prevContentLengthRef.current = content.length;
     }
-  }, [streamingData, content, isStreaming]);
+  }, [streamingData, content, isStreaming, messageId]);
   
   return (
     <div className="smooth-streaming-container">
       <div className={`smooth-streaming-text ${isCurrentlyStreaming ? 'with-cursor' : ''}`}>
-        <MessageParser content={displayContent} isStreaming={isCurrentlyStreaming} />
+        <MessageParser content={displayContent} isStreaming={false} />
       </div>
     </div>
   );

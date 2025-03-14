@@ -338,21 +338,20 @@
   vertical-align: middle;
 }
 
-/* Improved smooth streaming styles */
+/* Simplified streaming styles - no animations */
 .smooth-streaming-container {
   position: relative;
-  transition: all 0.05s ease-out;
 }
 
 .smooth-streaming-text {
   position: relative;
   white-space: pre-wrap;
-  transition: all 0.05s ease-out;
   /* Improve text rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Single cursor implementation */
 .smooth-streaming-text.with-cursor::after {
   content: '';
   display: inline-block;
@@ -362,7 +361,6 @@
   margin-left: 2px;
   animation: cursor-blink 0.8s infinite;
   vertical-align: middle;
-  transform: translateY(1px);
 }
 
 .streaming-cursor {

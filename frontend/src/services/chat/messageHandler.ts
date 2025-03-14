@@ -24,14 +24,32 @@ interface MessageIdMapping {
   timestamp: number;
 }
 
+// Message metadata type for properly typed metadata
+interface MessageMetadata {
+  model?: string;
+  total_duration?: number;
+  load_duration?: number;
+  prompt_eval_count?: number;
+  prompt_eval_duration?: number;
+  eval_count?: number;
+  eval_duration?: number;
+  [key: string]: any;  // Allow additional fields
+}
+
 class MessageHandler {
   private static instance: MessageHandler;
   
   // Track message ID mappings
   private messageIdMappings: MessageIdMapping[] = [];
   
-  // Store message content for completion handling
+  // Store accumulated message content
   private messageContent: Map<string, string> = new Map();
+  
+  // Store message metadata separately
+  private messageMetadata: Map<string, MessageMetadata> = new Map();
+  
+  // Track message sequence numbers to prevent duplicate processing
+  private messageSequence: Map<string, number> = new Map();
   
   // Interval timer reference
   private cleanupInterval: number | null = null;
@@ -55,6 +73,24 @@ class MessageHandler {
     return this.messageContent.get(messageId);
   }
   
+  // Store message metadata
+  private storeMessageMetadata(messageId: string, metadata: MessageMetadata): void {
+    this.messageMetadata.set(messageId, metadata);
+  }
+  
+  // Get stored message metadata
+  private getMessageMetadata(messageId: string): MessageMetadata | undefined {
+    return this.messageMetadata.get(messageId);
+  }
+  
+  // Get next sequence number for a message to prevent duplicates
+  private getNextSequence(messageId: string): number {
+    const current = this.messageSequence.get(messageId) || 0;
+    const next = current + 1;
+    this.messageSequence.set(messageId, next);
+    return next;
+  }
+  
   // Method to clean up resources
   public cleanup(): void {
     // Clear the cleanup interval
@@ -63,8 +99,10 @@ class MessageHandler {
       this.cleanupInterval = null;
     }
     
-    // Clear stored message content
+    // Clear all stored message data
     this.messageContent.clear();
+    this.messageMetadata.clear();
+    this.messageSequence.clear();
     
     // Unsubscribe from message events
     eventEmitter.off('message_received', this.handleMessage.bind(this));
@@ -114,7 +152,7 @@ class MessageHandler {
       .find(mapping => mapping.conversationId === conversationId);
   }
   
-  // Clean up old mappings and content
+  // Clean up old mappings and related data
   private cleanupOldMappings(): void {
     const now = Date.now();
     const oldMappings = this.messageIdMappings.filter(
@@ -127,12 +165,14 @@ class MessageHandler {
         mapping => now - mapping.timestamp <= 3600000
       );
       
-      // Also remove content for these old messages
+      // Clean up all related data for these old messages
       oldMappings.forEach(mapping => {
         this.messageContent.delete(mapping.frontendId);
+        this.messageMetadata.delete(mapping.frontendId);
+        this.messageSequence.delete(mapping.frontendId);
       });
       
-      console.log(`Cleaned up ${oldMappings.length} old message ID mappings and their content`);
+      console.log(`Cleaned up ${oldMappings.length} old message ID mappings and their data`);
     }
   }
   
@@ -220,9 +260,9 @@ class MessageHandler {
       console.log(`No mapping found for message: ${message.message_id}, using as-is`);
     }
     
-    // This section has been moved to where the content is extracted and processed
-    // at the core of the message handling flow. This ensures all messages are properly
-    // cleaned of JSON metadata at their source, at the point where content is extracted.
+    // Get sequence number for this message to prevent duplicates
+    const sequenceNumber = this.getNextSequence(frontendMessageId);
+    console.log(`Processing message update #${sequenceNumber} for ${frontendMessageId}`);
     
     // Extract message status
     let status: MessageStatus = MessageStatus.STREAMING;
@@ -240,72 +280,54 @@ class MessageHandler {
                      message.done === true || 
                      status === MessageStatus.COMPLETE;
     
-    // Extract content - with special handling for completion messages
-    let content = '';
-    
-    // COMPLETION MESSAGES: Handle differently than streaming messages
-    if (isComplete) {
-      // For completion messages, we want the clean accumulated content
-      // Look for stored content first - this skips Ollama's metadata JSON
-      const storedContent = this.getStoredMessageContent(frontendMessageId);
-      if (storedContent) {
-        // Use the content we've been accumulating instead of the final message
-        // This avoids the JSON metadata problem entirely
-        console.log(`[messageHandler] Using accumulated content for complete message: ${frontendMessageId}`);
-        content = storedContent;
-      } else if (message.assistant_content) {
-        // If we don't have stored content, extract from message but handle JSON carefully
-        content = typeof message.assistant_content === 'string' 
-          ? message.assistant_content 
-          : String(message.assistant_content);
-        
-        // Check if content contains JSON and remove it
-        if (content.includes('{"model":')) {
-          const jsonIndex = content.indexOf('{"model":');
-          if (jsonIndex > 0) {
-            content = content.substring(0, jsonIndex).trim();
-            console.log(`[messageHandler] Removed JSON metadata from completion message`);
-          }
-        }
-      }
-    } 
-    // STREAMING MESSAGES: Normal processing
-    else {
-      if (message.assistant_content !== undefined) {
-        content = typeof message.assistant_content === 'string' 
-          ? message.assistant_content 
-          : String(message.assistant_content);
-        
-        // Store the content for this message ID for completion handling
-        this.storeMessageContent(frontendMessageId, content);
-      } else if (message.message?.content !== undefined) {
-        content = message.message.content;
-        this.storeMessageContent(frontendMessageId, content);
-      }
+    // Process metadata - now properly separated from content
+    if (message.metadata) {
+      // Store metadata properly
+      this.storeMessageMetadata(frontendMessageId, message.metadata);
     }
     
-    // Create normalized update object
+    // Extract content
+    let content = '';
+    if (message.assistant_content !== undefined) {
+      content = typeof message.assistant_content === 'string' 
+        ? message.assistant_content 
+        : String(message.assistant_content);
+    } else if (message.message?.content !== undefined) {
+      content = message.message.content;
+    }
+    
+    // Skip empty content updates (likely metadata-only updates)
+    if (content.length === 0 && !isComplete) {
+      console.log(`Skipping empty content update for ${frontendMessageId}`);
+      return;
+    }
+    
+    // For streaming updates, accumulate content properly
+    const currentContent = this.getStoredMessageContent(frontendMessageId) || '';
+    
+    // Use a proper content update based on mode
+    const contentUpdateMode = message.content_update_type === 'replace' ? 
+      ContentUpdateMode.REPLACE : ContentUpdateMode.APPEND;
+      
+    // Update our stored content
+    const newContent = contentUpdateMode === ContentUpdateMode.REPLACE ? 
+      content : currentContent + content;
+      
+    this.storeMessageContent(frontendMessageId, newContent);
+    
+    // Create normalized update object with proper separation of concerns
     const update: MessageUpdate = {
       messageId: frontendMessageId,
       conversationId: message.conversation_id || '',
-      content: content,
+      content: content,               // Only the new content, not accumulated
       status: isComplete ? MessageStatus.COMPLETE : status,
-      contentUpdateMode: ContentUpdateMode.APPEND,
+      contentUpdateMode: contentUpdateMode,
       isComplete: isComplete,
+      metadata: message.metadata || {} // Properly include metadata
     };
     
     // Add optional fields if present
     if (message.error) update.error = message.error;
-    if (message.model) update.model = message.model;
-    if (message.section) update.section = message.section;
-    
-    // Set update mode if specified
-    if (message.content_update_type) {
-      update.contentUpdateMode = 
-        message.content_update_type.toLowerCase() === 'replace' 
-          ? ContentUpdateMode.REPLACE 
-          : ContentUpdateMode.APPEND;
-    }
     
     // Emit the normalized message update event
     eventEmitter.emit('message_update', update);

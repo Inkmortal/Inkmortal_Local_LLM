@@ -124,6 +124,21 @@ export interface MessageUpdateEvent extends WebSocketMessage {
 export type MessageSection = 'thinking' | 'response';
 
 /**
+ * Message metadata structure
+ */
+export interface MessageMetadata {
+  model?: string;
+  total_duration?: number;
+  load_duration?: number;
+  prompt_eval_count?: number;
+  prompt_eval_duration?: number;
+  eval_count?: number;
+  eval_duration?: number;
+  sequence?: number;
+  [key: string]: any;  // Allow additional fields
+}
+
+/**
  * Processed message update (after going through messageHandler)
  */
 export interface MessageUpdate {
@@ -135,5 +150,5 @@ export interface MessageUpdate {
   contentUpdateMode?: ContentUpdateMode;
   isComplete?: boolean;
   error?: string;
-  model?: string;
+  metadata?: MessageMetadata;  // Proper metadata field
 }
