@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Message, MessageRole } from '../../pages/chat/types/message';
-import { ConversationSummary, ConversationData, MessageStatus, ContentUpdateMode } from './types';
+import { 
+  ConversationSummary, 
+  ConversationData, 
+  MessageStatus, 
+  ContentUpdateMode,
+  ConversationSessionData
+} from './types';
 import { sendChatMessage } from './messageService';
 import { subscribeToMessageUpdates } from './websocketService';
-import { useRegisterMessageId } from './StreamingContext';
 import { getConversation, listConversations } from './conversationService';
 
 // Action types
@@ -13,6 +18,7 @@ export enum ChatActionType {
   SET_ACTIVE_CONVERSATION = 'SET_ACTIVE_CONVERSATION',
   SET_LOADING = 'SET_LOADING',
   SET_LOADING_CONVERSATIONS = 'SET_LOADING_CONVERSATIONS',
+  SET_PREPARING_CONVERSATION = 'SET_PREPARING_CONVERSATION',
   ADD_MESSAGE = 'ADD_MESSAGE',
   UPDATE_MESSAGE = 'UPDATE_MESSAGE',
   SET_ERROR = 'SET_ERROR',
@@ -26,6 +32,7 @@ export interface ChatState {
   messages: Record<string, Message>;
   isLoading: boolean;
   isLoadingConversations: boolean;
+  isPreparingConversation: boolean;
   error: Error | null;
 }
 
@@ -36,6 +43,7 @@ const initialState: ChatState = {
   messages: {},
   isLoading: false,
   isLoadingConversations: false,
+  isPreparingConversation: false,
   error: null,
 };
 
@@ -45,6 +53,7 @@ type Action =
   | { type: ChatActionType.SET_ACTIVE_CONVERSATION; payload: string | null }
   | { type: ChatActionType.SET_LOADING; payload: boolean }
   | { type: ChatActionType.SET_LOADING_CONVERSATIONS; payload: boolean }
+  | { type: ChatActionType.SET_PREPARING_CONVERSATION; payload: boolean }
   | { type: ChatActionType.ADD_MESSAGE; payload: any } // Using any to accommodate different message formats
   | { type: ChatActionType.UPDATE_MESSAGE; payload: { messageId: string; content?: string; status?: MessageStatus; isComplete?: boolean; contentUpdateMode?: ContentUpdateMode; conversationId?: string } }
   | { type: ChatActionType.SET_ERROR; payload: Error }
@@ -59,7 +68,7 @@ function chatReducer(state: ChatState, action: Action): ChatState {
         conversations: action.payload.reduce((acc, conv) => {
           acc[conv.id] = conv;
           return acc;
-        }, {} as Record<string, Conversation>),
+        }, {} as Record<string, ConversationSummary>),
       };
 
     case ChatActionType.SET_ACTIVE_CONVERSATION:
@@ -79,6 +88,12 @@ function chatReducer(state: ChatState, action: Action): ChatState {
       return {
         ...state,
         isLoadingConversations: action.payload,
+      };
+      
+    case ChatActionType.SET_PREPARING_CONVERSATION:
+      return {
+        ...state,
+        isPreparingConversation: action.payload,
       };
 
     case ChatActionType.ADD_MESSAGE:
@@ -215,122 +230,148 @@ export function ChatProvider({ children }: ChatProviderProps) {
     dispatch({ type: ChatActionType.SET_ACTIVE_CONVERSATION, payload: null });
   }, []);
 
-  // Send a message with proper conversation ID handling
+  // Send a message with robust two-phase conversation handling
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
     if (!content.trim() && !file) return;
 
+    console.log('[ChatStore] Starting message send process');
+    
     try {
       // Generate message IDs
       const userMessageId = uuidv4();
       const assistantMessageId = uuidv4();
       
-      // Show user message immediately with temporary or existing conversation ID
-      const currentConversationId = state.activeConversationId || 'new';
-      console.log(`[ChatStore] Creating messages with initial conversation ID: ${currentConversationId}`);
-
+      // Get current conversation ID or null for new conversations
+      const currentConversationId = state.activeConversationId;
+      
+      // Phase 1: Show messages immediately with pending state
+      console.log('[ChatStore] Adding messages to UI with status pending');
+      
       // Create user message
       const userMessage: Message = {
         id: userMessageId,
-        conversationId: currentConversationId,
+        conversationId: currentConversationId || 'pending',
         role: MessageRole.USER,
         content,
         timestamp: Date.now(),
         status: MessageStatus.COMPLETE
       };
 
-      // Create placeholder assistant message (with pending status)
+      // Create placeholder assistant message (pending state)
       const assistantMessage: Message = {
         id: assistantMessageId,
-        conversationId: currentConversationId,
+        conversationId: currentConversationId || 'pending',
         role: MessageRole.ASSISTANT,
         content: '',
         timestamp: Date.now(),
-        status: MessageStatus.PENDING // Show as pending until we get conversation ID
+        status: MessageStatus.PREPARING
       };
 
-      // Add messages to state immediately for UI feedback
+      // Add messages to UI state immediately
       dispatch({ type: ChatActionType.ADD_MESSAGE, payload: userMessage });
       dispatch({ type: ChatActionType.ADD_MESSAGE, payload: assistantMessage });
-
-      // Now send the message to backend and WAIT for the response 
-      // with the correct conversation ID
-      console.log(`[ChatStore] Sending message to backend and waiting for response`);
       
-      const response = await sendChatMessage(
-        content,
-        state.activeConversationId, // Will be null for new conversations
-        file,
-        {},
-        assistantMessageId
-      );
-
-      console.log("[ChatStore] Received response with conversation details:", response);
-
-      if (!response) {
-        console.error("[ChatStore] No response received from backend");
-        // Update message status to error
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId: assistantMessageId,
-            status: MessageStatus.ERROR
-          }
-        });
-        return null;
-      }
-
-      // Always check for conversation ID in the response regardless of whether we're
-      // creating a new conversation or using an existing one
-      if (response && response.conversation_id) {
-        const confirmedConversationId = response.conversation_id;
-        console.log(`[ChatStore] Confirmed conversation ID from backend: ${confirmedConversationId}`);
+      // Set preparing state
+      dispatch({ type: ChatActionType.SET_PREPARING_CONVERSATION, payload: true });
+      
+      try {
+        // Phase 2: Send to backend (using two-phase approach in messageService)
+        console.log('[ChatStore] Sending message to backend', { currentConversationId });
         
-        // Update the active conversation ID in state
-        dispatch({ 
-          type: ChatActionType.SET_ACTIVE_CONVERSATION, 
-          payload: confirmedConversationId 
-        });
-
-        // Update both messages with confirmed conversation ID
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId: userMessageId,
-            conversationId: confirmedConversationId,
-            status: MessageStatus.COMPLETE
+        // Define handlers for message status updates
+        const messageHandlers = {
+          onStatusUpdate: (status: MessageStatus) => {
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                status
+              }
+            });
           }
-        });
+        };
+        
+        // Send the message - note this uses the two-phase approach internally for new conversations
+        const response = await sendChatMessage(
+          content,
+          currentConversationId, // Will be null for new conversations
+          file,
+          messageHandlers,
+          assistantMessageId
+        );
 
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId: assistantMessageId,
-            conversationId: confirmedConversationId,
-            status: MessageStatus.STREAMING // Now we can show as streaming
-          }
-        });
-
-        // Reload conversations to include the new one (if it's new)
-        if (currentConversationId === 'new' || !state.activeConversationId) {
-          loadConversations();
+        console.log('[ChatStore] Received response from backend:', response);
+        
+        if (!response) {
+          throw new Error('No response received from backend');
         }
-      } else {
-        console.error("[ChatStore] Backend did not return a conversation ID");
-        // Update message status to error
-        dispatch({
-          type: ChatActionType.UPDATE_MESSAGE,
-          payload: {
-            messageId: assistantMessageId,
-            status: MessageStatus.ERROR
+
+        // Phase 3: Handle conversation creation and ID assignment
+        if (response.conversation_id) {
+          const confirmedConversationId = response.conversation_id;
+          console.log(`[ChatStore] Confirmed conversation ID: ${confirmedConversationId}`);
+          
+          // Update state with the confirmed conversation ID
+          if (!currentConversationId || currentConversationId !== confirmedConversationId) {
+            console.log(`[ChatStore] Updating conversation ID in state: ${confirmedConversationId}`);
+            
+            // Update the active conversation ID
+            dispatch({ 
+              type: ChatActionType.SET_ACTIVE_CONVERSATION, 
+              payload: confirmedConversationId 
+            });
+
+            // Update both messages with confirmed conversation ID
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: userMessageId,
+                conversationId: confirmedConversationId
+              }
+            });
+
+            dispatch({
+              type: ChatActionType.UPDATE_MESSAGE,
+              payload: {
+                messageId: assistantMessageId,
+                conversationId: confirmedConversationId,
+                status: MessageStatus.STREAMING // Now streaming
+              }
+            });
+
+            // Reload conversations to include the new one if it's new
+            if (!currentConversationId) {
+              loadConversations();
+            }
           }
-        });
+        } else {
+          console.error('[ChatStore] No conversation ID in backend response');
+          
+          // Update message to error state
+          dispatch({
+            type: ChatActionType.UPDATE_MESSAGE,
+            payload: {
+              messageId: assistantMessageId,
+              status: MessageStatus.ERROR
+            }
+          });
+        }
+        
+        // Return response for router navigation
+        return response;
+      } finally {
+        // Always clear preparing state
+        dispatch({ type: ChatActionType.SET_PREPARING_CONVERSATION, payload: false });
       }
-      
-      // Return the full response so the router can update the URL
-      return response;
     } catch (error) {
       console.error('[ChatStore] Error sending message:', error);
-      dispatch({ type: ChatActionType.SET_ERROR, payload: error as Error });
+      
+      dispatch({ 
+        type: ChatActionType.SET_ERROR, 
+        payload: error as Error 
+      });
+      
+      // Return null to indicate error
       return null;
     }
   }, [state.activeConversationId, loadConversations]);

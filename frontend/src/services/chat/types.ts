@@ -4,10 +4,14 @@
 
 /**
  * Message status enum for tracking the state of each message
+ * 
+ * IMPORTANT: These values MUST match the lowercase strings used by the backend
+ * Example: Backend sends "error", so we must use ERROR = 'error'
  */
 export enum MessageStatus {
   PENDING = 'pending',    // Message is yet to be sent
   SENDING = 'sending',    // Message is being sent to the server
+  PREPARING = 'preparing', // Preparing conversation and WebSocket connection
   QUEUED = 'queued',      // Message is in the server queue
   PROCESSING = 'processing', // Message is being processed by the LLM
   STREAMING = 'streaming', // Message is streaming back from the LLM
@@ -119,6 +123,15 @@ export interface MessageUpdateEvent extends WebSocketMessage {
   content_update_mode?: string;  // 'APPEND' or 'REPLACE'
   is_final_message?: boolean;    // Indicates if this is the final message in a stream
   metadata?: MessageMetadata;    // Metadata about the message/generation
+}
+
+/**
+ * Session data for conversation continuity between phases
+ */
+export interface ConversationSessionData {
+  conversationId: string;      // Confirmed conversation ID from backend
+  sessionToken: string;        // Auth token for this specific conversation
+  assistantMessageId: string;  // Frontend message ID for tracking
 }
 
 /**

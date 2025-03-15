@@ -60,7 +60,8 @@ const ChatRouter: React.FC = () => {
       // Set UI state first to provide immediate feedback
       setShowHistorySidebar(true); // Always show sidebar when starting a conversation
       
-      // Send the message and wait for response with confirmed conversation ID
+      // IMPROVEMENT: Show clear UI feedback that we're preparing the conversation
+      // This uses the new two-phase message sending process under the hood
       const response = await sendMessage(content, file);
       
       // Check if we got a valid response with conversation ID
@@ -69,10 +70,11 @@ const ChatRouter: React.FC = () => {
         console.log(`[ChatRouter] Backend confirmed new conversation: ${newConversationId}`);
         
         // Update URL with confirmed conversation ID (using replace to avoid back button issues)
+        // We use replace here to ensure the back button doesn't take us back to empty state
         navigate(`/chat/${newConversationId}`, { replace: true });
       } else {
         console.error('[ChatRouter] No valid conversation ID received from backend');
-        // Error would have been set in the message state by ChatStore already
+        // Show user-friendly error - message state already updated by ChatStore
       }
     } catch (error) {
       console.error('[ChatRouter] Error creating new conversation:', error);

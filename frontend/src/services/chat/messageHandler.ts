@@ -189,40 +189,54 @@ class MessageHandler {
     }
   }
   
-  // Process WebSocket message
+  // Process WebSocket message with better error handling
   private handleMessage(message: any): void {
     if (!message) return;
     
-    // Basic message validation
-    if (!message.type) {
-      console.warn('Received WebSocket message without type:', message);
-      return;
-    }
-    
-    // Process message based on type
-    switch (message.type) {
-      case MessageType.MESSAGE_UPDATE:
-        this.handleMessageUpdate(message);
-        break;
-        
-      case MessageType.CONVERSATION_UPDATE:
-        eventEmitter.emit('conversation_update', message);
-        break;
-        
-      case MessageType.SYSTEM_MESSAGE:
-        eventEmitter.emit('system_message', message);
-        break;
-        
-      case MessageType.ERROR:
-        eventEmitter.emit('error', message);
-        break;
-        
-      case MessageType.ACK:
-        // Just a heartbeat response, ignore
-        break;
-        
-      default:
-        console.warn(`Unknown message type: ${message.type}`, message);
+    try {
+      // Basic message validation
+      if (!message.type) {
+        console.warn('Received WebSocket message without type:', message);
+        return;
+      }
+      
+      // Enhanced logging for all incoming messages
+      console.log(`[messageHandler] Received message type: ${message.type}`, {
+        hasMessageId: !!message.message_id,
+        hasConversationId: !!message.conversation_id,
+        messageType: message.type
+      });
+      
+      // Process message based on type
+      switch (message.type) {
+        case MessageType.MESSAGE_UPDATE:
+          this.handleMessageUpdate(message);
+          break;
+          
+        case MessageType.CONVERSATION_UPDATE:
+          console.log('[messageHandler] Received conversation update');
+          eventEmitter.emit('conversation_update', message);
+          break;
+          
+        case MessageType.SYSTEM_MESSAGE:
+          console.log('[messageHandler] Received system message');
+          eventEmitter.emit('system_message', message);
+          break;
+          
+        case MessageType.ERROR:
+          console.error('[messageHandler] Received error message:', message.error || 'Unknown error');
+          eventEmitter.emit('error', message);
+          break;
+          
+        case MessageType.ACK:
+          // Just a heartbeat response, ignore
+          break;
+          
+        default:
+          console.warn(`[messageHandler] Unknown message type: ${message.type}`, message);
+      }
+    } catch (error) {
+      console.error('[messageHandler] Error processing WebSocket message:', error);
     }
   }
   
@@ -302,15 +316,21 @@ class MessageHandler {
     const sequenceNumber = this.getNextSequence(frontendMessageId);
     console.log(`Processing message update #${sequenceNumber} for ${frontendMessageId}`);
     
-    // Extract message status
+    // Extract message status (backend uses lowercase status values)
     let status: MessageStatus = MessageStatus.STREAMING;
     if (message.status) {
-      // Map strings to enum values
-      const statusString = message.status.toUpperCase();
-      if (statusString === 'COMPLETE') status = MessageStatus.COMPLETE;
-      else if (statusString === 'ERROR') status = MessageStatus.ERROR;
-      else if (statusString === 'QUEUED') status = MessageStatus.QUEUED;
-      else if (statusString === 'PROCESSING') status = MessageStatus.PROCESSING;
+      // Convert status string to lowercase for case-insensitive mapping
+      const statusString = message.status.toLowerCase();
+      
+      // Map directly to our enum values which match lowercase backend values
+      if (statusString === 'complete') status = MessageStatus.COMPLETE;
+      else if (statusString === 'error') status = MessageStatus.ERROR;
+      else if (statusString === 'queued') status = MessageStatus.QUEUED;
+      else if (statusString === 'processing') status = MessageStatus.PROCESSING;
+      else if (statusString === 'preparing') status = MessageStatus.PREPARING;
+      
+      // Log status mapping for debugging
+      console.log(`[messageHandler] Message status from backend: ${message.status} → ${status}`);
     }
     
     // Check completion status
@@ -357,7 +377,13 @@ class MessageHandler {
       console.log(`Final message detected for ${frontendMessageId}, using REPLACE mode`);
     }
       
-    // Update our stored content
+    // Update our stored content with better logging
+    console.log(`[messageHandler] Content update for ${frontendMessageId}`, {
+      mode: contentUpdateMode,
+      newContentLength: content.length,
+      prevTotalLength: currentContent.length
+    });
+    
     const newContent = contentUpdateMode === ContentUpdateMode.REPLACE ? 
       content : currentContent + content;
       

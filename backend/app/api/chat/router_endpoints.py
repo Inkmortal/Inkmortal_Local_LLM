@@ -4,13 +4,14 @@ API routes for chat functionality.
 This file contains the endpoint definitions for the chat API.
 The complex streaming logic is in stream_message.py.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 import logging
 import json
 from jose import JWTError
+from datetime import datetime, timedelta
 
 from .schemas import (
     MessageCreate, MessageResponse, ConversationResponse, 
@@ -101,12 +102,29 @@ async def websocket_endpoint(
 # Endpoint to create a new conversation
 @router.post("/conversation", status_code=status.HTTP_201_CREATED)
 async def create_conversation_endpoint(
-    conversation: ConversationCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new conversation"""
-    result = create_conversation(db, current_user.id, title=conversation.title)
+    """Create a new conversation with two-phase support
+    
+    Supports a 'prepare_only' flag for the first phase of two-phase messaging:
+    - Phase 1: Create conversation but don't queue LLM request
+    - Phase 2: Process message with established conversation ID
+    """
+    # Parse body - can be ConversationCreate or have prepare_only flag
+    body = await request.json()
+    
+    # Extract data from request
+    title = body.get('title', None)
+    prepare_only = body.get('prepare_only', False)
+    message = body.get('message', None)
+    
+    # Log extended information about the request
+    logger.info(f"Creating conversation with prepare_only={prepare_only}, title={title}")
+    
+    # Create conversation
+    result = create_conversation(db, current_user.id, title=title or message)
     
     if not result.get("success", False):
         raise HTTPException(
@@ -114,9 +132,24 @@ async def create_conversation_endpoint(
             detail=result.get("error", "Error creating conversation")
         )
     
+    # Generate a session token for phase 2 authentication
+    # This helps ensure only the client that created the conversation can use it
+    session_token = jwt.encode(
+        {
+            "sub": current_user.username, 
+            "conversation_id": result["conversation_id"],
+            "exp": datetime.utcnow() + timedelta(minutes=10)
+        }, 
+        SECRET_KEY, 
+        algorithm=ALGORITHM
+    )
+    
+    # Return response with conversation details and session token
     return {
         "conversation_id": result["conversation_id"],
-        "title": result.get("title", "New conversation")
+        "title": result.get("title", "New conversation"),
+        "session_token": session_token,
+        "prepare_only": prepare_only
     }
 
 # Endpoint to get a conversation
@@ -238,7 +271,7 @@ async def get_available_models(
             "default_model": settings.default_model
         }
 
-# Endpoint to send a message with file upload
+# Endpoint to send a message with file upload - supports two-phase communication
 @router.post("/message")
 async def send_message_endpoint(
     request: Request,
@@ -246,19 +279,25 @@ async def send_message_endpoint(
     current_user: User = Depends(get_current_user),
     queue_manager = Depends(get_queue)
 ):
-    print("ROUTER ENDPOINT: send_message_endpoint called!")
-    """Send a message to the LLM and store the conversation - always uses streaming now
+    """Send a message to the LLM and store the conversation using two-phase messaging
+    
+    Phase 1: Conversation creation (done separately via /conversation endpoint)
+    Phase 2: This endpoint - processes message with established conversation ID
     
     IMPORTANT:
-    - The frontend sends an assistant_message_id with each request
-    - This ID MUST be preserved and used for all WebSocket updates
-    - Failure to use the same ID will break streaming response display
+    - Requires a valid conversation_id
+    - Requires a frontend-generated assistant_message_id for consistent WebSocket updates
+    - Session_token may be provided for extra security
     """
+    logger.info(f"ROUTER ENDPOINT: send_message_endpoint called by user {current_user.username}")
+    
     content_type = request.headers.get("Content-Type", "")
     message_text = None
     conversation_id = None
+    session_token = None
+    assistant_message_id = None
+    headers = {}
     file_content = None
-    # Always stream - removed stream flag
     
     try:
         # Parse request based on content type
@@ -267,7 +306,8 @@ async def send_message_endpoint(
             form = await request.form()
             message_text = form.get("message")
             conversation_id = form.get("conversation_id")
-            # Ignoring stream parameter - always stream now
+            session_token = form.get("session_token")
+            assistant_message_id = form.get("assistant_message_id")
             file = form.get("file")
             
             # Handle file upload if provided
@@ -284,31 +324,69 @@ async def send_message_endpoint(
             data = await request.json()
             message_text = data.get("message")
             conversation_id = data.get("conversation_id")
-            assistant_message_id = data.get("assistant_message_id")  # Extract assistant message ID
-            headers = data.get("headers", {})  # Extract headers for client type detection
-            # Ignoring stream parameter - always stream now
-            
+            session_token = data.get("session_token")
+            assistant_message_id = data.get("assistant_message_id")
+            headers = data.get("headers", {})
+        
         # Validate message text
         if not message_text:
+            logger.error("Message content missing in request")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Message is required"
             )
         
-        # Always use streaming now - no more condition check
-        # Using the synchronous queue_manager dependency (no need to await)
-        print("ROUTER ENDPOINT: About to call stream_message!")
-        print(f"ROUTER ENDPOINT: message_text={message_text[:20]}..., conversation_id={conversation_id}, assistant_message_id={assistant_message_id}")
-        return await stream_message(
+        # Validate conversation ID - REQUIRED in two-phase approach
+        if not conversation_id:
+            logger.error("Conversation ID missing in request")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Conversation ID is required - use two-phase messaging"
+            )
+        
+        # Validate assistant message ID - REQUIRED for consistent WebSocket updates
+        if not assistant_message_id:
+            logger.error("Assistant message ID missing in request")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Assistant message ID is required for consistent updates"
+            )
+        
+        # Validate session token if provided (optional validation)
+        if session_token:
+            try:
+                # Decode the token
+                payload = jwt.decode(session_token, SECRET_KEY, algorithms=[ALGORITHM])
+                token_conversation_id = payload.get("conversation_id")
+                token_username = payload.get("sub")
+                
+                # Verify the token matches this conversation and user
+                if token_conversation_id != conversation_id or token_username != current_user.username:
+                    logger.warning(f"Invalid session token for conversation {conversation_id}")
+                    # Continue anyway but log it
+            except JWTError:
+                logger.warning(f"Invalid session token format for conversation {conversation_id}")
+                # Continue anyway but log it
+        else:
+            # No session token provided, that's OK - it's optional for backward compatibility
+            logger.info(f"No session token provided for conversation {conversation_id} - continuing anyway")
+        
+        # Log the request details
+        logger.info(f"Processing message: conversation_id={conversation_id}, assistant_message_id={assistant_message_id}")
+        
+        # Process the message with streaming
+        response = await stream_message(
             db=db,
             user=current_user,
             message_text=message_text,
-            conversation_id=conversation_id,
+            conversation_id=conversation_id,  # Now guaranteed to be present
             file_content=file_content,
             queue_manager=queue_manager,
-            assistant_message_id=assistant_message_id,  # Pass the assistant message ID
-            headers=headers  # Pass headers for client type detection
+            assistant_message_id=assistant_message_id,
+            headers=headers
         )
+        
+        return response
         
     except HTTPException:
         # Re-raise HTTP exceptions

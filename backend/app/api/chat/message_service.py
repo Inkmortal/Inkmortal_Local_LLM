@@ -211,7 +211,7 @@ async def generate_response(
             "type": "message_update",
             "message_id": message_id,
             "conversation_id": conv_id,
-            "status": "PROCESSING"
+            "status": "processing"
         })
         
         try:
@@ -243,7 +243,7 @@ async def generate_response(
                     "type": "message_update",
                     "message_id": message_id,
                     "conversation_id": conv_id,
-                    "status": "PROCESSING"
+                    "status": "processing"
                 })
                 
                 # Check if we should use streaming
@@ -279,7 +279,7 @@ async def generate_response(
                                         "type": "message_update",
                                         "message_id": message_id,
                                         "conversation_id": conv_id,
-                                        "status": "STREAMING",
+                                        "status": "streaming",
                                         "assistant_content": content,
                                         "content_update_type": "APPEND",
                                         "is_complete": False
@@ -291,7 +291,7 @@ async def generate_response(
                                     "type": "message_update",
                                     "message_id": message_id,
                                     "conversation_id": conv_id,
-                                    "status": "STREAMING",
+                                    "status": "streaming",
                                     "assistant_content": chunk,
                                     "content_update_type": "APPEND",
                                     "is_complete": False
@@ -334,7 +334,7 @@ async def generate_response(
                                     "type": "message_update",
                                     "message_id": message_id,
                                     "conversation_id": conv_id,
-                                    "status": "COMPLETE",
+                                    "status": "complete",
                                     "assistant_content": assistant_text,
                                     "content_update_type": "REPLACE",
                                     "is_complete": True
@@ -353,7 +353,7 @@ async def generate_response(
                             "type": "message_update",
                             "message_id": message_id,
                             "conversation_id": conv_id,
-                            "status": "ERROR",
+                            "status": "error",
                             "assistant_content": error_message,
                             "error": f"Error parsing LLM response: {str(e)}"
                         })
@@ -366,7 +366,7 @@ async def generate_response(
                         "type": "message_update",
                         "message_id": message_id,
                         "conversation_id": conv_id,
-                        "status": "ERROR",
+                        "status": "error",
                         "assistant_content": "I apologize, but I didn't receive a response. Please try again.",
                         "error": "No response received from LLM"
                     })
@@ -380,7 +380,7 @@ async def generate_response(
                     "type": "message_update",
                     "message_id": message_id,
                     "conversation_id": conv_id,
-                    "status": "ERROR",
+                    "status": "error",
                     "assistant_content": f"I apologize, but I encountered an error: {str(e)}",
                     "error": str(e)
                 })
@@ -397,7 +397,7 @@ async def generate_response(
                 "type": "message_update",
                 "message_id": message_id,
                 "conversation_id": conv_id,
-                "status": "ERROR",
+                "status": "error",
                 "assistant_content": f"I apologize, but I encountered an error while setting up your request: {str(e)}",
                 "error": str(e)
             })
@@ -411,7 +411,7 @@ async def generate_response(
                 "type": "message_update",
                 "message_id": message_id,
                 "conversation_id": conv_id,
-                "status": "ERROR",
+                "status": "error",
                 "assistant_content": "I apologize, but I encountered an unexpected error.",
                 "error": str(e)
             })

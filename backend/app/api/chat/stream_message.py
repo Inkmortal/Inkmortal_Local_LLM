@@ -208,7 +208,7 @@ async def stream_message(
                         "type": "message_update",
                         "message_id": assistant_message_id,
                         "conversation_id": conversation_id,
-                        "status": "ERROR",
+                        "status": "error",  # Use lowercase status for frontend compatibility
                         "error": error_message
                     })
                     
@@ -242,12 +242,12 @@ async def stream_message(
             
             # Handle error based on transport mode
             if transport_mode == "websocket":
-                # Send error via WebSocket
+                # Send error via WebSocket - use lowercase status for frontend compatibility
                 await manager.send_update(user.id, {
                     "type": "message_update",
                     "message_id": assistant_message_id,
                     "conversation_id": conversation_id,
-                    "status": "ERROR",
+                    "status": "error",
                     "error": error_message
                 })
                 
@@ -274,7 +274,7 @@ async def stream_message(
                     "type": "message_update",
                     "message_id": assistant_message_id,
                     "conversation_id": conversation_id,
-                    "status": "STREAMING",
+                    "status": "streaming",
                     "assistant_content": ""
                 })
                 
@@ -337,7 +337,7 @@ async def stream_message(
                                 "type": "message_update",
                                 "message_id": assistant_message_id,
                                 "conversation_id": conversation_id,
-                                "status": "STREAMING" if not is_complete else "COMPLETE",
+                                "status": "streaming" if not is_complete else "COMPLETE",
                                 "assistant_content": "",
                                 "is_complete": is_complete,
                                 "metadata": data.copy()
@@ -356,7 +356,7 @@ async def stream_message(
                             "type": "message_update",
                             "message_id": assistant_message_id,
                             "conversation_id": conversation_id,
-                            "status": "STREAMING",
+                            "status": "streaming",
                             "assistant_content": token,
                             "is_complete": is_complete,
                             "metadata": {"model": model_used} if model_used else {}
@@ -425,7 +425,7 @@ async def stream_message(
                             "type": "message_update",
                             "message_id": assistant_message_id,
                             "conversation_id": conversation_id,
-                            "status": "STREAMING",
+                            "status": "streaming",
                             "assistant_content": token,
                             "is_complete": is_complete
                         })
@@ -462,7 +462,7 @@ async def stream_message(
                         "type": "message_update",
                         "message_id": assistant_message_id,
                         "conversation_id": conversation_id,
-                        "status": "COMPLETE",
+                        "status": "complete",
                         "assistant_content": assistant_content,
                         "is_complete": True,
                         "content_update_mode": "REPLACE",
@@ -501,7 +501,7 @@ async def stream_message(
                     "type": "message_update",
                     "message_id": assistant_message_id,
                     "conversation_id": conversation_id,
-                    "status": "ERROR",
+                    "status": "error",
                     "error": str(e),
                     "is_complete": True
                 })
