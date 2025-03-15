@@ -7,7 +7,7 @@ import ChatInputAdapterWithStop from '../../../components/chat/ChatInputAdapterW
 import ChatHistorySidebar from '../../../components/chat/ChatHistorySidebar';
 import ChatBackgroundEffects from './layout/ChatBackgroundEffects';
 import { useTheme } from '../../../context/ThemeContext';
-import { MessageStatus } from '../types/message';
+import { MessageStatus } from '../../../services/chat/types';
 
 interface ChatPageProps {
   conversationId: string;

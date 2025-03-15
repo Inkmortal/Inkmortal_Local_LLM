@@ -40,11 +40,12 @@ const ChatRouter: React.FC = () => {
 
   // Handle new conversation creation (after first message is sent)
   const handleNewConversation = async (content: string, file: File | null = null) => {
-    // Send the message and get the new conversation ID
-    const newConversationId = await sendMessage(content, file);
+    // Send the message and get the response
+    const response = await sendMessage(content, file);
     
-    // If we got a new conversation ID, update the URL
-    if (newConversationId) {
+    // Check if we got a conversation ID from the response
+    if (response && response.conversation_id) {
+      const newConversationId = response.conversation_id;
       console.log(`[ChatRouter] New conversation created: ${newConversationId}, updating URL`);
       navigate(`/chat/${newConversationId}`, { replace: true });
     }

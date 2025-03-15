@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Message, MessageRole, MessageStatus, Conversation, ContentUpdateMode } from '../../pages/chat/types/message';
+import { Message, MessageRole } from '../../pages/chat/types/message';
+import { ConversationSummary, ConversationData, MessageStatus, ContentUpdateMode } from './types';
 import { sendChatMessage } from './messageService';
 import { subscribeToMessageUpdates } from './websocketService';
 import { useRegisterMessageId } from './StreamingContext';
-import { fetchConversationById, fetchConversations } from './conversationService';
+import { getConversation, listConversations } from './conversationService';
 
 // Action types
 export enum ChatActionType {
@@ -20,7 +21,7 @@ export enum ChatActionType {
 
 // State interface
 export interface ChatState {
-  conversations: Record<string, Conversation>;
+  conversations: Record<string, ConversationSummary>;
   activeConversationId: string | null;
   messages: Record<string, Message>;
   isLoading: boolean;
@@ -40,11 +41,11 @@ const initialState: ChatState = {
 
 // Action types
 type Action =
-  | { type: ChatActionType.SET_CONVERSATIONS; payload: Conversation[] }
+  | { type: ChatActionType.SET_CONVERSATIONS; payload: ConversationSummary[] }
   | { type: ChatActionType.SET_ACTIVE_CONVERSATION; payload: string | null }
   | { type: ChatActionType.SET_LOADING; payload: boolean }
   | { type: ChatActionType.SET_LOADING_CONVERSATIONS; payload: boolean }
-  | { type: ChatActionType.ADD_MESSAGE; payload: Message }
+  | { type: ChatActionType.ADD_MESSAGE; payload: any } // Using any to accommodate different message formats
   | { type: ChatActionType.UPDATE_MESSAGE; payload: { messageId: string; content?: string; status?: MessageStatus; isComplete?: boolean; contentUpdateMode?: ContentUpdateMode; conversationId?: string } }
   | { type: ChatActionType.SET_ERROR; payload: Error }
   | { type: ChatActionType.CLEAR_MESSAGES };
@@ -149,7 +150,7 @@ function chatReducer(state: ChatState, action: Action): ChatState {
 interface ChatContextValue extends ChatState {
   loadConversations: () => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
-  sendMessage: (content: string, file?: File | null) => Promise<void>;
+  sendMessage: (content: string, file?: File | null) => Promise<any>;
   clearActiveConversation: () => void;
 }
 
@@ -169,7 +170,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
   const loadConversations = useCallback(async () => {
     try {
       dispatch({ type: ChatActionType.SET_LOADING_CONVERSATIONS, payload: true });
-      const conversations = await fetchConversations();
+      const conversations = await listConversations();
       dispatch({ type: ChatActionType.SET_CONVERSATIONS, payload: conversations });
     } catch (error) {
       console.error('Error loading conversations:', error);
@@ -188,13 +189,16 @@ export function ChatProvider({ children }: ChatProviderProps) {
       dispatch({ type: ChatActionType.CLEAR_MESSAGES });
       dispatch({ type: ChatActionType.SET_ACTIVE_CONVERSATION, payload: id });
       
-      const conversation = await fetchConversationById(id);
+      const conversation = await getConversation(id);
       
-      // If conversation has messages, add them to state
-      if (conversation.messages && conversation.messages.length > 0) {
-        conversation.messages.forEach(message => {
-          dispatch({ type: ChatActionType.ADD_MESSAGE, payload: message });
-        });
+      // Only proceed if we got a conversation back
+      if (conversation) {
+        // If conversation has messages, add them to state
+        if (conversation.messages && conversation.messages.length > 0) {
+          conversation.messages.forEach(message => {
+            dispatch({ type: ChatActionType.ADD_MESSAGE, payload: message });
+          });
+        }
       }
     } catch (error) {
       console.error(`Error loading conversation ${id}:`, error);
