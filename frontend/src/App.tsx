@@ -7,6 +7,7 @@ import NotificationProvider from './components/ui/Notification';
 import { appRoutes } from './routes';
 import { StreamingProvider } from './services/chat/StreamingContext';
 import { ChatProvider } from './services/chat/ChatStore';
+import { EditorProvider } from './services/editor/EditorContext';
 
 // Clean up global window navigateTo function to avoid issues
 declare global {
@@ -33,7 +34,9 @@ function App() {
         <AuthProvider>
           <StreamingProvider>
             <ChatProvider>
-              {routeElement}
+              <EditorProvider>
+                {routeElement}
+              </EditorProvider>
             </ChatProvider>
           </StreamingProvider>
         </AuthProvider>

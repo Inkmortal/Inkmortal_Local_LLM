@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../services/chat/ChatStore';
 import { useTheme } from '../../context/ThemeContext';
@@ -178,8 +178,6 @@ const ChatRouter: React.FC = () => {
                   }}
                   placeholder="Message Inkmortal..."
                   isGenerating={isGenerating}
-                  codeInsertRef={useRef<((code: string) => void) | undefined>(undefined)}
-                  mathInsertRef={useRef<((math: string) => void) | undefined>(undefined)}
                 />
               </div>
             </div>

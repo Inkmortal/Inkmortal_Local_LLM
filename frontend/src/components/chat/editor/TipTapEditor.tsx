@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor as useTipTapEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useTheme } from '../../../context/ThemeContext';
@@ -10,6 +10,7 @@ import { CodeBlockExtension } from './extensions/CodeBlockExtension';
 import MathExpressionEditor from '../../chat/editors/MathExpressionEditor';
 import CodeEditor from '../../chat/editors/CodeEditor';
 import MessageParser from '../../chat/MessageParser';
+import { useEditor } from '../../../services/editor/EditorContext';
 
 interface TipTapEditorProps {
   onSend: (html: string) => void;
@@ -17,8 +18,6 @@ interface TipTapEditorProps {
   loading?: boolean;
   placeholder?: string;
   isGenerating?: boolean;
-  codeInsertRef?: React.MutableRefObject<((codeSnippet: string) => void) | undefined>;
-  mathInsertRef?: React.MutableRefObject<((mathSnippet: string) => void) | undefined>;
   onInsertCode?: (codeSnippet: string) => void;
   onInsertMath?: (mathSnippet: string) => void;
 }
@@ -29,22 +28,27 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
   loading = false,
   placeholder = "Type a message...",
   isGenerating = false,
-  codeInsertRef,
-  mathInsertRef,
   onInsertCode,
   onInsertMath,
 }) => {
   const { currentTheme } = useTheme();
+  const { 
+    isPreviewMode, 
+    togglePreview, 
+    codeInsertRef, 
+    mathInsertRef, 
+    setEditor 
+  } = useEditor();
+  
   const [mathEditorOpen, setMathEditorOpen] = useState(false);
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
   const editorContentRef = useRef<HTMLDivElement>(null);
   
   // Keep references to handlers to avoid recreating them on each render
   const mathHandlerRef = useRef<((input: string) => void) | null>(null);
   const codeHandlerRef = useRef<((input: string) => void) | null>(null);
   
-  const editor = useEditor({
+  const editor = useTipTapEditor({
     extensions: [
       StarterKit.configure({
         heading: false,
@@ -105,33 +109,41 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     setCodeEditorOpen(true);
   };
 
-  // Register handlers in refs for external access
+  // Register the editor instance with the context
   useEffect(() => {
-    // If custom handlers provided as props via refs
-    if (mathInsertRef) {
-      mathInsertRef.current = (mathSnippet: string) => {
-        if (!editor) return;
-        
-        // Insert math node - use inline for $ format
-        editor.commands.insertContent({
-          type: 'mathInline',
-          attrs: { value: mathSnippet }
-        });
-      };
+    if (editor) {
+      setEditor(editor);
     }
     
-    if (codeInsertRef) {
-      codeInsertRef.current = (codeSnippet: string) => {
-        if (!editor) return;
-        
-        // Insert code block
-        editor.commands.insertContent({
-          type: 'codeBlock',
-          attrs: { language: 'javascript' },
-          content: [{ type: 'text', text: codeSnippet }]
-        });
-      };
-    }
+    return () => {
+      setEditor(null);
+    };
+  }, [editor, setEditor]);
+  
+  // Register handlers in refs for external access
+  useEffect(() => {
+    // Register math handler with context
+    mathInsertRef.current = (mathSnippet: string) => {
+      if (!editor) return;
+      
+      // Insert math node - use inline for $ format
+      editor.commands.insertContent({
+        type: 'mathInline',
+        attrs: { value: mathSnippet }
+      });
+    };
+    
+    // Register code handler with context
+    codeInsertRef.current = (codeSnippet: string, language = 'javascript') => {
+      if (!editor) return;
+      
+      // Insert code block
+      editor.commands.insertContent({
+        type: 'codeBlock',
+        attrs: { language },
+        content: [{ type: 'text', text: codeSnippet }]
+      });
+    };
     
     // Also register local handlers
     mathHandlerRef.current = (value: string) => {
@@ -208,13 +220,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             editor={editor}
             onMathClick={openMathEditor}
             onCodeClick={openCodeEditor}
-            showPreview={previewMode}
-            onTogglePreview={() => setPreviewMode(!previewMode)}
+            showPreview={isPreviewMode}
+            onTogglePreview={togglePreview}
           />
         )}
         
         {/* Preview mode - renders editor content as Markdown */}
-        {previewMode && editor ? (
+        {isPreviewMode && editor ? (
           <div className="p-3 min-h-[100px] max-h-[300px] overflow-auto scrollbar-thin prose prose-sm">
             <MessageParser content={editor.getHTML()} />
           </div>

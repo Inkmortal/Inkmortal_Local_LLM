@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { useTheme } from '../../../context/ThemeContext';
 import TipTapAdapterWithStop from '../../../components/chat/TipTapAdapterWithStop';
 
@@ -157,8 +157,6 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
           onStopGeneration={() => {}}
           placeholder="Send a message to start a new conversation..."
           isGenerating={false}
-          codeInsertRef={useRef<((code: string) => void) | undefined>(undefined)}
-          mathInsertRef={useRef<((math: string) => void) | undefined>(undefined)}
         />
       </div>
       

@@ -7,22 +7,18 @@ interface TipTapAdapterWithStopProps {
   onFileSelect?: (file: File) => void;
   placeholder?: string;
   isGenerating?: boolean;
-  codeInsertRef?: React.MutableRefObject<((code: string) => void) | undefined>;
-  mathInsertRef?: React.MutableRefObject<((math: string) => void) | undefined>;
 }
 
 /**
  * Enhanced TipTap adapter component that supports the stop generation feature
- * and maintains the same interface as ChatInputAdapterWithStop
+ * Uses the EditorContext through TipTapAdapter
  */
 const TipTapAdapterWithStop: React.FC<TipTapAdapterWithStopProps> = ({
   onSendMessage,
   onStopGeneration,
   onFileSelect,
   placeholder = "Type a message...",
-  isGenerating = false,
-  codeInsertRef,
-  mathInsertRef
+  isGenerating = false
 }) => {
   return (
     <div className="tiptap-adapter-with-stop">
@@ -32,8 +28,6 @@ const TipTapAdapterWithStop: React.FC<TipTapAdapterWithStopProps> = ({
         onFileSelect={onFileSelect}
         placeholder={placeholder}
         isGenerating={isGenerating}
-        codeInsertRef={codeInsertRef}
-        mathInsertRef={mathInsertRef}
       />
     </div>
   );

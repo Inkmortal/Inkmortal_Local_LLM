@@ -4,7 +4,7 @@ import { useTheme } from '../../../context/ThemeContext';
 
 interface EditorToolbarProps {
   editor: Editor | null;
-  previewMode: boolean;
+  showPreview: boolean;
   onTogglePreview: () => void;
   onMathClick?: () => void;
   onCodeClick?: () => void;
@@ -12,7 +12,7 @@ interface EditorToolbarProps {
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   editor,
-  previewMode,
+  showPreview,
   onTogglePreview,
   onMathClick,
   onCodeClick
@@ -36,7 +36,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   return (
     <div className="flex flex-wrap gap-1.5">
       {/* Editing toolbar shown only when not in preview mode */}
-      {!previewMode && (
+      {!showPreview && (
         <>
           <button
             type="button"
@@ -182,8 +182,8 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         type="button"
         onClick={onTogglePreview}
         className="p-1.5 rounded text-xs"
-        style={previewMode ? activeButtonStyles : buttonStyles}
-        title={previewMode ? "Edit Mode" : "Preview Mode"}
+        style={showPreview ? activeButtonStyles : buttonStyles}
+        title={showPreview ? "Edit Mode" : "Preview Mode"}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
           <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>

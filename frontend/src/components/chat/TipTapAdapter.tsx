@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import TipTapEditor from './editor/TipTapEditor';
 import { convertHtmlToMarkdown } from '../../utils/htmlToMarkdown';
+import { useEditor } from '../../services/editor/EditorContext';
 
 interface TipTapAdapterProps {
   onSendMessage: (message: string) => void;
@@ -8,14 +9,13 @@ interface TipTapAdapterProps {
   onFileSelect?: (file: File) => void;
   placeholder?: string;
   isGenerating?: boolean;
-  codeInsertRef?: React.MutableRefObject<((code: string) => void) | undefined>;
-  mathInsertRef?: React.MutableRefObject<((math: string) => void) | undefined>;
   disabled?: boolean;
 }
 
 /**
  * Adapter component to use TipTap editor in the chat interface
  * Handles conversion from HTML to proper markdown format
+ * Uses EditorContext for refs and editor functionality
  */
 const TipTapAdapter: React.FC<TipTapAdapterProps> = ({
   onSendMessage,
@@ -23,10 +23,11 @@ const TipTapAdapter: React.FC<TipTapAdapterProps> = ({
   onFileSelect,
   placeholder = "Type a message...",
   isGenerating = false,
-  codeInsertRef,
-  mathInsertRef,
   disabled = false
 }) => {
+  // Get editor context
+  const { codeInsertRef, mathInsertRef } = useEditor();
+  
   // Convert TipTap HTML to markdown-style format
   const handleSend = (html: string) => {
     // Convert HTML to markdown-style text
@@ -55,8 +56,6 @@ const TipTapAdapter: React.FC<TipTapAdapterProps> = ({
         loading={false}
         placeholder={placeholder}
         isGenerating={isGenerating}
-        codeInsertRef={codeInsertRef}
-        mathInsertRef={mathInsertRef}
       />
     </div>
   );
