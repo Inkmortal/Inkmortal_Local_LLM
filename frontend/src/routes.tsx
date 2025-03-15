@@ -23,7 +23,7 @@ import Unauthorized from './pages/auth/Unauthorized';
 
 // User Pages
 import Profile from './pages/user/Profile';
-import ChatPage from "./pages/chat/ModernChatPage";
+import ChatRouter from "./pages/chat/ChatRouter";
 import ModernHomePage from './components/HomePage';
 import ThemeGallery from './pages/themes/ThemeGallery';
 
@@ -94,14 +94,14 @@ export const routes: AppRoutes = {
           ],
         },
         
-        // Protected Chat Routes - direct render without nested layout
+        // Protected Chat Routes with the new router architecture
         { 
           path: 'chat', 
-          element: <RequireAuth><ChatPage /></RequireAuth>
+          element: <RequireAuth><ChatRouter /></RequireAuth>
         },
         { 
           path: 'chat/:conversationId', 
-          element: <RequireAuth><ChatPage /></RequireAuth>
+          element: <RequireAuth><ChatRouter /></RequireAuth>
         },
         
                 
