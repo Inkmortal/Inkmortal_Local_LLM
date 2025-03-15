@@ -148,7 +148,7 @@ const ChatRouter: React.FC = () => {
           <ChatBackgroundEffects />
           
           {/* Conditional content based on conversation state */}
-          {conversationId ? (
+          {activeConversationId ? (
             // Content container for active conversation
             <div className="w-full h-full flex flex-col relative">
               {/* Chat Window */}
