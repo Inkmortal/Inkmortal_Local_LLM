@@ -11,6 +11,7 @@ import {
 import { sendChatMessage } from './messageService';
 import { subscribeToMessageUpdates } from './websocketService';
 import { getConversation, listConversations } from './conversationService';
+import { useRegisterMessageId } from './StreamingContext';
 
 // Action types
 export enum ChatActionType {
