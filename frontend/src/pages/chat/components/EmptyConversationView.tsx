@@ -159,6 +159,13 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
           isGenerating={false}
         />
       </div>
+      
+      {/* Loading indicator state explanation */}
+      <div className="w-full max-w-3xl mt-2 text-center">
+        <p className="text-xs opacity-70">
+          💡 After sending a message, please wait briefly while the conversation is established
+        </p>
+      </div>
     </div>
   );
 };

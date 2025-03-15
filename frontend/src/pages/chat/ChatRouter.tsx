@@ -57,16 +57,22 @@ const ChatRouter: React.FC = () => {
     
     console.log('[ChatRouter] Creating new conversation with message:', content);
     try {
-      // Send the message and get the response with potential new conversation ID
+      // Set UI state first to provide immediate feedback
+      setShowHistorySidebar(true); // Always show sidebar when starting a conversation
+      
+      // Send the message and wait for response with confirmed conversation ID
       const response = await sendMessage(content, file);
       
-      // Check if we got a conversation ID from the response
+      // Check if we got a valid response with conversation ID
       if (response && response.conversation_id) {
         const newConversationId = response.conversation_id;
-        console.log(`[ChatRouter] New conversation created: ${newConversationId}, updating URL`);
+        console.log(`[ChatRouter] Backend confirmed new conversation: ${newConversationId}`);
+        
+        // Update URL with confirmed conversation ID (using replace to avoid back button issues)
         navigate(`/chat/${newConversationId}`, { replace: true });
       } else {
-        console.error('[ChatRouter] No conversation ID received from backend');
+        console.error('[ChatRouter] No valid conversation ID received from backend');
+        // Error would have been set in the message state by ChatStore already
       }
     } catch (error) {
       console.error('[ChatRouter] Error creating new conversation:', error);

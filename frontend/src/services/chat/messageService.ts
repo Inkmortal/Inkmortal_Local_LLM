@@ -138,8 +138,7 @@ export async function sendChatMessage(
       // For WebSocket clients, handle differently to ensure message state maintenance
       if (useWebSocket) {
         try {
-          // CRITICAL: Use the correct format that the backend is expecting
-          // Log the exact payload we're sending
+          // Log the payload we're sending
           console.log('[messageService] Sending request payload to backend:', 
             JSON.stringify({
               ...requestData,
@@ -147,7 +146,7 @@ export async function sendChatMessage(
             })
           );
           
-          // Make sure these fields explicitly match what router_endpoints.py is expecting
+          // Prepare the payload that matches what router_endpoints.py expects
           const backendPayload = {
             message: message,
             conversation_id: conversationId,
@@ -157,7 +156,9 @@ export async function sendChatMessage(
             headers: requestData.headers
           };
           
-          await fetchApi<ChatResponse>('/api/chat/message', {
+          // Send HTTP request and WAIT for the response to get conversation ID
+          console.log('[messageService] Sending HTTP request and waiting for response');
+          const httpResponse = await fetchApi<ChatResponse>('/api/chat/message', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -165,44 +166,81 @@ export async function sendChatMessage(
             body: JSON.stringify(backendPayload),
           });
           
-          console.log('[messageService] WebSocket client request sent successfully');
+          // Parse the HTTP response to get the conversation ID and other details
+          console.log('[messageService] Received HTTP response, parsing');
+          const parsedResponse = await httpResponse.json();
+          
+          console.log('[messageService] Parsed HTTP response:', parsedResponse);
+          
+          // Get the real conversation ID from the backend
+          const backendConversationId = parsedResponse.conversation_id;
+          
+          // Log important info about the response
+          console.log(`[messageService] Backend response details:
+            message_id: ${parsedResponse.id || 'none'}
+            conversation_id: ${backendConversationId || 'none'}
+            assistant_message_id: ${parsedResponse.assistant_message_id || requestData.assistant_message_id || 'none'}
+          `);
+          
+          // Register message ID with the CORRECT conversation ID from backend
+          if (requestData.assistant_message_id && backendConversationId) {
+            console.log(`[messageService] Registering WebSocket message ID mapping with backend conversation ID: ${backendConversationId}`);
+            
+            // Register with confirmed conversation ID from backend
+            registerMessageId(
+              requestData.assistant_message_id, // Frontend ID
+              requestData.assistant_message_id, // Backend ID (same initially)
+              backendConversationId // Use the REAL conversation ID from backend
+            );
+            
+            // Return the actual backend response
+            console.log(`[messageService] Returning backend response with conversation_id: ${backendConversationId}`);
+            return parsedResponse;
+          } else if (requestData.assistant_message_id && conversationId) {
+            // Fallback to original conversation ID if backend didn't provide one
+            console.log(`[messageService] Backend didn't provide conversation ID, using original: ${conversationId}`);
+            
+            registerMessageId(
+              requestData.assistant_message_id,
+              requestData.assistant_message_id,
+              conversationId
+            );
+            
+            return {
+              success: true,
+              message_id: requestData.assistant_message_id,
+              conversation_id: conversationId,
+              assistant_message_id: requestData.assistant_message_id
+            };
+          } else {
+            console.error(`[messageService] CRITICAL ERROR: Cannot register message ID mapping - missing required IDs`);
+            
+            // Return what we have as a last resort
+            return parsedResponse;
+          }
+          
         } catch (error) {
-          // For WebSocket clients, log but continue - we want to maintain message state
-          console.warn('HTTP error for WebSocket client, continuing with WebSocket streaming:', error);
+          console.error('[messageService] Error during HTTP request:', error);
           
-          // CRITICAL: Log the assistant message ID we're expecting updates for
-          console.log(`[messageService] CRITICAL! Expecting WebSocket updates for assistant_message_id: ${requestData.assistant_message_id}`);
+          // For WebSocket clients, still need to register the ID to handle future updates
+          if (requestData.assistant_message_id && conversationId) {
+            console.log(`[messageService] Registering message ID despite error: ${requestData.assistant_message_id}`);
+            registerMessageId(
+              requestData.assistant_message_id,
+              requestData.assistant_message_id,
+              conversationId
+            );
+          }
           
-          // Skip message ID registration here - we'll do it once after all error handling
+          // Return a basic response so UI can continue
+          return {
+            success: false,
+            message_id: requestData.assistant_message_id,
+            conversation_id: conversationId,
+            assistant_message_id: requestData.assistant_message_id,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
         }
-        
-        // Always return success for WebSocket clients to maintain message state
-        // Actual content will come via WebSocket updates
-        
-        // CRITICAL FIX: Only register the message ID once, after all error handling
-        // This ensures we have a single consistent registration
-        if (requestData.assistant_message_id && conversationId) {
-          console.log(`[messageService] Registering WebSocket message ID mapping for: ${requestData.assistant_message_id}`);
-          registerMessageId(
-            requestData.assistant_message_id, // Frontend ID
-            requestData.assistant_message_id, // Backend ID (same initially)
-            conversationId
-          );
-        } else {
-          console.error(`[messageService] CRITICAL ERROR: Cannot register message ID mapping - missing ID or conversation ID`);
-        }
-        
-        const response = {
-          success: true,
-          message_id: requestData.assistant_message_id!, // Use the frontend-generated ID
-          conversation_id: conversationId,
-          assistant_message_id: requestData.assistant_message_id // Explicitly include assistant ID
-        };
-        
-        // CRITICAL: Log the response to verify IDs match
-        console.log(`[messageService] WebSocket client response with message_id: ${response.message_id} and assistant_message_id: ${response.assistant_message_id}`);
-        
-        return response;
       }
       
       // For non-WebSocket clients, use the normal flow with error handling

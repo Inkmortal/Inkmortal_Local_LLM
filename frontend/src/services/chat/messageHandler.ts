@@ -146,10 +146,23 @@ class MessageHandler {
   
   // Find mapping by conversation ID (most recent)
   private findMappingByConversationId(conversationId: string): MessageIdMapping | undefined {
+    if (!conversationId || conversationId === 'new') {
+      console.log(`Invalid conversation ID for mapping lookup: ${conversationId}`);
+      return undefined;
+    }
+    
     // Sort by timestamp descending and find the first matching
-    return [...this.messageIdMappings]
+    const mapping = [...this.messageIdMappings]
       .sort((a, b) => b.timestamp - a.timestamp)
       .find(mapping => mapping.conversationId === conversationId);
+      
+    if (mapping) {
+      console.log(`Found mapping for conversation ${conversationId}: frontend=${mapping.frontendId}, backend=${mapping.backendId}`);
+    } else {
+      console.log(`No mapping found for conversation ID: ${conversationId}`);
+    }
+    
+    return mapping;
   }
   
   // Clean up old mappings and related data
@@ -239,12 +252,14 @@ class MessageHandler {
       } 
     }
     
-    // Try conversation ID as a last resort
+    // Try conversation ID as a last resort - enhanced with better logging and recovery
     if (!mapping && message.conversation_id) {
+      console.log(`No direct mapping found, attempting lookup by conversation: ${message.conversation_id}`);
+      
       const conversationMapping = this.findMappingByConversationId(message.conversation_id);
       if (conversationMapping) {
         frontendMessageId = conversationMapping.frontendId;
-        console.log(`Found message ID by conversation: ${frontendMessageId}`);
+        console.log(`Found message ID by conversation: conversation=${message.conversation_id}, frontendId=${frontendMessageId}`);
         
         // Update mapping for future messages
         this.registerMessageIdMapping(
@@ -252,6 +267,29 @@ class MessageHandler {
           message.message_id,
           message.conversation_id
         );
+      } else {
+        // More aggressive recovery - check if any mapping has a temporary conversation ID
+        console.log(`No mapping found by real conversation ID, checking for temporary mappings`);
+        
+        const tempMapping = this.messageIdMappings.find(m => 
+          m.conversationId === 'new' || 
+          m.conversationId === null || 
+          m.conversationId === undefined
+        );
+        
+        if (tempMapping) {
+          frontendMessageId = tempMapping.frontendId;
+          console.log(`Found message with temporary conversation ID, updating to: ${message.conversation_id}`);
+          
+          // Update the mapping with the real conversation ID
+          this.registerMessageIdMapping(
+            tempMapping.frontendId,
+            message.message_id,
+            message.conversation_id
+          );
+        } else {
+          console.log(`No temporary mappings found - using backend ID directly: ${message.message_id}`);
+        }
       }
     }
     
