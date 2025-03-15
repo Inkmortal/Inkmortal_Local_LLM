@@ -1,7 +1,7 @@
 import React from 'react';
-import ChatInput from './ChatInput';
+import TipTapAdapter from './TipTapAdapter';
 
-interface ChatInputAdapterProps {
+interface TipTapAdapterWithStopProps {
   onSendMessage: (message: string) => void;
   onStopGeneration?: () => void;
   onFileSelect?: (file: File) => void;
@@ -12,10 +12,10 @@ interface ChatInputAdapterProps {
 }
 
 /**
- * Enhanced adapter component that passes through to the improved ChatInput
- * which now supports typing during generation and a subtle stop button
+ * Enhanced TipTap adapter component that supports the stop generation feature
+ * and maintains the same interface as ChatInputAdapterWithStop
  */
-const ChatInputAdapterWithStop: React.FC<ChatInputAdapterProps> = ({
+const TipTapAdapterWithStop: React.FC<TipTapAdapterWithStopProps> = ({
   onSendMessage,
   onStopGeneration,
   onFileSelect,
@@ -25,9 +25,9 @@ const ChatInputAdapterWithStop: React.FC<ChatInputAdapterProps> = ({
   mathInsertRef
 }) => {
   return (
-    <div className="chat-input">
-      <ChatInput
-        onSend={onSendMessage}
+    <div className="tiptap-adapter-with-stop">
+      <TipTapAdapter
+        onSendMessage={onSendMessage}
         onStopGeneration={onStopGeneration}
         onFileSelect={onFileSelect}
         placeholder={placeholder}
@@ -39,4 +39,4 @@ const ChatInputAdapterWithStop: React.FC<ChatInputAdapterProps> = ({
   );
 };
 
-export default ChatInputAdapterWithStop;
+export default TipTapAdapterWithStop;

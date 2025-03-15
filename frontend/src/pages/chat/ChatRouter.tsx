@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../services/chat/ChatStore';
 import { useTheme } from '../../context/ThemeContext';
@@ -6,7 +6,7 @@ import ChatHistorySidebar from '../../components/chat/ChatHistorySidebar';
 import ChatHeader from './components/layout/ChatHeader';
 import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
 import ChatWindow from '../../components/chat/ChatWindow';
-import ChatInputAdapterWithStop from '../../components/chat/ChatInputAdapterWithStop';
+import TipTapAdapterWithStop from '../../components/chat/TipTapAdapterWithStop';
 import EmptyConversationView from './components/EmptyConversationView';
 
 /**
@@ -170,7 +170,7 @@ const ChatRouter: React.FC = () => {
               
               {/* Chat Input Area */}
               <div className="px-4 py-2 relative">
-                <ChatInputAdapterWithStop
+                <TipTapAdapterWithStop
                   onSendMessage={sendMessage}
                   onStopGeneration={() => {
                     // Implement stop generation if needed
@@ -178,6 +178,8 @@ const ChatRouter: React.FC = () => {
                   }}
                   placeholder="Message Inkmortal..."
                   isGenerating={isGenerating}
+                  codeInsertRef={useRef<((code: string) => void) | undefined>(undefined)}
+                  mathInsertRef={useRef<((math: string) => void) | undefined>(undefined)}
                 />
               </div>
             </div>

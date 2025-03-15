@@ -6,12 +6,16 @@ interface EditorToolbarProps {
   editor: Editor | null;
   previewMode: boolean;
   onTogglePreview: () => void;
+  onMathClick?: () => void;
+  onCodeClick?: () => void;
 }
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   editor,
   previewMode,
-  onTogglePreview
+  onTogglePreview,
+  onMathClick,
+  onCodeClick
 }) => {
   const { currentTheme } = useTheme();
   
@@ -75,6 +79,12 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <button
             type="button"
             onClick={() => {
+              // If a handler is provided, use that first
+              if (onCodeClick) {
+                onCodeClick();
+                return;
+              }
+              
               // Convert selected text to a code block
               const { state, dispatch } = editor.view;
               const { from, to } = state.selection;
@@ -110,7 +120,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             }}
             className="p-1.5 rounded text-xs"
             style={buttonStyles}
-            title="Convert to Code Block"
+            title="Insert Code Block"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
               <path d="M5.854 4.854a.5.5 0 1 0-.708-.708l-3.5 3.5a.5.5 0 0 0 0 .708l3.5 3.5a.5.5 0 0 0 .708-.708L2.707 8l3.147-3.146zm4.292 0a.5.5 0 0 1 .708-.708l3.5 3.5a.5.5 0 0 1 0 .708l-3.5 3.5a.5.5 0 0 1-.708-.708L13.293 8l-3.147-3.146z"/>
@@ -120,7 +130,13 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <button
             type="button"
             onClick={() => {
-              // Convert selected text to a math block
+              // If a handler is provided, use that first
+              if (onMathClick) {
+                onMathClick();
+                return;
+              }
+              
+              // Otherwise, inline conversion
               const { state } = editor.view;
               const { from, to } = state.selection;
               
@@ -128,17 +144,17 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
               if (from !== to) {
                 const selectedText = state.doc.textBetween(from, to);
                 
-                // Insert math block with the selected text
+                // Insert math inline with the selected text
                 editor.chain()
                   .focus()
                   .deleteSelection()
                   .insertContent({
-                    type: 'mathBlock',
-                    content: [{ type: 'text', text: selectedText }]
+                    type: 'mathInline',
+                    attrs: { value: selectedText }
                   })
                   .run();
               } else {
-                // If no text is selected, insert empty math block
+                // If no text is selected, use block math
                 editor.chain()
                   .focus()
                   .insertContent({
@@ -150,7 +166,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             }}
             className="p-1.5 rounded text-xs"
             style={buttonStyles}
-            title="Convert to Math Expression"
+            title="Insert Math Expression"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
               <path d="M8.41 7.56C7.55 7.81 6.68 7.94 5.8 7.94c-1.25 0-2.45-.2-3.57-.57-.35-.12-.75-.03-1.02.24-.27.27-.36.68-.24 1.04.37.98.92 1.88 1.62 2.67.35.4.98.52 1.48.28.67-.32 1.39-.5 2.13-.5.64 0 1.27.13 1.86.38.93.4 2 .4 2.93 0 .6-.25 1.22-.38 1.87-.38.71 0 1.4.17 2.04.46.44.21.98.09 1.3-.26.72-.78 1.3-1.67 1.68-2.65.13-.34.04-.73-.22-1-.26-.26-.65-.37-1-.27-1.13.37-2.34.57-3.6.57-.87 0-1.73-.13-2.54-.37.29-.12.56-.27.8-.44.34-.24.89-.24 1.23 0 .81.57 1.92.87 3.05.87.95 0 1.89-.21 2.82-.62.35-.15.57-.48.57-.85a.96.96 0 0 0-.4-.76c-.67-.46-1.36-.84-2.07-1.13-.71-.29-1.48-.45-2.25-.45-.97 0-1.9.27-2.71.76-.34.22-.88.22-1.22 0A4.64 4.64 0 0 0 5.8 4.4c-.77 0-1.54.15-2.23.44-.66.28-1.29.63-1.88 1.05-.29.2-.46.54-.46.88 0 .37.22.7.57.85.92.4 1.84.6 2.79.6 1.13 0 2.25-.3 3.06-.87.33-.24.88-.24 1.22 0 .25.18.53.33.83.46l-.29-.25Z"/>

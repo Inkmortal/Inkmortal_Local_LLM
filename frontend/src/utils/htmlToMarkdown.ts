@@ -16,7 +16,44 @@ export function htmlToMarkdown(html: string): string {
   const doc = parser.parseFromString(html, 'text/html');
   
   // Process the body content
-  return processNode(doc.body);
+  const result = processNode(doc.body);
+
+  // Clean up and return
+  return cleanupMarkdown(result);
+}
+
+/**
+ * Converts HTML to markdown with specific emphasis on our TipTap extensions for math and code
+ */
+export function convertHtmlToMarkdown(html: string): string {
+  if (!html || html.trim() === '') return '';
+  
+  // First create a DOM element to parse the HTML
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  
+  // Process math nodes - our TipTap extension uses <math-inline> elements
+  const mathNodes = doc.querySelectorAll('[data-type="math"]');
+  mathNodes.forEach(node => {
+    const mathValue = node.getAttribute('data-value') || '';
+    const mathSpan = document.createElement('span');
+    mathSpan.setAttribute('class', 'math-inline');
+    mathSpan.textContent = mathValue;
+    node.parentNode?.replaceChild(mathSpan, node);
+  });
+  
+  // Process the body content
+  const result = processNode(doc.body);
+  
+  // Apply custom transformations specific to our needs
+  let markdown = result
+    // Convert span.math-inline to $formula$ format
+    .replace(/<span class="math-inline">(.*?)<\/span>/g, '$$$1$$')
+    // Handle TipTap code blocks with language
+    .replace(/<pre data-language="([^"]*)">([\s\S]*?)<\/pre>/g, '```$1\n$2```');
+  
+  // Clean up and return
+  return cleanupMarkdown(markdown);
 }
 
 /**

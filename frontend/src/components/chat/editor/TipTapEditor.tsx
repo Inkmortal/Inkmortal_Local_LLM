@@ -5,6 +5,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { useTheme } from '../../../context/ThemeContext';
 import EditorToolbar from './EditorToolbar';
 import { MathExtension } from './extensions/MathExtension';
+import MathInlineExtension from './extensions/MathInlineExtension';
 import { CodeBlockExtension } from './extensions/CodeBlockExtension';
 import MathExpressionEditor from '../../chat/editors/MathExpressionEditor';
 import CodeEditor from '../../chat/editors/CodeEditor';
@@ -52,6 +53,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         placeholder,
       }),
       MathExtension,
+      MathInlineExtension,
       CodeBlockExtension,
     ],
     editorProps: {
@@ -110,9 +112,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
       mathInsertRef.current = (mathSnippet: string) => {
         if (!editor) return;
         
-        // Insert math node
+        // Insert math node - use inline for $ format
         editor.commands.insertContent({
-          type: 'math',
+          type: 'mathInline',
           attrs: { value: mathSnippet }
         });
       };

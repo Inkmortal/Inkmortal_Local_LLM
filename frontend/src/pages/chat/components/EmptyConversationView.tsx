@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useTheme } from '../../../context/ThemeContext';
-import ChatInputAdapterWithStop from '../../../components/chat/ChatInputAdapterWithStop';
+import TipTapAdapterWithStop from '../../../components/chat/TipTapAdapterWithStop';
 
 interface SuggestionProps {
   title: string;
@@ -152,11 +152,13 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
       
       {/* Chat Input */}
       <div className="w-full max-w-3xl mt-4 px-4">
-        <ChatInputAdapterWithStop
+        <TipTapAdapterWithStop
           onSendMessage={onSendMessage}
           onStopGeneration={() => {}}
           placeholder="Send a message to start a new conversation..."
           isGenerating={false}
+          codeInsertRef={useRef<((code: string) => void) | undefined>(undefined)}
+          mathInsertRef={useRef<((math: string) => void) | undefined>(undefined)}
         />
       </div>
       
