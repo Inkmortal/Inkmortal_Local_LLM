@@ -149,8 +149,14 @@ const ChatRouter: React.FC = () => {
                   messages={conversationMessages}
                   isLoading={isLoading}
                   isGenerating={isGenerating}
-                  onRegenerate={() => {}}
-                  onStopGeneration={() => {}}
+                  onRegenerate={() => {
+                    // Implement regenerate functionality if needed
+                    console.log('[ChatRouter] Regenerate requested');
+                  }}
+                  onStopGeneration={() => {
+                    // Implement stop generation if needed
+                    console.log('[ChatRouter] Stop generation requested');
+                  }}
                 />
               </div>
               
@@ -158,7 +164,10 @@ const ChatRouter: React.FC = () => {
               <div className="px-4 py-2 relative">
                 <ChatInputAdapterWithStop
                   onSendMessage={sendMessage}
-                  onStopGeneration={() => {}}
+                  onStopGeneration={() => {
+                    // Implement stop generation if needed
+                    console.log('[ChatRouter] Stop generation requested');
+                  }}
                   placeholder="Message Inkmortal..."
                   isGenerating={isGenerating}
                 />

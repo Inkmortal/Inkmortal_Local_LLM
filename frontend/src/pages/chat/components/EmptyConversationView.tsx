@@ -1,7 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../../context/ThemeContext';
 import ChatInputAdapterWithStop from '../../../components/chat/ChatInputAdapterWithStop';
-import ChatInputAdapterWithStop from '../../../components/chat/ChatInputAdapterWithStop';
 
 interface SuggestionProps {
   title: string;
