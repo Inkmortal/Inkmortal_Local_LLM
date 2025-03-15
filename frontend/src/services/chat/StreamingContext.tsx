@@ -114,9 +114,6 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
         // Clear the timer
         delete updateTimers.current[messageId];
       }, 32); // Approx 30fps for smooth animation
-    } else {
-      console.log(`[StreamingContext] No subscribers for message ${messageId}`);
-    }
     } else if (isComplete) {
       // Handle completion messages that might not have content
       // but need to update the completion status
@@ -143,9 +140,11 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
           }
         });
       }
+    } else {
+      console.log(`[StreamingContext] No subscribers for message ${messageId}`);
     }
     
-    // No return statement here - handleMessageUpdate shouldn't return a cleanup function
+    // handleMessageUpdate is now properly structured without syntax errors
   }, []);
   
   // Subscribe to message updates on mount with improved cleanup
