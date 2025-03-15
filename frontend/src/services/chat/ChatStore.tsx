@@ -63,6 +63,7 @@ function chatReducer(state: ChatState, action: Action): ChatState {
       };
 
     case ChatActionType.SET_ACTIVE_CONVERSATION:
+      console.log(`[ChatStore] Setting active conversation ID: ${action.payload}`);
       return {
         ...state,
         activeConversationId: action.payload,
@@ -214,7 +215,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     dispatch({ type: ChatActionType.SET_ACTIVE_CONVERSATION, payload: null });
   }, []);
 
-  // Send a message
+  // Send a message with improved conversation ID handling
   const sendMessage = useCallback(async (content: string, file: File | null = null) => {
     if (!content.trim() && !file) return;
 
@@ -222,11 +223,14 @@ export function ChatProvider({ children }: ChatProviderProps) {
       // Generate message IDs
       const userMessageId = uuidv4();
       const assistantMessageId = uuidv4();
+      
+      // Determine temporary or existing conversation ID
+      const currentConversationId = state.activeConversationId || 'new';
 
       // Create user message
       const userMessage: Message = {
         id: userMessageId,
-        conversationId: state.activeConversationId || 'new',
+        conversationId: currentConversationId,
         role: MessageRole.USER,
         content,
         timestamp: Date.now(),
@@ -236,7 +240,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       // Create placeholder assistant message
       const assistantMessage: Message = {
         id: assistantMessageId,
-        conversationId: state.activeConversationId || 'new',
+        conversationId: currentConversationId,
         role: MessageRole.ASSISTANT,
         content: '',
         timestamp: Date.now(),
@@ -247,25 +251,31 @@ export function ChatProvider({ children }: ChatProviderProps) {
       dispatch({ type: ChatActionType.ADD_MESSAGE, payload: userMessage });
       dispatch({ type: ChatActionType.ADD_MESSAGE, payload: assistantMessage });
 
-      // Register for streaming updates
+      // IMPORTANT: Always register message ID with temporary ID
+      // This ensures the WebSocket connection knows which message to update
+      console.log(`[ChatStore] Registering message with temp ID: ${currentConversationId}`);
       registerMessageId(
         assistantMessageId, 
         assistantMessageId, 
-        state.activeConversationId || 'new'
+        currentConversationId
       );
 
       // Send message to backend
       const response = await sendChatMessage(
         content,
-        state.activeConversationId,
+        state.activeConversationId, // Will be null for new conversations
         file,
         {},
         assistantMessageId
       );
 
+      console.log("[ChatStore] Received response:", response);
+
       // If new conversation was created, update the conversation ID
-      if (response && response.conversation_id && (!state.activeConversationId || state.activeConversationId === 'new')) {
+      if (response && response.conversation_id && 
+         (currentConversationId === 'new' || !state.activeConversationId)) {
         const newConversationId = response.conversation_id;
+        console.log(`[ChatStore] New conversation created: ${newConversationId}`);
         
         // Update the active conversation ID
         dispatch({ 
@@ -293,12 +303,17 @@ export function ChatProvider({ children }: ChatProviderProps) {
         // Reload conversations to include the new one
         loadConversations();
         
-        // Return the new ID so the router can update
-        return Promise.resolve(newConversationId);
+        // Return the full response so the router can update the URL
+        return response;
       }
+      
+      // Return the response for existing conversations too
+      return response;
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[ChatStore] Error sending message:', error);
       dispatch({ type: ChatActionType.SET_ERROR, payload: error as Error });
+      // Return null to indicate error
+      return null;
     }
   }, [state.activeConversationId, registerMessageId, loadConversations]);
 
