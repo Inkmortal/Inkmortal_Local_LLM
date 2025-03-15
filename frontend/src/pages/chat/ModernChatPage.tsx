@@ -68,30 +68,45 @@ const ModernChatPage: React.FC = () => {
   // Track whether conversations have been loaded
   const hasLoadedConversationsRef = useRef(false);
   
-  // Effect to load conversations only once
+  // Single unified effect to handle both conversation list and active conversation
   useEffect(() => {
-    if (isAuthenticated && !hasLoadedConversationsRef.current) {
-      // Load conversation list only once
-      console.log('[ModernChatPage] Loading conversations list (one-time)');
-      loadConversations();
-      hasLoadedConversationsRef.current = true;
-    }
-  }, [isAuthenticated, loadConversations]);
-  
-  // Separate effect to handle conversation loading based on URL
-  useEffect(() => {
-    if (isAuthenticated) {
-      // If we have a conversation ID, load that specific conversation
-      if (conversationId) {
-        console.log(`[ModernChatPage] Loading conversation from URL: ${conversationId}`);
-        loadConversation(conversationId);
-      } else {
-        // On /chat route with no ID, just show empty state
-        console.log('[ModernChatPage] Empty chat state - waiting for first message');
-        startNewConversation();
+    if (!isAuthenticated) return;
+    
+    // Keep track of the current action being performed
+    let isCancelled = false;
+    
+    const initializeChat = async () => {
+      try {
+        // First load the conversation list if needed
+        if (!hasLoadedConversationsRef.current) {
+          console.log('[ModernChatPage] Loading conversations list');
+          await loadConversations();
+          hasLoadedConversationsRef.current = true;
+          
+          if (isCancelled) return;
+        }
+        
+        // Then handle specific conversation or empty state
+        if (conversationId) {
+          console.log(`[ModernChatPage] Loading conversation from URL: ${conversationId}`);
+          await loadConversation(conversationId);
+        } else {
+          // On /chat route with no ID, just show empty state
+          console.log('[ModernChatPage] Initializing empty chat state');
+          startNewConversation();
+        }
+      } catch (error) {
+        console.error('[ModernChatPage] Error initializing chat:', error);
       }
-    }
-  }, [isAuthenticated, conversationId, loadConversation, startNewConversation]);
+    };
+    
+    initializeChat();
+    
+    // Cleanup function to prevent state updates after unmount or re-render
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated, conversationId, loadConversations, loadConversation, startNewConversation]);
   
   // Sidebar toggles
   const toggleHistorySidebar = () => {
@@ -106,15 +121,17 @@ const ModernChatPage: React.FC = () => {
     }
   };
   
-  // Handler for selecting a conversation
+  // Handler for selecting a conversation - only navigation, no state updates
   const handleSelectConversation = (id: string) => {
+    console.log(`[ModernChatPage] Selecting conversation: ${id}`);
+    // Only navigate - the effect will handle loading the conversation based on URL
     navigate(`/chat/${id}`);
-    loadConversation(id);
   };
   
-  // Handler for creating a new conversation
+  // Handler for creating a new conversation - only navigation, no state updates
   const handleNewConversation = () => {
-    startNewConversation();
+    console.log('[ModernChatPage] Creating new conversation');
+    // Only navigate - the effect will handle creating a new conversation based on URL
     navigate('/chat');
   };
   

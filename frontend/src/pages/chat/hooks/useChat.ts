@@ -10,9 +10,6 @@
 import { useReducer, useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
-  closeWebSocket, 
-  isWebSocketConnected,
-  ensureWebSocketConnection,
   subscribeToMessageUpdates
 } from '../../../services/chat/websocketService';
 import { chatReducer, initialChatState, ChatActionType } from '../reducers/chatReducer';
@@ -97,6 +94,14 @@ export const useChat = ({
   // Register message ID with streaming context
   const registerMessage = useRegisterMessageId();
   
+  // Store isGenerating state in a ref to avoid dependency issues
+  const isGeneratingRef = useRef(false);
+  
+  // Update the ref when state changes
+  useEffect(() => {
+    isGeneratingRef.current = state.isGenerating;
+  }, [state.isGenerating]);
+  
   // Handle message updates from WebSocket directly - more reliable for streaming
   const handleStreamingUpdate = useCallback((update: MessageUpdate) => {
     // Skip updates for messages that we don't know about
@@ -125,23 +130,18 @@ export const useChat = ({
       }
     });
     
-    // Update generating state if needed
+    // Update generating state if needed - using the ref to avoid re-creating this callback
     if (isComplete) {
       dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
-    } else if (status === MessageStatus.STREAMING && !state.isGenerating) {
+    } else if (status === MessageStatus.STREAMING && !isGeneratingRef.current) {
       dispatch({ type: ChatActionType.SET_GENERATING, payload: true });
     }
-  }, [state.isGenerating]);
+  }, []);
   
   // Setup direct WebSocket streaming handling
   useEffect(() => {
     // Get token from localStorage
     tokenRef.current = localStorage.getItem('token') || localStorage.getItem('authToken');
-    
-    // Connect WebSocket if needed
-    if (autoConnect && tokenRef.current) {
-      ensureWebSocketConnection(tokenRef.current);
-    }
     
     // Subscribe to message updates directly for streaming
     const unsubscribe = subscribeToMessageUpdates(handleStreamingUpdate);
@@ -155,7 +155,7 @@ export const useChat = ({
         abortControllerRef.current.abort();
       }
     };
-  }, [autoConnect, handleStreamingUpdate]);
+  }, [handleStreamingUpdate]);
   
   // Message and connection handling are interdependent, so we need to initialize
   // them in a specific order to avoid circular dependencies
@@ -227,12 +227,12 @@ export const useChat = ({
       // Set generating state
       dispatch({ type: ChatActionType.SET_GENERATING, payload: true });
       
-      // Ensure WebSocket connection is active
+      // Use the connection manager from useChatConnection
       const token = tokenRef.current;
       let isConnected = false;
       
       if (token) {
-        isConnected = isWebSocketConnected() || await ensureWebSocketConnection(token);
+        isConnected = await connectWebSocket();
       }
       
       // Create abort controller for this request
@@ -288,8 +288,17 @@ export const useChat = ({
           }
         });
         
-        // Update URL without reloading the page
-        window.history.pushState({}, '', `/chat/${newConversationId}`);
+        // Use proper programmatic navigation to update URL
+        // This replaces window.history.pushState to ensure proper routing
+        if (typeof window !== 'undefined') {
+          console.log(`[useChat] New conversation created, updating URL to: /chat/${newConversationId}`);
+          window.history.replaceState({}, '', `/chat/${newConversationId}`);
+          
+          // Dispatch a custom event to notify the router of the URL change
+          window.dispatchEvent(new CustomEvent('chat:conversation-created', {
+            detail: { conversationId: newConversationId }
+          }));
+        }
         
         // Refresh the conversation list to include the new conversation
         loadConversations();
@@ -368,15 +377,6 @@ export const useChat = ({
     
     return () => {
       isMounted.current = false;
-      
-      // Clean up WebSocket connection - but only if we're unmounting the entire chat
-      // Don't close connection when just switching between conversations
-      if (!window.location.pathname.includes('/chat')) {
-        console.log('Leaving chat area, closing WebSocket connection');
-        closeWebSocket();
-      } else {
-        console.log('Staying in chat area, keeping WebSocket connection alive');
-      }
     };
   }, [autoConnect, connectWebSocket]);
   

@@ -46,20 +46,24 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
   const messageContents = useRef(new Map<string, string>());
   const messageStatus = useRef(new Map<string, MessageStatus>());
   
-  // Handler for WebSocket message updates
+  // Debounce timers for update batching
+  const updateTimers = useRef<Record<string, any>>({});
+  
+  // Handler for WebSocket message updates with improved batching
   const handleMessageUpdate = useCallback((update: MessageUpdate) => {
     const { messageId, content, contentUpdateMode, status, isComplete, metadata } = update;
     
     if (!messageId) return;
     
-    // Debug messages to help diagnose streaming issues
-    console.log(`[StreamingContext] Received update for message ${messageId}: ` +
-      `content=${content ? content.substring(0, 10) + '...' : '[empty]'}, ` +
-      `mode=${contentUpdateMode}, status=${status}, isComplete=${isComplete}`);
+    // Debug messages to help diagnose streaming issues (reduced logging)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[StreamingContext] Update for ${messageId}: ` +
+        `${content ? content.length + ' chars' : '[empty]'}, ` +
+        `mode=${contentUpdateMode}, status=${status}, isComplete=${isComplete}`);
+    }
     
     // Skip empty content updates (likely metadata-only)
     if (!content && !isComplete) {
-      console.log(`[StreamingContext] Skipping empty content update for message ${messageId}`);
       return;
     }
     
@@ -79,21 +83,25 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
       // Store the new content
       messageContents.current.set(messageId, newContent);
       
-      console.log(`[StreamingContext] Updated content for ${messageId}, total length: ${newContent.length}`);
-      
       // Update status
       if (status) {
         messageStatus.current.set(messageId, status);
       }
       
-      // Notify all callbacks for this message ID
-      const callbacks = messageCallbacks.current.get(messageId);
-      if (callbacks) {
-        console.log(`[StreamingContext] Notifying ${callbacks.size} subscribers for message ${messageId}`);
-        
-        // Use setTimeout to break React's update batching
-        // This ensures each update is rendered independently
-        setTimeout(() => {
+      // Clear any existing timer for this message ID
+      if (updateTimers.current[messageId]) {
+        clearTimeout(updateTimers.current[messageId]);
+      }
+      
+      // Batch updates for smoother rendering on rapid updates
+      updateTimers.current[messageId] = setTimeout(() => {
+        // Notify all callbacks for this message ID
+        const callbacks = messageCallbacks.current.get(messageId);
+        if (callbacks && callbacks.size > 0) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[StreamingContext] Notifying ${callbacks.size} subscribers for message ${messageId}`);
+          }
+          
           callbacks.forEach(callback => {
             try {
               callback(newContent, isComplete === true);
@@ -101,22 +109,32 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
               console.error(`Error in streaming callback for message ${messageId}:`, error);
             }
           });
-        }, 0);
-      } else {
-        console.log(`[StreamingContext] No subscribers for message ${messageId}`);
-      }
+        }
+        
+        // Clear the timer
+        delete updateTimers.current[messageId];
+      }, 32); // Approx 30fps for smooth animation
+    } else {
+      console.log(`[StreamingContext] No subscribers for message ${messageId}`);
+    }
     } else if (isComplete) {
       // Handle completion messages that might not have content
       // but need to update the completion status
       const currentContent = messageContents.current.get(messageId) || '';
       
       // Update status
-      messageStatus.current.set(messageId, status);
+      messageStatus.current.set(messageId, status || MessageStatus.COMPLETE);
       
-      // Notify subscribers of completion
+      // Clear any existing timer for this message ID
+      if (updateTimers.current[messageId]) {
+        clearTimeout(updateTimers.current[messageId]);
+      }
+      
+      // Always process completion immediately (non-batched)
       const callbacks = messageCallbacks.current.get(messageId);
-      if (callbacks) {
+      if (callbacks && callbacks.size > 0) {
         console.log(`[StreamingContext] Notifying completion for message ${messageId}`);
+        
         callbacks.forEach(callback => {
           try {
             callback(currentContent, true);
@@ -126,14 +144,29 @@ export const StreamingProvider: React.FC<StreamingProviderProps> = ({ children }
         });
       }
     }
+    
+    // No return statement here - handleMessageUpdate shouldn't return a cleanup function
   }, []);
   
-  // Subscribe to message updates on mount
+  // Subscribe to message updates on mount with improved cleanup
   useEffect(() => {
+    // Clear all update timers
+    const clearUpdateTimers = () => {
+      Object.keys(updateTimers.current).forEach(id => {
+        clearTimeout(updateTimers.current[id]);
+      });
+      updateTimers.current = {};
+    };
+    
     const unsubscribe = subscribeToMessageUpdates(handleMessageUpdate);
     
     return () => {
       unsubscribe();
+      
+      // Clear all timers
+      clearUpdateTimers();
+      
+      // Clear all cached data
       messageCallbacks.current.clear();
       messageContents.current.clear();
       messageStatus.current.clear();
