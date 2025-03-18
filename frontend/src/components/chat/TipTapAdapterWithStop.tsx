@@ -21,7 +21,7 @@ const TipTapAdapterWithStop: React.FC<TipTapAdapterWithStopProps> = ({
   isGenerating = false
 }) => {
   return (
-    <div className="tiptap-adapter-with-stop">
+    <div className="tiptap-adapter-with-stop w-full max-w-chat mx-auto">
       <TipTapAdapter
         onSendMessage={onSendMessage}
         onStopGeneration={onStopGeneration}

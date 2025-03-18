@@ -288,13 +288,14 @@ export const useChat = ({
           }
         });
         
-        // Use proper programmatic navigation to update URL
-        // This replaces window.history.pushState to ensure proper routing
+        // Import and use React Router's navigate function instead of direct window.history manipulation
+        // Since we're in a hook, we can't use useNavigate directly here - using a custom event instead
+        // The ChatRouter component will handle this event and perform the navigation
+        console.log(`[useChat] New conversation created with ID: ${newConversationId}`);
+        
+        // Dispatch a custom event that will be handled by ChatRouter to update URL
         if (typeof window !== 'undefined') {
-          console.log(`[useChat] New conversation created, updating URL to: /chat/${newConversationId}`);
-          window.history.replaceState({}, '', `/chat/${newConversationId}`);
-          
-          // Dispatch a custom event to notify the router of the URL change
+          console.log(`[useChat] Dispatching event to update URL to: /chat/${newConversationId}`);
           window.dispatchEvent(new CustomEvent('chat:conversation-created', {
             detail: { conversationId: newConversationId }
           }));

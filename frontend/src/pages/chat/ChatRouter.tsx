@@ -37,11 +37,39 @@ const ChatRouter: React.FC = () => {
     console.log('[ChatRouter] Loading conversation list');
     loadConversations();
   }, [loadConversations]);
+  
+  // Listen for custom navigation events from useChat
+  useEffect(() => {
+    const handleConversationCreated = (event: CustomEvent) => {
+      const { conversationId } = event.detail;
+      console.log(`[ChatRouter] Received chat:conversation-created event for ID: ${conversationId}`);
+      
+      // Use React Router's navigate for proper routing
+      navigate(`/chat/${conversationId}`, { replace: true });
+    };
+    
+    // Add event listener
+    window.addEventListener('chat:conversation-created', handleConversationCreated as EventListener);
+    
+    // Clean up on unmount
+    return () => {
+      window.removeEventListener('chat:conversation-created', handleConversationCreated as EventListener);
+    };
+  }, [navigate]);
 
   // Handle conversationId parameter changes
   useEffect(() => {
+    console.log(`[ChatRouter] URL parameter changed, conversationId: ${conversationId || 'null'}`);
+    console.log(`[ChatRouter] Current activeConversationId: ${activeConversationId || 'null'}`);
+    
     // If we have a conversation ID in the URL, load that conversation
     if (conversationId) {
+      // Check if we already have this conversation loaded to avoid unnecessary reloads
+      if (conversationId === activeConversationId) {
+        console.log(`[ChatRouter] Conversation ${conversationId} is already active, skipping reload`);
+        return;
+      }
+      
       console.log(`[ChatRouter] Loading conversation from URL: ${conversationId}`);
       loadConversation(conversationId);
     } else {
@@ -49,7 +77,7 @@ const ChatRouter: React.FC = () => {
       console.log('[ChatRouter] No conversation ID in URL, showing empty state');
       clearActiveConversation();
     }
-  }, [conversationId, loadConversation, clearActiveConversation]);
+  }, [conversationId, loadConversation, clearActiveConversation, activeConversationId]);
 
   // Handle new conversation creation (after first message is sent)
   const handleNewConversation = async (content: string, file: File | null = null) => {
@@ -60,18 +88,25 @@ const ChatRouter: React.FC = () => {
       // Set UI state first to provide immediate feedback
       setShowHistorySidebar(true); // Always show sidebar when starting a conversation
       
-      // IMPROVEMENT: Show clear UI feedback that we're preparing the conversation
-      // This uses the new two-phase message sending process under the hood
+      // Log the current state to help with debugging
+      console.log(`[ChatRouter] Current active conversation before sending: ${activeConversationId || 'null'}`);
+      console.log('[ChatRouter] Sending message to create new conversation...');
+      
+      // This uses the two-phase message sending process:
+      // 1. First phase: Send message, let backend create conversation if needed
+      // 2. Second phase: WebSocket receives updates, UI updates with streaming content
       const response = await sendMessage(content, file);
       
-      // Check if we got a valid response with conversation ID
+      // The URL change will now be handled by our event listener
+      // This avoids direct manipulation of window.history and uses React Router properly
+      
+      // Check if we got a valid response with conversation ID (for logging/debugging)
       if (response && response.conversation_id) {
         const newConversationId = response.conversation_id;
         console.log(`[ChatRouter] Backend confirmed new conversation: ${newConversationId}`);
         
-        // Update URL with confirmed conversation ID (using replace to avoid back button issues)
-        // We use replace here to ensure the back button doesn't take us back to empty state
-        navigate(`/chat/${newConversationId}`, { replace: true });
+        // The URL will be updated via the custom event handler we added
+        // No need to call navigate() here - this prevents duplicate navigation
       } else {
         console.error('[ChatRouter] No valid conversation ID received from backend');
         // Show user-friendly error - message state already updated by ChatStore

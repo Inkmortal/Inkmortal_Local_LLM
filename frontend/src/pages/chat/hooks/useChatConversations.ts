@@ -225,17 +225,18 @@ export function useChatConversations(
    * Conversation will only be created when the first message is sent
    */
   const startNewConversation = useCallback(() => {
+    console.log('[useChatConversations] Starting new conversation - clearing state');
+    
     // Clear messages and active conversation ID
     dispatch({ type: ChatActionType.SET_MESSAGES, payload: [] });
     dispatch({ type: ChatActionType.SET_ACTIVE_CONVERSATION, payload: null });
     
-    // Navigate to base chat URL to reflect new conversation
-    // Using replace state to avoid back button issues
-    window.history.pushState({}, '', '/chat');
+    // Use React Router's navigate to update URL and ensure proper state tracking
+    // Using replace: true to avoid back button issues
+    navigate('/chat', { replace: true });
     
-    // Log to confirm start of new chat
-    console.log('Starting new conversation - waiting for first message to create in database');
-  }, [dispatch]);
+    console.log('[useChatConversations] Conversation state cleared - waiting for first message to create in database');
+  }, [dispatch, navigate]);
   
   /**
    * Delete the current conversation

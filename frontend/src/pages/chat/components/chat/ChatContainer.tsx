@@ -85,7 +85,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
       {/* Main Content Area */}
       <div className="flex-grow flex flex-col overflow-hidden">
         {showEmptyState ? (
-          <EmptyConversationView onSend={onSendMessage} />
+          <EmptyConversationView onSendMessage={async (message) => onSendMessage(message)} />
         ) : (
           <div className="flex-grow overflow-hidden">
             <ChatWindow 

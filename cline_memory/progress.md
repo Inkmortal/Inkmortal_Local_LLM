@@ -79,6 +79,30 @@
 -   [x] Fixed excessive API polling during WebSocket streaming
 -   [x] Improved UI by positioning status indicators at bottom of messages
 
+## Frontend Routing and Code Architecture
+
+- [x] Address routing refactor issues
+    -   [x] Replace all uses of `window.navigateTo` with React Router's `useNavigate` hook
+    -   [x] Standardize navigation methods across all components
+    -   [x] Ensure consistent API response handling
+    -   [x] Verify all component imports in routes.tsx
+    -   [x] Standardize route constant usage throughout the application
+
+## Chat Architecture Cleanup
+
+- [x] Fix URL handling issues in chat interface
+    - [x] Replace direct window.history calls with React Router's navigate
+    - [x] Fix state transitions in useChatConversations.ts
+    - [x] Add proper logging for state changes
+- [x] Remove redundant code
+    - [x] Delete unused ChatPageV2.tsx
+    - [x] Delete unused ModernChatPage.tsx
+    - [x] Update duplicate EmptyConversationView implementations to use consistent interface
+- [x] Standardize chat UI components
+    - [x] Use TipTapAdapterWithStop consistently
+    - [x] Apply constrained max-width to all chat views
+    - [x] Fix ChatRouter component to properly handle state transitions
+
 ## Conversation History and Context
 
 -   [x] Implemented basic conversation history with backend storage.
@@ -112,6 +136,7 @@
 -   [x] Test message sending and receiving with WebSocket
 -   [x] Test error scenarios and recovery mechanisms
 -   [ ] Test file upload functionality
+-   [ ] Test chat interface routing fixes
 -   [ ] Test the system as an integrated whole
 
 ## Deployment
@@ -122,12 +147,3 @@
 ## Monitoring
 
 -   [ ] Implement system monitoring and logging.
-
-## Frontend Routing
-
-- [ ] Address routing refactor issues
-    -   [ ] Replace all uses of `window.navigateTo` with React Router's `useNavigate` hook
-    -   [ ] Standardize navigation methods across all components
-    -   [ ] Ensure consistent API response handling in Login.tsx and all components
-    -   [ ] Verify all component imports in routes.tsx
-    -   [ ] Standardize route constant usage throughout the application

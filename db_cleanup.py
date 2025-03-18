@@ -30,6 +30,45 @@ def count_records(cursor, table):
     cursor.execute(f"SELECT COUNT(*) FROM {table}")
     return cursor.fetchone()[0]
 
+def check_tables(cursor):
+    """Check that tables exist and print their schema"""
+    try:
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """)
+        tables = [row[0] for row in cursor.fetchall()]
+        print(f"Available tables: {', '.join(tables)}")
+        
+        # Check messages table
+        if 'messages' in tables:
+            cursor.execute("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'messages'
+            """)
+            print("\nMessages table columns:")
+            for col in cursor.fetchall():
+                print(f"  {col[0]} ({col[1]})")
+        else:
+            print("WARNING: 'messages' table not found!")
+            
+        # Check conversations table
+        if 'conversations' in tables:
+            cursor.execute("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'conversations'
+            """)
+            print("\nConversations table columns:")
+            for col in cursor.fetchall():
+                print(f"  {col[0]} ({col[1]})")
+        else:
+            print("WARNING: 'conversations' table not found!")
+    except Exception as e:
+        print(f"Error checking tables: {e}")
+
 def delete_with_progress(table_name, batch_size=5000):
     """Delete records from a table with progress bar"""
     conn = connect_to_db()
@@ -74,10 +113,61 @@ def delete_with_progress(table_name, batch_size=5000):
     
     print(f"Deleted {deleted} records from {table_name}")
 
+def check_constraints():
+    """Check foreign key constraints"""
+    conn = connect_to_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT
+                tc.constraint_name, 
+                tc.table_name, 
+                kcu.column_name, 
+                ccu.table_name AS foreign_table_name,
+                ccu.column_name AS foreign_column_name 
+            FROM 
+                information_schema.table_constraints AS tc 
+                JOIN information_schema.key_column_usage AS kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage AS ccu 
+                  ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY';
+        """)
+        
+        print("\nForeign Key Constraints:")
+        constraints = cursor.fetchall()
+        if not constraints:
+            print("  No foreign key constraints found")
+        else:
+            for constraint in constraints:
+                print(f"  {constraint[1]}.{constraint[2]} references {constraint[3]}.{constraint[4]}")
+    except Exception as e:
+        print(f"Error checking constraints: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
 def main():
     print("Starting database cleanup...")
     
-    # First delete messages (assuming foreign key constraints)
+    # Check database structure first
+    conn = connect_to_db()
+    cursor = conn.cursor()
+    check_tables(cursor)
+    cursor.close()
+    conn.close()
+    
+    # Check constraints
+    check_constraints()
+    
+    # Ask for confirmation
+    response = input("\nProceed with deletion? (y/n): ")
+    if response.lower() != 'y':
+        print("Operation cancelled.")
+        return
+    
+    # First delete messages (due to foreign key constraints)
     delete_with_progress("messages")
     
     # Then delete conversations
