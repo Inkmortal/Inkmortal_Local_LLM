@@ -17,7 +17,9 @@ import { executeServiceCall, handleApiResponse } from './errorHandling';
 import { 
   isWebSocketConnected, 
   waitForWebSocketConnection, 
-  registerMessageId
+  registerMessageId,
+  signalClientReady,
+  waitForReadinessConfirmation
 } from './websocketService';
 
 // Constants
