@@ -1,23 +1,16 @@
 /**
- * WebSocket connection management hook
+ * Legacy WebSocket connection management hook
  * 
- * Centralized hook for establishing and maintaining WebSocket connections
- * for real-time chat functionality.
+ * This is a compatibility wrapper for the new ChatConnectionContext.
+ * For new code, use the context directly: import { useChatConnection } from '../../../services/chat/ChatConnectionContext';
  */
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ChatActionType } from '../reducers/chatReducer';
-import {
-  isWebSocketConnected,
-  waitForWebSocketConnection,
-  addConnectionListener,
-  closeWebSocket,
-  ConnectionStatus
-} from '../../../services/chat/websocketService';
+import { useChatConnection as useConnectionContext } from '../../../services/chat/ChatConnectionContext';
 
 /**
  * Hook for managing WebSocket connections in chat interface
- * This is the single source of truth for WebSocket connections
- * Message handling is done through StreamingContext.
+ * LEGACY COMPATIBILITY VERSION
  * 
  * @param tokenRef Reference to auth token
  * @param dispatch Reducer dispatch function
@@ -30,7 +23,34 @@ export function useChatConnection(
   state: any
 ) {
   const wsConnectedRef = useRef(false);
-  const connectionListenerRef = useRef<(() => void) | null>(null);
+  const connection = useConnectionContext();
+  
+  // Update reducer state when connection status changes
+  useEffect(() => {
+    // Set up connection listener for changes
+    const unsubscribe = connection.addConnectionListener((connected) => {
+      wsConnectedRef.current = connected;
+      console.log(`[useChatConnection-legacy] WebSocket connection state changed: ${connected ? 'connected' : 'disconnected'}`);
+      
+      // Update reducer state to trigger UI changes
+      dispatch({ 
+        type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+        payload: connected 
+      });
+    });
+    
+    // Initial update
+    wsConnectedRef.current = connection.isConnected;
+    dispatch({ 
+      type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
+      payload: connection.isConnected 
+    });
+    
+    // Clean up on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [dispatch, connection]);
   
   /**
    * Connect WebSocket with improved reliability
@@ -50,11 +70,11 @@ export function useChatConnection(
     }
     
     try {
-      console.log("[useChatConnection] Centralized connection attempt");
+      console.log("[useChatConnection-legacy] Centralized connection attempt");
       
       // Check if already connected first
-      if (isWebSocketConnected()) {
-        console.log("[useChatConnection] WebSocket already connected");
+      if (connection.isConnected) {
+        console.log("[useChatConnection-legacy] WebSocket already connected");
         wsConnectedRef.current = true;
         dispatch({ 
           type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
@@ -63,11 +83,11 @@ export function useChatConnection(
         return true;
       }
       
-      // Use waitForWebSocketConnection with timeout - this is now the single point of connection
-      const connected = await waitForWebSocketConnection(token, 5000);
+      // Connect using the connection context
+      const connected = await connection.connect(token);
       wsConnectedRef.current = connected;
       
-      console.log(`[useChatConnection] WebSocket connection: ${connected ? 'SUCCESS' : 'FAILED'}`);
+      console.log(`[useChatConnection-legacy] WebSocket connection: ${connected ? 'SUCCESS' : 'FAILED'}`);
       
       // Update UI state
       dispatch({ 
@@ -77,7 +97,7 @@ export function useChatConnection(
       
       return wsConnectedRef.current;
     } catch (error) {
-      console.error('[useChatConnection] Error connecting to WebSocket:', error);
+      console.error('[useChatConnection-legacy] Error connecting to WebSocket:', error);
       wsConnectedRef.current = false;
       
       // Update UI state
@@ -88,44 +108,7 @@ export function useChatConnection(
       
       return false;
     }
-  }, [dispatch, tokenRef]);
-  
-  // Set up connection status listener once
-  useEffect(() => {
-    // Clean up any previous listener
-    if (connectionListenerRef.current) {
-      connectionListenerRef.current();
-      connectionListenerRef.current = null;
-    }
-    
-    // Setup connection listener for changes
-    connectionListenerRef.current = addConnectionListener((connected) => {
-      wsConnectedRef.current = connected;
-      console.log(`[useChatConnection] WebSocket connection state changed: ${connected ? 'connected' : 'disconnected'}`);
-      
-      // Update reducer state to trigger UI changes
-      dispatch({ 
-        type: ChatActionType.SET_WEBSOCKET_CONNECTED, 
-        payload: connected 
-      });
-    });
-    
-    // Clean up on unmount
-    return () => {
-      if (connectionListenerRef.current) {
-        connectionListenerRef.current();
-        connectionListenerRef.current = null;
-      }
-      
-      // Clean up WebSocket connection only when leaving the chat area completely
-      if (!window.location.pathname.includes('/chat')) {
-        console.log('[useChatConnection] Leaving chat area, closing WebSocket connection');
-        closeWebSocket();
-      } else {
-        console.log('[useChatConnection] Staying in chat area, keeping WebSocket connection alive');
-      }
-    };
-  }, [dispatch]);
+  }, [dispatch, tokenRef, connection]);
   
   return {
     connectWebSocket,

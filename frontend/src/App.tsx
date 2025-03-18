@@ -7,6 +7,7 @@ import NotificationProvider from './components/ui/Notification';
 import { appRoutes } from './routes';
 import { StreamingProvider } from './services/chat/StreamingContext';
 import { ChatProvider } from './services/chat/ChatStore';
+import { ChatConnectionProvider } from './services/chat/ChatConnectionContext';
 import { EditorProvider } from './services/editor/EditorContext';
 
 // Clean up global window navigateTo function to avoid issues
@@ -32,13 +33,15 @@ function App() {
     <ThemeProvider>
       <NotificationProvider>
         <AuthProvider>
-          <StreamingProvider>
-            <ChatProvider>
-              <EditorProvider>
-                {routeElement}
-              </EditorProvider>
-            </ChatProvider>
-          </StreamingProvider>
+          <ChatConnectionProvider>
+            <StreamingProvider>
+              <ChatProvider>
+                <EditorProvider>
+                  {routeElement}
+                </EditorProvider>
+              </ChatProvider>
+            </StreamingProvider>
+          </ChatConnectionProvider>
         </AuthProvider>
       </NotificationProvider>
     </ThemeProvider>

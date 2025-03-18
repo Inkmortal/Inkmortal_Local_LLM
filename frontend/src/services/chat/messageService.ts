@@ -121,7 +121,7 @@ export async function processMessage(
   } = handlers;
 
   try {
-    // Phase 2: Establish WebSocket connection first
+    // Phase 2: Verify WebSocket connection is established and persistent
     const token = localStorage.getItem('token') || localStorage.getItem('authToken');
     
     if (!token) {
@@ -132,10 +132,20 @@ export async function processMessage(
     onStart();
     onStatusUpdate(MessageStatus.PREPARING);
     
-    const useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
+    // IMPROVED APPROACH: Validate existing connection first, then reconnect if needed
+    // Never create a temporary connection - ensure one persistent connection throughout
+    let useWebSocket = isWebSocketConnected();
+    
+    // Only attempt to connect if not already connected
+    if (!useWebSocket) {
+      console.log('[messageService] No active WebSocket connection, establishing persistent connection');
+      useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
+    } else {
+      console.log('[messageService] Using existing WebSocket connection');
+    }
     
     if (useWebSocket) {
-      console.log('[messageService] WebSocket connected and validated');
+      console.log('[messageService] WebSocket connected and validated - will use for streaming');
     } else {
       console.warn('[messageService] WebSocket connection failed, will use polling fallback');
     }
@@ -154,33 +164,58 @@ export async function processMessage(
         sessionData.conversationId
       );
       
-      // NEW: If using WebSocket, send readiness signal to backend
+      // Only use WebSocket readiness protocol if the connection is established
       if (useWebSocket) {
-        console.log('[READINESS-DEBUG] Starting client readiness protocol for message flow');
+        console.log('[READINESS-DEBUG] Starting client readiness protocol on PERSISTENT connection');
         console.log('[READINESS-DEBUG] Message details: ' + 
                    `msgId=${sessionData.assistantMessageId.substring(0,8)}, ` + 
                    `convId=${sessionData.conversationId.substring(0,8)}`);
         
-        const readySignalSent = signalClientReady(
-          sessionData.assistantMessageId,
-          sessionData.conversationId
-        );
-        
-        if (readySignalSent) {
-          console.log('[READINESS-DEBUG] Now waiting for backend readiness confirmation');
+        // CRITICAL: Validate connection one last time before sending
+        if (!isWebSocketConnected()) {
+          console.warn('[READINESS-DEBUG] Connection lost - attempting to reconnect');
+          useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
           
-          // Wait for backend to confirm readiness before proceeding
-          const waitStart = Date.now();
-          const confirmed = await waitForReadinessConfirmation(sessionData.assistantMessageId, 3000);
-          const waitDuration = Date.now() - waitStart;
-          
-          if (confirmed) {
-            console.log(`[READINESS-DEBUG] SUCCESS: Client readiness confirmed by backend after ${waitDuration}ms`);
-          } else {
-            console.warn(`[READINESS-DEBUG] WARNING: No readiness confirmation from backend after ${waitDuration}ms, proceeding anyway`);
+          if (!useWebSocket) {
+            console.error('[READINESS-DEBUG] Failed to reconnect - will proceed without readiness protocol');
           }
-        } else {
-          console.warn('[READINESS-DEBUG] ERROR: Failed to send readiness signal, proceeding anyway');
+        }
+        
+        // Only proceed with readiness protocol if connection is valid
+        if (useWebSocket) {
+          const readySignalSent = signalClientReady(
+            sessionData.assistantMessageId,
+            sessionData.conversationId
+          );
+          
+          if (readySignalSent) {
+            console.log('[READINESS-DEBUG] Now waiting for backend readiness confirmation');
+            
+            // Wait for backend to confirm readiness before proceeding
+            const waitStart = Date.now();
+            const confirmed = await waitForReadinessConfirmation(sessionData.assistantMessageId, 3000);
+            const waitDuration = Date.now() - waitStart;
+            
+            if (confirmed) {
+              console.log(`[READINESS-DEBUG] SUCCESS: Client readiness confirmed by backend after ${waitDuration}ms`);
+            } else {
+              console.warn(`[READINESS-DEBUG] WARNING: No readiness confirmation from backend after ${waitDuration}ms, proceeding anyway`);
+              
+              // If confirmation failed, check connection state again
+              if (!isWebSocketConnected()) {
+                console.error('[READINESS-DEBUG] WebSocket disconnected during readiness confirmation');
+                useWebSocket = false;
+              }
+            }
+          } else {
+            console.warn('[READINESS-DEBUG] ERROR: Failed to send readiness signal, proceeding anyway');
+            
+            // Check if connection is still active
+            if (!isWebSocketConnected()) {
+              console.error('[READINESS-DEBUG] WebSocket disconnected after failed readiness signal');
+              useWebSocket = false;
+            }
+          }
         }
       }
     } else {

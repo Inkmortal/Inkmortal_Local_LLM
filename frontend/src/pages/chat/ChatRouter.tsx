@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../services/chat/ChatStore';
 import { useTheme } from '../../context/ThemeContext';
+import { ensureWebSocketConnection } from '../../services/chat/websocketService';
 import ChatHistorySidebar from '../../components/chat/ChatHistorySidebar';
 import ChatHeader from './components/layout/ChatHeader';
 import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
@@ -31,9 +32,31 @@ const ChatRouter: React.FC = () => {
 
   // UI state
   const [showHistorySidebar, setShowHistorySidebar] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const tokenRef = useRef<string | null>(null);
 
-  // On mount, load the conversation list once
+  // On mount, establish WebSocket connection and load conversation list
   useEffect(() => {
+    console.log('[ChatRouter] Initializing chat environment');
+    
+    // Get token from localStorage
+    tokenRef.current = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    
+    // Establish persistent WebSocket connection at chat UI load time
+    if (tokenRef.current) {
+      console.log('[ChatRouter] Establishing persistent WebSocket connection');
+      ensureWebSocketConnection(tokenRef.current)
+        .then(connected => {
+          console.log(`[ChatRouter] WebSocket connection established: ${connected}`);
+          setIsConnected(connected);
+        })
+        .catch(error => {
+          console.error('[ChatRouter] WebSocket connection error:', error);
+          setIsConnected(false);
+        });
+    }
+    
+    // Load conversation list
     console.log('[ChatRouter] Loading conversation list');
     loadConversations();
   }, [loadConversations]);

@@ -3,6 +3,8 @@
  * 
  * This service coordinates the connection manager, message handler,
  * and event emitter to provide a complete WebSocket solution.
+ * 
+ * REVISED VERSION: Uses persistent connection management.
  */
 import { connectionManager, ConnectionStatus } from './connectionManager';
 import { eventEmitter } from './eventEmitter';
@@ -12,7 +14,7 @@ import { MessageStatus, ContentUpdateMode } from './types';
 // Re-export important types
 export { ConnectionStatus } from './connectionManager';
 export { MessageType } from './messageHandler';
-export { MessageStatus, ContentUpdateMode } from './types';
+export { MessageStatus, ContentUpdateMode, MessageUpdate } from './types';
 
 /**
  * Get authentication token for WebSocket connection
@@ -20,7 +22,7 @@ export { MessageStatus, ContentUpdateMode } from './types';
  */
 export function getAuthToken(): string {
   // Try to get token from localStorage
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
   
   if (!token) {
     console.warn('No authentication token found in localStorage');
@@ -50,7 +52,7 @@ export function registerMessageId(frontendId: string, backendId: string, convers
 
 /**
  * Signal client readiness to receive messages for a specific message
- * This helps synchronize frontend and backend
+ * Enhanced version ensures connection is active before sending
  */
 export function signalClientReady(messageId: string, conversationId: string): boolean {
   if (!messageId || !conversationId) {
@@ -59,6 +61,24 @@ export function signalClientReady(messageId: string, conversationId: string): bo
   }
   
   try {
+    // Validate connection first to prevent sending on closed socket
+    if (!connectionManager.validateConnection()) {
+      console.error('[READINESS-DEBUG] Cannot signal client readiness - WebSocket not connected');
+      
+      // Try to reconnect if possible
+      try {
+        const token = getAuthToken();
+        console.log('[READINESS-DEBUG] Attempting to reconnect WebSocket before sending readiness signal');
+        connectionManager.connect(token).catch(error => {
+          console.error('[READINESS-DEBUG] Reconnection failed:', error);
+        });
+      } catch (error) {
+        console.error('[READINESS-DEBUG] Failed to get token for reconnection:', error);
+      }
+      
+      return false;
+    }
+    
     // Create readiness signal message
     const readySignal = {
       type: 'client_ready',
@@ -67,10 +87,10 @@ export function signalClientReady(messageId: string, conversationId: string): bo
       timestamp: Date.now()
     };
     
-    console.log(`[READINESS-DEBUG] ATTEMPTING TO SEND client_ready signal: msgId=${messageId.substring(0,8)}, convId=${conversationId.substring(0,8)}, connectionState=${getConnectionStatus()}`);
+    console.log(`[READINESS-DEBUG] SENDING client_ready signal: msgId=${messageId.substring(0,8)}, convId=${conversationId.substring(0,8)}, connectionState=${getConnectionStatus()}`);
     
     // Send over WebSocket
-    const sent = sendWebSocketMessage(readySignal);
+    const sent = connectionManager.sendMessage(readySignal);
     
     // Log success or failure with more details
     if (sent) {
@@ -210,6 +230,9 @@ export function isWebSocketConnected(): boolean {
  * @param tokenOverride Optional auth token override
  * @param timeout Maximum time to wait in milliseconds
  * @returns Promise that resolves to true when connected or false on timeout
+ * 
+ * CRITICAL: This is now a persistent connection function that establishes
+ * a single long-lived connection. NOT to be used for temporary connections!
  */
 export async function waitForWebSocketConnection(
   tokenOverride?: string, 
@@ -257,11 +280,29 @@ export async function waitForWebSocketConnection(
 }
 
 /**
- * Send a message through the WebSocket connection
+ * Send a message through the WebSocket connection with connection validation
  * @param message Message to send
  * @returns True if message was sent successfully
  */
 export function sendWebSocketMessage(message: any): boolean {
+  // Validate connection first
+  if (!connectionManager.validateConnection()) {
+    console.error('[websocketService] Cannot send message - no active WebSocket connection');
+    
+    // Try to reconnect if token is available
+    try {
+      const token = getAuthToken();
+      console.log('[websocketService] Attempting to reconnect WebSocket before sending message');
+      connectionManager.connect(token).catch(error => {
+        console.error('[websocketService] Reconnection failed:', error);
+      });
+    } catch (error) {
+      console.error('[websocketService] No valid token for reconnection:', error);
+    }
+    
+    return false;
+  }
+  
   return connectionManager.sendMessage(message);
 }
 
@@ -274,11 +315,20 @@ export function getConnectionStatus(): ConnectionStatus {
 
 /**
  * Safely ensure WebSocket connection with proper error handling
+ * This is the primary entry point for establishing a connection
  */
 export async function ensureWebSocketConnection(tokenOverride?: string): Promise<boolean> {
   try {
     // Use provided token or get from storage
     const token = tokenOverride || getAuthToken();
+    
+    // Always validate existing connection first
+    if (connectionManager.validateConnection()) {
+      console.log('[websocketService] Connection already established and validated');
+      return true;
+    }
+    
+    console.log('[websocketService] Ensuring WebSocket connection...');
     return await initializeWebSocket(token);
   } catch (error) {
     console.warn('WebSocket connection failed, falling back to polling:', 
@@ -325,19 +375,5 @@ export function registerGlobalMessageHandler(callback: (update: MessageUpdate) =
  * @returns Function to unsubscribe
  */
 export function addConnectionListener(callback: (connected: boolean) => void): () => void {
-  console.log('Registering connection status listener');
-  
-  // Map ConnectionStatus enum to boolean for simpler API
-  const statusCallback = (status: ConnectionStatus) => {
-    const isConnected = status === ConnectionStatus.CONNECTED;
-    callback(isConnected);
-  };
-  
-  // Initial callback with current status
-  setTimeout(() => {
-    statusCallback(connectionManager.getStatus());
-  }, 0);
-  
-  // Subscribe to future status changes
-  return eventEmitter.on('connection_status', statusCallback);
+  return connectionManager.addConnectionListener(callback);
 }

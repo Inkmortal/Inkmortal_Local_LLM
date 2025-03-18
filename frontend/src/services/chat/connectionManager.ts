@@ -686,6 +686,25 @@ class ConnectionManager {
     return this.connectionStatus;
   }
   
+  // Add a connection status listener
+  public addConnectionListener(callback: (connected: boolean) => void): () => void {
+    // First call callback with current status
+    const isCurrentlyConnected = this.isConnected();
+    setTimeout(() => {
+      callback(isCurrentlyConnected);
+    }, 0);
+    
+    // Convert ConnectionStatus to boolean for simpler API
+    const statusListener = (status: ConnectionStatus) => {
+      const isConnected = status === ConnectionStatus.CONNECTED;
+      callback(isConnected);
+    };
+    
+    // Subscribe to status events
+    const eventEmitter = require('./eventEmitter').eventEmitter;
+    return eventEmitter.on('connection_status', statusListener);
+  }
+  
   // Cleanup resources and event listeners
   public cleanup(): void {
     // Close WebSocket connection
