@@ -292,7 +292,12 @@ export function ChatProvider({ children }: ChatProviderProps) {
         role: MessageRole.ASSISTANT,
         content: '',
         timestamp: Date.now(),
-        status: MessageStatus.PREPARING
+        status: MessageStatus.PREPARING,
+        // Add sections to ensure consistent rendering
+        sections: {
+          response: { content: '', visible: true },
+          thinking: { content: '', visible: false }
+        }
       };
 
       // Add messages to UI state immediately
@@ -303,6 +308,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
       dispatch({ type: ChatActionType.SET_PREPARING_CONVERSATION, payload: true });
       
       try {
+        // Register message ID with streaming context early, before sending
+        registerMessage(assistantMessageId, assistantMessageId, currentConversationId || 'pending');
+        
         // Phase 2: Send to backend (using two-phase approach in messageService)
         console.log('[ChatStore] Sending message to backend', { currentConversationId });
         

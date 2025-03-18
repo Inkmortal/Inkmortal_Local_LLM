@@ -287,9 +287,8 @@ class ConnectionManager {
     this.cleanupTimeouts();
     this.isConnecting = false;
     
-    if (wasConnected) {
-      this.updateConnectionStatus(ConnectionStatus.DISCONNECTED);
-    }
+    // Always update status to disconnected when connection closes
+    this.updateConnectionStatus(ConnectionStatus.DISCONNECTED);
     
     // Only attempt reconnect for unexpected closures and if we have an auth token
     if (this.authToken && event.code !== 1000 && event.code !== 1001) {
