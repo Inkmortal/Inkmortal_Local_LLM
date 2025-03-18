@@ -166,28 +166,38 @@ class ConnectionManager:
     
     async def mark_client_ready(self, message_id: str, conversation_id: str, user_id: int):
         """Mark a client as ready to receive updates for a specific message"""
+        # Event-based logging start
+        logger.info(f"[READINESS-EVENT] MARK_CLIENT_READY_START user={user_id}")
+        
         if not message_id or not conversation_id:
-            logger.warning(f"[READINESS-DEBUG] Cannot mark client ready - missing IDs: message_id={message_id}, conversation_id={conversation_id}")
+            logger.warning(f"[READINESS-EVENT] MARK_CLIENT_READY_INVALID_IDS user={user_id} message_id={message_id} conversation_id={conversation_id}")
             return False
         
         # Use composite key of message_id + conversation_id to ensure uniqueness
         ready_key = f"{message_id}:{conversation_id}:{user_id}"
-        logger.info(f"[READINESS-DEBUG] Creating ready_key: {ready_key[:30]}...")
+        logger.info(f"[READINESS-EVENT] READY_KEY_CREATED user={user_id} key={ready_key[:30]}")
         
-        async with self._ready_lock:
-            # Check if already marked ready
-            if ready_key in self.client_ready_state:
-                timestamp = self.client_ready_state[ready_key]
-                logger.info(f"[READINESS-DEBUG] Client was already marked ready at {timestamp}")
+        try:
+            async with self._ready_lock:
+                # Check if already marked ready - important to prevent redundant processing
+                if ready_key in self.client_ready_state:
+                    timestamp = self.client_ready_state[ready_key]
+                    time_ago = time.time() - timestamp
+                    logger.info(f"[READINESS-EVENT] ALREADY_READY user={user_id} key={ready_key[:30]} time_ago={time_ago:.2f}s")
+                else:
+                    # Mark as ready with current timestamp
+                    self.client_ready_state[ready_key] = time.time()
+                    logger.info(f"[READINESS-EVENT] NEWLY_MARKED_READY user={user_id} key={ready_key[:30]}")
+                
+                # Log current readiness state size for monitoring memory usage
+                logger.info(f"[READINESS-EVENT] READINESS_STATE_SIZE size={len(self.client_ready_state)}")
             
-            # Mark as ready
-            self.client_ready_state[ready_key] = time.time()
-            logger.info(f"[READINESS-DEBUG] Client marked ready: key={ready_key[:30]}...")
-            
-            # Log current readiness state size
-            logger.info(f"[READINESS-DEBUG] Current readiness tracking size: {len(self.client_ready_state)} entries")
-            
-        return True
+            return True
+        except Exception as e:
+            # Log details of any exception that might occur
+            error_type = type(e).__name__
+            logger.error(f"[READINESS-EVENT] MARK_READY_ERROR user={user_id} error_type={error_type} error={str(e)}")
+            return False
     
     async def wait_for_client_ready(self, message_id: str, conversation_id: str, user_id: int, timeout: float = 5.0):
         """Wait for client to signal readiness before sending updates"""

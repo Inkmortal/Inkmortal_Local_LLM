@@ -276,8 +276,11 @@ async def stream_message(
                 connections = manager.active_connections.get(user.id, [])
                 logger.info(f"[READINESS-DEBUG] Active WebSocket connections for user {user.id}: {len(connections)}")
                 
-                # Wait for client readiness
+                # Event-based logging for readiness wait
+                logger.info(f"[READINESS-EVENT] WAIT_START user={user.id} msgId={assistant_message_id[:8]} convId={conversation_id[:8]}")
                 wait_start = time.time()
+                
+                # Wait for client readiness
                 client_ready = await manager.wait_for_client_ready(
                     message_id=assistant_message_id,
                     conversation_id=conversation_id,
@@ -286,9 +289,12 @@ async def stream_message(
                 )
                 wait_duration = time.time() - wait_start
                 
+                # Log result of wait operation with detailed event info
                 if not client_ready:
+                    logger.warning(f"[READINESS-EVENT] WAIT_TIMEOUT user={user.id} msgId={assistant_message_id[:8]} duration={wait_duration:.2f}s")
                     logger.warning(f"[READINESS-DEBUG] **WAIT FAILED** Client not ready after {wait_duration:.2f}s, proceeding anyway for: msgId={assistant_message_id[:8]}")
                 else:
+                    logger.info(f"[READINESS-EVENT] WAIT_SUCCESS user={user.id} msgId={assistant_message_id[:8]} duration={wait_duration:.2f}s")
                     logger.info(f"[READINESS-DEBUG] **WAIT SUCCESS** Client ready after {wait_duration:.2f}s, beginning streaming: msgId={assistant_message_id[:8]}")
                 
                 # Initial update to show processing has started

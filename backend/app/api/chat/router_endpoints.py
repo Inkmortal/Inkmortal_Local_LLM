@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 import logging
 import json
+import time
 from jose import JWTError
 from datetime import datetime, timedelta
 
@@ -94,17 +95,33 @@ async def websocket_endpoint(
                         
                         # Handle client_ready signals - critical for streaming sync
                         if message_type == "client_ready":
+                            # Event-based logging - client_ready received
+                            logger.info(f"[READINESS-EVENT] CLIENT_READY_RECEIVED user={user.id}")
+                            
                             # Extract IDs from the message
                             message_id = message.get("message_id")
                             conversation_id = message.get("conversation_id")
                             
-                            logger.info(f"[READINESS-DEBUG] Received client_ready signal: msgId={message_id[:8]}, convId={conversation_id[:8]}, userId={user.id}")
+                            # Log detailed message info
+                            logger.info(f"[READINESS-DEBUG] Received client_ready signal: msgId={message_id[:8] if message_id else 'None'}, convId={conversation_id[:8] if conversation_id else 'None'}, userId={user.id}")
                             
-                            if message_id and conversation_id:
+                            # Validate IDs
+                            if not message_id or not conversation_id:
+                                logger.error(f"[READINESS-EVENT] CLIENT_READY_INVALID_IDS user={user.id} message_id={message_id} conversation_id={conversation_id}")
+                                # Send error response
+                                await websocket.send_json({
+                                    "type": "readiness_error",
+                                    "error": "Invalid message_id or conversation_id",
+                                    "timestamp": time.time()
+                                })
+                                continue
+                                
+                            try:
                                 # Store this readiness state in the connection manager
                                 # This will tell the stream_message function to begin streaming
+                                logger.info(f"[READINESS-EVENT] MARKING_CLIENT_READY user={user.id} msgId={message_id[:8]} convId={conversation_id[:8]}")
                                 ready_result = await manager.mark_client_ready(message_id, conversation_id, user.id)
-                                logger.info(f"[READINESS-DEBUG] Mark ready result: {ready_result}")
+                                logger.info(f"[READINESS-EVENT] CLIENT_READY_MARKED user={user.id} result={ready_result}")
                                 
                                 # Send confirmation back to client
                                 conf_msg = {
@@ -114,9 +131,23 @@ async def websocket_endpoint(
                                     "readiness_confirmed": True,
                                     "timestamp": time.time()
                                 }
-                                logger.info(f"[READINESS-DEBUG] Sending confirmation: msgId={message_id[:8]}")
+                                logger.info(f"[READINESS-EVENT] SENDING_CONFIRMATION user={user.id} msgId={message_id[:8]}")
                                 await websocket.send_json(conf_msg)
-                                logger.info(f"[READINESS-DEBUG] Confirmation sent successfully")
+                                logger.info(f"[READINESS-EVENT] CONFIRMATION_SENT user={user.id} msgId={message_id[:8]}")
+                                continue
+                            except Exception as ready_error:
+                                # Specific exception handling for readiness protocol
+                                error_type = type(ready_error).__name__
+                                logger.error(f"[READINESS-EVENT] READINESS_PROTOCOL_ERROR user={user.id} error_type={error_type} error={str(ready_error)}")
+                                # Try to send error to client
+                                try:
+                                    await websocket.send_json({
+                                        "type": "readiness_error",
+                                        "error": f"Server error: {error_type}",
+                                        "timestamp": time.time()
+                                    })
+                                except:
+                                    logger.error(f"[READINESS-EVENT] FAILED_TO_SEND_ERROR user={user.id}")
                                 continue
                         
                         # For other message types or heartbeats, just acknowledge
@@ -133,11 +164,20 @@ async def websocket_endpoint(
             await websocket.close(code=1008, reason="Invalid token")
             
     except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
+        # Enhanced error logging with error type and traceback
+        import traceback
+        error_type = type(e).__name__
+        logger.error(f"WebSocket error [{error_type}]: {str(e)}")
+        logger.error(f"WebSocket error traceback:\n{traceback.format_exc()}")
+        
+        # Log client info for correlation with connection attempts
+        client_info = f"{websocket.client.host}:{websocket.client.port}" if hasattr(websocket, 'client') else "unknown"
+        logger.error(f"WebSocket connection failed for client {client_info}")
+        
         try:
             await websocket.close(code=1011, reason="Server error")
-        except:
-            pass
+        except Exception as close_error:
+            logger.error(f"Error while closing WebSocket: {str(close_error)}")
 
 
 # Endpoint to create a new conversation
