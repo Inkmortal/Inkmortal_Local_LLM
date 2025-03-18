@@ -184,31 +184,38 @@ const ChatRouter: React.FC = () => {
           
           {/* Conditional content based on conversation state */}
           {activeConversationId ? (
-            // Content container for active conversation
+            // Content container for active conversation (with messages or empty state)
             <div className="w-full h-full flex flex-col relative">
-              {/* Chat Window */}
+              {/* Chat Window - Always show when we have an active conversation */}
               <div className="flex-grow overflow-hidden">
-                <ChatWindow 
-                  messages={conversationMessages}
-                  isLoading={isLoading}
-                  isGenerating={isGenerating}
-                  onRegenerate={() => {
-                    // Implement regenerate functionality if needed
-                    console.log('[ChatRouter] Regenerate requested');
-                  }}
-                  onStopGeneration={() => {
-                    // Implement stop generation if needed
-                    console.log('[ChatRouter] Stop generation requested');
-                  }}
-                />
+                {/* If we have no messages but loading or generating is in progress, show a loading message */}
+                {conversationMessages.length === 0 && !isLoading && !isGenerating ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="text-center max-w-md px-4">
+                      <h3 className="text-lg font-medium mb-2">New Conversation</h3>
+                      <p className="text-sm opacity-80">Type your message below to begin chatting.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <ChatWindow 
+                    messages={conversationMessages}
+                    isLoading={isLoading}
+                    isGenerating={isGenerating}
+                    onRegenerate={() => {
+                      console.log('[ChatRouter] Regenerate requested');
+                    }}
+                    onStopGeneration={() => {
+                      console.log('[ChatRouter] Stop generation requested');
+                    }}
+                  />
+                )}
               </div>
               
-              {/* Chat Input Area */}
+              {/* Chat Input Area - Always present with active conversation */}
               <div className="px-4 py-2 relative">
                 <TipTapAdapterWithStop
                   onSendMessage={sendMessage}
                   onStopGeneration={() => {
-                    // Implement stop generation if needed
                     console.log('[ChatRouter] Stop generation requested');
                   }}
                   placeholder="Message Inkmortal..."
@@ -217,7 +224,7 @@ const ChatRouter: React.FC = () => {
               </div>
             </div>
           ) : (
-            // Empty conversation view (welcome screen)
+            // Welcome screen - Only show when there's no active conversation
             <EmptyConversationView onSendMessage={handleNewConversation} />
           )}
         </div>

@@ -168,97 +168,42 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     currentTheme.colors.bgPrimary
   ]);
   
+  // Empty state content - lightweight version for conversation-specific empty state
+  // This is different from the welcome page (EmptyConversationView)
   const emptyStateContent = (
     <div className="w-full h-full flex items-center justify-center py-12 animate-fade-in">
       <div className="text-center max-w-md px-4">
         <div
-          className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center"
+          className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center"
           style={{
             background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}15, ${currentTheme.colors.accentSecondary}15)`,
             border: `1px solid ${currentTheme.colors.borderColor}30`,
-            boxShadow: `0 0 30px ${currentTheme.colors.accentPrimary}10`
+            boxShadow: `0 0 20px ${currentTheme.colors.accentPrimary}10`
           }}
         >
           <svg 
-            className="w-10 h-10" 
+            className="w-8 h-8" 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24" 
             xmlns="http://www.w3.org/2000/svg"
             style={{ color: currentTheme.colors.accentPrimary }}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
         </div>
         <h3 
-          className="text-xl font-medium mb-3"
+          className="text-lg font-medium mb-2"
           style={{ color: currentTheme.colors.textPrimary }}
         >
-          Welcome to Inkmortal Chat
+          Conversation Created
         </h3>
         <p 
-          className="mb-6 text-sm"
+          className="mb-4 text-sm"
           style={{ color: currentTheme.colors.textSecondary }}
         >
-          This is the start of a new conversation. Type a message below to begin.
-          Your conversation will be created automatically when you send your first message.
+          Type your first message below to start chatting.
         </p>
-        
-        <div className="grid grid-cols-3 gap-3 text-xs mb-6" style={{ color: currentTheme.colors.textMuted }}>
-          <div 
-            className="p-3 rounded-md flex flex-col items-center text-center"
-            style={{ 
-              backgroundColor: `${currentTheme.colors.bgSecondary}50`,
-              border: `1px solid ${currentTheme.colors.borderColor}30`
-            }}
-          >
-            <svg className="w-5 h-5 mb-2 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Upload files
-          </div>
-          <div 
-            className="p-3 rounded-md flex flex-col items-center text-center"
-            style={{ 
-              backgroundColor: `${currentTheme.colors.bgSecondary}50`,
-              border: `1px solid ${currentTheme.colors.borderColor}30`
-            }}
-          >
-            <svg className="w-5 h-5 mb-2 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            Math expressions
-          </div>
-          <div 
-            className="p-3 rounded-md flex flex-col items-center text-center"
-            style={{ 
-              backgroundColor: `${currentTheme.colors.bgSecondary}50`,
-              border: `1px solid ${currentTheme.colors.borderColor}30`
-            }}
-          >
-            <svg className="w-5 h-5 mb-2 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-            Code blocks
-          </div>
-        </div>
-        
-        <div 
-          className="text-xs py-3 px-4 rounded-lg"
-          style={{ 
-            backgroundColor: `${currentTheme.colors.accentPrimary}08`,
-            border: `1px solid ${currentTheme.colors.accentPrimary}15`,
-            color: currentTheme.colors.textSecondary
-          }}
-        >
-          <div className="flex items-center mb-2">
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium">Quick Tip</span>
-          </div>
-          <p>You can navigate between conversations using the sidebar. Your conversations will be saved automatically, and you can continue them later.</p>
-        </div>
       </div>
     </div>
   );
@@ -289,9 +234,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             }}
           />
         )}
-        
-        {/* Empty state when no messages */}
-        {messages.length === 0 && !isLoading && emptyStateContent}
         
         {/* Message list */}
         {messages.map((message, index) => (
