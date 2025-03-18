@@ -44,16 +44,19 @@ const ChatRouter: React.FC = () => {
     
     // Establish persistent WebSocket connection at chat UI load time
     if (tokenRef.current) {
-      console.log('[ChatRouter] Establishing persistent WebSocket connection');
-      ensureWebSocketConnection(tokenRef.current)
-        .then(connected => {
-          console.log(`[ChatRouter] WebSocket connection established: ${connected}`);
-          setIsConnected(connected);
-        })
-        .catch(error => {
-          console.error('[ChatRouter] WebSocket connection error:', error);
-          setIsConnected(false);
-        });
+      // Use setTimeout to ensure component mount is complete before attempting connection
+      setTimeout(() => {
+        console.log('[ChatRouter] Establishing persistent WebSocket connection');
+        ensureWebSocketConnection(tokenRef.current)
+          .then(connected => {
+            console.log(`[ChatRouter] WebSocket connection established: ${connected}`);
+            setIsConnected(connected);
+          })
+          .catch(error => {
+            console.error('[ChatRouter] WebSocket connection error:', error);
+            setIsConnected(false);
+          });
+      }, 500);
     }
     
     // Load conversation list

@@ -9,15 +9,12 @@
 import { connectionManager, ConnectionStatus } from './connectionManager';
 import { eventEmitter } from './eventEmitter';
 import { messageHandler, MessageType } from './messageHandler';
-import { MessageStatus, ContentUpdateMode } from './types';
+import { MessageStatus, ContentUpdateMode, MessageUpdate } from './types';
 
 // Re-export important types
 export { ConnectionStatus } from './connectionManager';
 export { MessageType } from './messageHandler';
 export { MessageStatus, ContentUpdateMode } from './types';
-
-// Import MessageUpdate type for internal use
-import { MessageUpdate } from './types';
 
 /**
  * Get authentication token for WebSocket connection

@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { ChatActionType } from '../reducers/chatReducer';
+// Dynamically import to avoid circular dependencies
 import { useChatConnection as useConnectionContext } from '../../../services/chat/ChatConnectionContext';
 
 /**

@@ -5,6 +5,7 @@
  * independently of React component lifecycle.
  */
 import { eventEmitter } from './eventEmitter';
+import type { EventEmitter } from './eventEmitter';
 
 // Connection constants
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -700,7 +701,7 @@ class ConnectionManager {
     };
     
     // Subscribe to status events
-    const eventEmitter = require('./eventEmitter').eventEmitter;
+    // Using the imported eventEmitter from the top
     return eventEmitter.on('connection_status', statusListener);
   }
   
