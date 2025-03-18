@@ -49,6 +49,61 @@ export function registerMessageId(frontendId: string, backendId: string, convers
 }
 
 /**
+ * Signal client readiness to receive messages for a specific message
+ * This helps synchronize frontend and backend
+ */
+export function signalClientReady(messageId: string, conversationId: string): boolean {
+  if (!messageId || !conversationId) {
+    console.error('[websocketService] Cannot signal readiness - missing IDs');
+    return false;
+  }
+  
+  try {
+    // Create readiness signal message
+    const readySignal = {
+      type: 'client_ready',
+      message_id: messageId,
+      conversation_id: conversationId,
+      timestamp: Date.now()
+    };
+    
+    // Send over WebSocket
+    const sent = sendWebSocketMessage(readySignal);
+    console.log(`[websocketService] Client readiness signal ${sent ? 'sent' : 'failed'} for message ${messageId}`);
+    return sent;
+  } catch (error) {
+    console.error('[websocketService] Error signaling client readiness:', error);
+    return false;
+  }
+}
+
+/**
+ * Wait for readiness confirmation from server
+ */
+export function waitForReadinessConfirmation(messageId: string, timeout: number = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Set timeout for maximum wait time
+    const timeoutId = setTimeout(() => {
+      console.warn(`[websocketService] Readiness confirmation timeout for ${messageId}`);
+      eventEmitter.off('readiness_confirmed', handler);
+      resolve(false);
+    }, timeout);
+    
+    // Define handler that will resolve when readiness is confirmed
+    const handler = (data: any) => {
+      if (data.message_id === messageId && data.readiness_confirmed) {
+        clearTimeout(timeoutId);
+        eventEmitter.off('readiness_confirmed', handler);
+        resolve(true);
+      }
+    };
+    
+    // Listen for readiness confirmation events
+    eventEmitter.on('readiness_confirmed', handler);
+  });
+}
+
+/**
  * Subscribe to message updates for a specific message
  * @param callback Function to call when message is updated
  * @returns Function to unsubscribe
@@ -146,8 +201,11 @@ export async function waitForWebSocketConnection(
   tokenOverride?: string, 
   timeout = 5000
 ): Promise<boolean> {
-  // If already connected, return immediately
-  if (isWebSocketConnected()) {
+  console.log('[websocketService] Waiting for WebSocket connection...');
+  
+  // Validate existing connection first
+  if (connectionManager.validateConnection()) {
+    console.log('[websocketService] Already connected, returning immediately');
     return true;
   }
   
@@ -155,7 +213,10 @@ export async function waitForWebSocketConnection(
   try {
     // Create a promise that resolves on timeout
     const timeoutPromise = new Promise<boolean>((resolve) => {
-      setTimeout(() => resolve(false), timeout);
+      setTimeout(() => {
+        console.log('[websocketService] Connection timed out');
+        resolve(false);
+      }, timeout);
     });
     
     // Get token (either from parameter or from storage)
@@ -165,9 +226,18 @@ export async function waitForWebSocketConnection(
     const connectPromise = initializeWebSocket(token);
     
     // Race between connection and timeout
-    return Promise.race([connectPromise, timeoutPromise]);
+    const connected = await Promise.race([connectPromise, timeoutPromise]);
+    
+    // Double-check connection state after everything is done
+    const validated = connectionManager.validateConnection();
+    
+    if (connected && !validated) {
+      console.error('[websocketService] Connection state inconsistency detected');
+    }
+    
+    return validated;
   } catch (error) {
-    console.error('Error waiting for WebSocket connection:', error);
+    console.error('[websocketService] Error waiting for connection:', error);
     return false;
   }
 }

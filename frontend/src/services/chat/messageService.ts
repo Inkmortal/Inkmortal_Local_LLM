@@ -133,7 +133,7 @@ export async function processMessage(
     const useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
     
     if (useWebSocket) {
-      console.log('[messageService] WebSocket connected and ready');
+      console.log('[messageService] WebSocket connected and validated');
     } else {
       console.warn('[messageService] WebSocket connection failed, will use polling fallback');
     }
@@ -145,11 +145,35 @@ export async function processMessage(
         conversationId: sessionData.conversationId
       });
       
+      // Initial ID mapping - both IDs are the same until backend assigns a real ID
       registerMessageId(
         sessionData.assistantMessageId,
         sessionData.assistantMessageId,
         sessionData.conversationId
       );
+      
+      // NEW: If using WebSocket, send readiness signal to backend
+      if (useWebSocket) {
+        console.log('[messageService] Sending client readiness signal');
+        const readySignalSent = signalClientReady(
+          sessionData.assistantMessageId,
+          sessionData.conversationId
+        );
+        
+        if (readySignalSent) {
+          console.log('[messageService] Client readiness signal sent, waiting for confirmation');
+          
+          // Wait for backend to confirm readiness before proceeding
+          const confirmed = await waitForReadinessConfirmation(sessionData.assistantMessageId, 3000);
+          if (confirmed) {
+            console.log('[messageService] Client readiness confirmed by backend');
+          } else {
+            console.warn('[messageService] No readiness confirmation from backend, proceeding anyway');
+          }
+        } else {
+          console.warn('[messageService] Failed to send readiness signal, proceeding anyway');
+        }
+      }
     } else {
       console.error('[messageService] Cannot register message - missing IDs');
     }
@@ -194,6 +218,27 @@ export async function processMessage(
         throw new Error(result.error || 'Failed to start message processing');
       }
 
+      // If we have a real message ID from the response, update our mapping
+      if (result.data && result.data.message_id && 
+          result.data.message_id !== sessionData.assistantMessageId) {
+        console.log('[messageService] Updating mapping with real backend ID:', result.data.message_id);
+        
+        // Update our mapping with the backend-generated ID
+        registerMessageId(
+          sessionData.assistantMessageId,
+          result.data.message_id,
+          sessionData.conversationId
+        );
+        
+        // Return both IDs for clarity
+        return {
+          success: true,
+          conversation_id: sessionData.conversationId,
+          message_id: result.data.message_id,
+          assistant_message_id: sessionData.assistantMessageId
+        };
+      }
+      
       // Return with the known conversation ID
       return {
         success: true,

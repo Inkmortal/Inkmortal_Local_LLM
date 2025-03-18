@@ -611,9 +611,41 @@ class ConnectionManager {
     this.saveConnectionState(); // Remove from storage
   }
 
+  // Validate connection is truly established and consistent
+  public validateConnection(): boolean {
+    // Check the WebSocket readyState directly
+    if (!this.websocket) {
+      console.log('[connectionManager] validateConnection: No WebSocket instance');
+      return false;
+    }
+    
+    const readyState = this.websocket.readyState;
+    const connected = readyState === WebSocket.OPEN;
+    
+    // Log detailed state info for debugging
+    const stateStr = 
+      readyState === WebSocket.CONNECTING ? "CONNECTING" :
+      readyState === WebSocket.OPEN ? "OPEN" :
+      readyState === WebSocket.CLOSING ? "CLOSING" :
+      readyState === WebSocket.CLOSED ? "CLOSED" : "UNKNOWN";
+      
+    console.log(`[connectionManager] validateConnection: ${connected ? "CONNECTED" : "NOT CONNECTED"} (${stateStr})`);
+    
+    // Update status if inconsistent
+    if (connected && this.connectionStatus !== ConnectionStatus.CONNECTED) {
+      console.warn('[connectionManager] Fixing inconsistent connection status');
+      this.updateConnectionStatus(ConnectionStatus.CONNECTED);
+    } else if (!connected && this.connectionStatus === ConnectionStatus.CONNECTED) {
+      console.warn('[connectionManager] Fixing inconsistent connection status');
+      this.updateConnectionStatus(ConnectionStatus.DISCONNECTED);
+    }
+    
+    return connected;
+  }
+
   // Check if WebSocket is connected
   public isConnected(): boolean {
-    return this.websocket !== null && this.websocket.readyState === WebSocket.OPEN;
+    return this.validateConnection();
   }
 
   // Send a message over the WebSocket

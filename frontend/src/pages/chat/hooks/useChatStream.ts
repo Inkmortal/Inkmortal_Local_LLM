@@ -291,6 +291,20 @@ export function useChatStream({
     }
   }, [state.activeConversationId, registerMessage]);
   
+  // Get the last assistant message in the conversation
+  const getLastAssistantMessage = useCallback(() => {
+    if (!state.activeConversationId || !state.messages) return null;
+    
+    // Convert messages object to array and filter by conversation
+    const conversationMessages = Object.values(state.messages)
+      .filter(msg => msg.conversationId === state.activeConversationId)
+      // Sort by timestamp to ensure we get the latest one
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    
+    // Find the most recent assistant message
+    return conversationMessages.find(msg => msg.role === MessageRole.ASSISTANT);
+  }, [state.messages, state.activeConversationId]);
+
   // Stop ongoing generation
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -303,8 +317,8 @@ export function useChatStream({
     dispatch({ type: ChatActionType.SET_GENERATING, payload: false });
     
     // Update the last message to show it's been stopped
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage && lastMessage.role === MessageRole.ASSISTANT) {
+    const lastMessage = getLastAssistantMessage();
+    if (lastMessage) {
       dispatch({
         type: ChatActionType.UPDATE_MESSAGE,
         payload: {
@@ -317,7 +331,7 @@ export function useChatStream({
         }
       });
     }
-  }, [state.messages]);
+  }, [state.messages, getLastAssistantMessage]);
   
   // Compute filtered messages based on active conversation
   const messages = useMemo(() => {

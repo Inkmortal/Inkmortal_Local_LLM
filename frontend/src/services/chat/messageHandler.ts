@@ -13,7 +13,10 @@ export enum MessageType {
   CONVERSATION_UPDATE = 'conversation_update',
   SYSTEM_MESSAGE = 'system_message',
   ERROR = 'error',
-  ACK = 'ack'
+  ACK = 'ack',
+  CLIENT_READY = 'client_ready',
+  READINESS_CONFIRMED = 'readiness_confirmed',
+  MESSAGE_ID_MAPPING = 'message_id_mapping'
 }
 
 // Message ID mappings to track backend<->frontend IDs
@@ -50,6 +53,12 @@ class MessageHandler {
   
   // Track message sequence numbers to prevent duplicate processing
   private messageSequence: Map<string, number> = new Map();
+  
+  // Store message update buffers for ordered processing
+  private messageUpdateBuffer: Map<string, MessageUpdate[]> = new Map();
+  
+  // Flag to prevent concurrent buffer processing
+  private processingUpdateBuffer: boolean = false;
   
   // Interval timer reference
   private cleanupInterval: number | null = null;
@@ -103,6 +112,7 @@ class MessageHandler {
     this.messageContent.clear();
     this.messageMetadata.clear();
     this.messageSequence.clear();
+    this.messageUpdateBuffer.clear();
     
     // Unsubscribe from message events
     eventEmitter.off('message_received', this.handleMessage.bind(this));
@@ -118,20 +128,43 @@ class MessageHandler {
   
   // Register a message ID mapping
   public registerMessageIdMapping(frontendId: string, backendId: string, conversationId: string): void {
-    // Remove any existing mappings for this frontend ID
+    // Add validation to prevent empty IDs
+    if (!frontendId || !backendId) {
+      console.error('Cannot register message ID mapping with empty IDs');
+      return;
+    }
+    
+    // Remove any existing mappings for both frontend and backend IDs to avoid duplicates
     this.messageIdMappings = this.messageIdMappings.filter(
-      mapping => mapping.frontendId !== frontendId
+      mapping => mapping.frontendId !== frontendId && mapping.backendId !== backendId
     );
     
     // Add new mapping
-    this.messageIdMappings.push({
+    const mapping = {
       frontendId,
       backendId,
       conversationId,
       timestamp: Date.now()
-    });
+    };
     
-    console.log(`Registered message ID mapping: frontend=${frontendId}, backend=${backendId}`);
+    this.messageIdMappings.push(mapping);
+    
+    // More detailed logging for debugging
+    console.log(`[CRITICAL] Registered message ID mapping: frontend=${frontendId}, backend=${backendId}, conversation=${conversationId}`);
+    
+    // Initialize empty content to avoid undefined issues
+    if (!this.messageContent.has(frontendId)) {
+      this.messageContent.set(frontendId, '');
+    }
+  }
+  
+  // Validate if a message ID has a valid mapping
+  public validateMessageMapping(messageId: string): boolean {
+    // Check if this message ID has an existing mapping either as frontend or backend ID
+    const hasFrontendMapping = this.findMappingByFrontendId(messageId) !== undefined;
+    const hasBackendMapping = this.findMappingByBackendId(messageId) !== undefined;
+    
+    return hasFrontendMapping || hasBackendMapping;
   }
   
   // Find mapping by frontend ID
@@ -232,6 +265,24 @@ class MessageHandler {
           // Just a heartbeat response, ignore
           break;
           
+        case MessageType.READINESS_CONFIRMED:
+          console.log('[messageHandler] Received readiness confirmation:', message);
+          eventEmitter.emit('readiness_confirmed', message);
+          break;
+          
+        case MessageType.MESSAGE_ID_MAPPING:
+          console.log('[messageHandler] Received message ID mapping confirmation:', message);
+          
+          // Update our mapping if needed
+          if (message.message_id && message.mapping_confirmed) {
+            if (message.frontend_id && message.frontend_id !== message.message_id) {
+              // Update mapping if frontend ID is provided
+              this.registerMessageIdMapping(message.frontend_id, message.message_id, message.conversation_id);
+            }
+            eventEmitter.emit('message_id_mapping', message);
+          }
+          break;
+          
         default:
           console.warn(`[messageHandler] Unknown message type: ${message.type}`, message);
       }
@@ -241,6 +292,46 @@ class MessageHandler {
   }
   
   // Process message updates and normalize
+  // Process update buffers in sequence to prevent race conditions
+  private async processMessageUpdateBuffer(): Promise<void> {
+    if (this.processingUpdateBuffer) return;
+    
+    this.processingUpdateBuffer = true;
+    
+    try {
+      // Process all buffered updates for each message ID in sequence
+      for (const [messageId, updates] of this.messageUpdateBuffer.entries()) {
+        if (!updates.length) continue;
+        
+        // Sort updates by sequence (if available) or by arrival time
+        updates.sort((a, b) => {
+          if (a.sequence !== undefined && b.sequence !== undefined) {
+            return a.sequence - b.sequence;
+          }
+          return 0; // Keep original order if no sequence
+        });
+        
+        // Process each update in order
+        for (const update of updates) {
+          // Actually emit the event
+          eventEmitter.emit('message_update', update);
+          await new Promise(resolve => setTimeout(resolve, 0)); // Yield to event loop
+        }
+        
+        // Clear processed updates
+        this.messageUpdateBuffer.delete(messageId);
+      }
+    } finally {
+      this.processingUpdateBuffer = false;
+      
+      // Check if new updates arrived during processing
+      if ([...this.messageUpdateBuffer.values()].some(arr => arr.length > 0)) {
+        // If so, process them in the next event loop tick
+        setTimeout(() => this.processMessageUpdateBuffer(), 0);
+      }
+    }
+  }
+
   private handleMessageUpdate(message: any): void {
     if (!message.message_id) {
       console.warn('Received message update without message_id:', message);
@@ -397,20 +488,31 @@ class MessageHandler {
       status: isComplete ? MessageStatus.COMPLETE : status,
       contentUpdateMode: contentUpdateMode,
       isComplete: isComplete,
+      sequence: message.sequence || sequenceNumber, // Use backend sequence if available, otherwise local
       metadata: message.metadata || {} // Properly include metadata
     };
     
     // Add optional fields if present
     if (message.error) update.error = message.error;
     
-    // Emit the normalized message update event
-    eventEmitter.emit('message_update', update);
+    // Buffer the update instead of emitting immediately
+    if (!this.messageUpdateBuffer.has(frontendMessageId)) {
+      this.messageUpdateBuffer.set(frontendMessageId, []);
+    }
+    
+    // Add to buffer
+    this.messageUpdateBuffer.get(frontendMessageId)!.push(update);
+    
+    // Trigger processing if not already in progress
+    if (!this.processingUpdateBuffer) {
+      this.processMessageUpdateBuffer();
+    }
     
     // Log only for debugging (limit to first 10 chars of content)
     const contentPreview = content.length > 10 
       ? `${content.substring(0, 10)}...` 
       : content;
-    console.log(`Processed message update: id=${frontendMessageId}, content="${contentPreview}"`);
+    console.log(`Buffered message update: id=${frontendMessageId}, sequence=${update.sequence}, content="${contentPreview}"`);
   }
 }
 

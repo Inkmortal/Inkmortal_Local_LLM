@@ -109,6 +109,26 @@ export interface WebSocketMessage {
 }
 
 /**
+ * Client readiness signal
+ */
+export interface ClientReadyMessage extends WebSocketMessage {
+  type: 'client_ready';
+  message_id: string;
+  conversation_id: string;
+  timestamp: number;
+}
+
+/**
+ * Readiness confirmation from server
+ */
+export interface ReadinessConfirmation extends WebSocketMessage {
+  type: 'readiness_confirmed';
+  message_id: string;
+  conversation_id: string;
+  readiness_confirmed: boolean;
+}
+
+/**
  * Message update from WebSocket (raw format)
  */
 export interface MessageUpdateEvent extends WebSocketMessage {
@@ -122,6 +142,7 @@ export interface MessageUpdateEvent extends WebSocketMessage {
   error?: string;
   content_update_mode?: string;  // 'APPEND' or 'REPLACE'
   is_final_message?: boolean;    // Indicates if this is the final message in a stream
+  sequence?: number;             // Sequence number for ordering
   metadata?: MessageMetadata;    // Metadata about the message/generation
 }
 
@@ -166,5 +187,6 @@ export interface MessageUpdate {
   contentUpdateMode?: ContentUpdateMode;
   isComplete?: boolean;
   error?: string;
+  sequence?: number;  // Message sequence number for ordering
   metadata?: MessageMetadata;  // Proper metadata field
 }
