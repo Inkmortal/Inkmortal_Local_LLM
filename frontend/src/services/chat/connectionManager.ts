@@ -347,6 +347,14 @@ class ConnectionManager {
       try {
         // Clean JSON should be directly parseable
         data = JSON.parse(event.data);
+        
+        // Debug log for readiness protocol messages
+        if (data && data.type) {
+          if (data.type === 'readiness_confirmed') {
+            console.log(`[READINESS-DEBUG] RECEIVED from server: readiness_confirmed message for msgId=${data.message_id?.substring(0,8)}`);
+          }
+        }
+        
         // Emit the parsed message event
         eventEmitter.emit('message_received', data);
       } catch (parseError) {
@@ -615,7 +623,7 @@ class ConnectionManager {
   public validateConnection(): boolean {
     // Check the WebSocket readyState directly
     if (!this.websocket) {
-      console.log('[connectionManager] validateConnection: No WebSocket instance');
+      console.log('[READINESS-DEBUG] validateConnection: No WebSocket instance');
       return false;
     }
     
@@ -629,14 +637,14 @@ class ConnectionManager {
       readyState === WebSocket.CLOSING ? "CLOSING" :
       readyState === WebSocket.CLOSED ? "CLOSED" : "UNKNOWN";
       
-    console.log(`[connectionManager] validateConnection: ${connected ? "CONNECTED" : "NOT CONNECTED"} (${stateStr})`);
+    console.log(`[READINESS-DEBUG] validateConnection: ${connected ? "CONNECTED" : "NOT CONNECTED"} (${stateStr})`);
     
     // Update status if inconsistent
     if (connected && this.connectionStatus !== ConnectionStatus.CONNECTED) {
-      console.warn('[connectionManager] Fixing inconsistent connection status');
+      console.warn('[READINESS-DEBUG] Fixing inconsistent connection status (was: ' + this.connectionStatus + ', should be: CONNECTED)');
       this.updateConnectionStatus(ConnectionStatus.CONNECTED);
     } else if (!connected && this.connectionStatus === ConnectionStatus.CONNECTED) {
-      console.warn('[connectionManager] Fixing inconsistent connection status');
+      console.warn('[READINESS-DEBUG] Fixing inconsistent connection status (was: ' + this.connectionStatus + ', should be: DISCONNECTED)');
       this.updateConnectionStatus(ConnectionStatus.DISCONNECTED);
     }
     
@@ -651,15 +659,24 @@ class ConnectionManager {
   // Send a message over the WebSocket
   public sendMessage(data: any): boolean {
     if (!this.isConnected()) {
-      console.error('Cannot send message - WebSocket not connected');
+      console.error('[READINESS-DEBUG] Cannot send message - WebSocket not connected');
       return false;
     }
     
     try {
-      this.websocket!.send(typeof data === 'string' ? data : JSON.stringify(data));
+      const message = typeof data === 'string' ? data : JSON.stringify(data);
+      
+      // Add special logging for client_ready messages
+      if (typeof data === 'object' && data.type === 'client_ready') {
+        const msgId = data.message_id?.substring(0, 8) || 'unknown';
+        const convId = data.conversation_id?.substring(0, 8) || 'unknown';
+        console.log(`[READINESS-DEBUG] SENDING WebSocket message: type=${data.type}, msgId=${msgId}, convId=${convId}`);
+      }
+      
+      this.websocket!.send(message);
       return true;
     } catch (error) {
-      console.error('Error sending WebSocket message:', error);
+      console.error('[READINESS-DEBUG] Error sending WebSocket message:', error);
       return false;
     }
   }

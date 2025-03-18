@@ -167,52 +167,98 @@ class ConnectionManager:
     async def mark_client_ready(self, message_id: str, conversation_id: str, user_id: int):
         """Mark a client as ready to receive updates for a specific message"""
         if not message_id or not conversation_id:
-            logger.warning(f"Cannot mark client ready - missing IDs: message_id={message_id}, conversation_id={conversation_id}")
+            logger.warning(f"[READINESS-DEBUG] Cannot mark client ready - missing IDs: message_id={message_id}, conversation_id={conversation_id}")
             return False
         
         # Use composite key of message_id + conversation_id to ensure uniqueness
         ready_key = f"{message_id}:{conversation_id}:{user_id}"
+        logger.info(f"[READINESS-DEBUG] Creating ready_key: {ready_key[:30]}...")
         
         async with self._ready_lock:
+            # Check if already marked ready
+            if ready_key in self.client_ready_state:
+                timestamp = self.client_ready_state[ready_key]
+                logger.info(f"[READINESS-DEBUG] Client was already marked ready at {timestamp}")
+            
+            # Mark as ready
             self.client_ready_state[ready_key] = time.time()
-            logger.info(f"Client marked ready for updates: {ready_key}")
+            logger.info(f"[READINESS-DEBUG] Client marked ready: key={ready_key[:30]}...")
+            
+            # Log current readiness state size
+            logger.info(f"[READINESS-DEBUG] Current readiness tracking size: {len(self.client_ready_state)} entries")
+            
         return True
     
     async def wait_for_client_ready(self, message_id: str, conversation_id: str, user_id: int, timeout: float = 5.0):
         """Wait for client to signal readiness before sending updates"""
         if not message_id or not conversation_id:
-            logger.warning(f"Cannot wait for client readiness - missing IDs")
+            logger.warning(f"[READINESS-DEBUG] Cannot wait for client readiness - missing IDs")
             return False
             
         ready_key = f"{message_id}:{conversation_id}:{user_id}"
         start_time = time.time()
         
+        logger.info(f"[READINESS-DEBUG] Starting wait for client readiness: key={ready_key[:30]}..., timeout={timeout}s")
+        
+        # Log the current state of the readiness tracking
+        logger.info(f"[READINESS-DEBUG] Current readiness state size: {len(self.client_ready_state)} entries")
+        
         # Check if client is already ready
         async with self._ready_lock:
             if ready_key in self.client_ready_state:
-                logger.info(f"Client already ready for: {ready_key}")
+                ready_time = self.client_ready_state[ready_key]
+                time_diff = time.time() - ready_time
+                logger.info(f"[READINESS-DEBUG] Client ALREADY ready for: key={ready_key[:30]}... (set {time_diff:.2f}s ago)")
                 return True
+            else:
+                # Log a few keys to help debug key mismatches
+                if self.client_ready_state:
+                    sample_keys = list(self.client_ready_state.keys())[:3]
+                    logger.info(f"[READINESS-DEBUG] Current keys in readiness state: {[k[:30] for k in sample_keys]}")
         
         # Wait for readiness signal
+        check_count = 0
         while time.time() - start_time < timeout:
+            check_count += 1
             async with self._ready_lock:
                 if ready_key in self.client_ready_state:
-                    logger.info(f"Client became ready for: {ready_key}")
+                    elapsed = time.time() - start_time
+                    logger.info(f"[READINESS-DEBUG] Client BECAME READY after {elapsed:.2f}s, checks={check_count}, key={ready_key[:30]}...")
                     return True
+            
+            # Log periodically, not on every check
+            if check_count % 10 == 0:
+                elapsed = time.time() - start_time
+                logger.info(f"[READINESS-DEBUG] Still waiting for readiness: elapsed={elapsed:.2f}s, checks={check_count}")
+            
             # Sleep shortly to avoid tight loop
             await asyncio.sleep(0.1)
         
-        logger.warning(f"Timeout waiting for client readiness: {ready_key}")
+        elapsed = time.time() - start_time
+        logger.warning(f"[READINESS-DEBUG] TIMEOUT waiting for client readiness: elapsed={elapsed:.2f}s, key={ready_key[:30]}...")
         return False
         
     async def clear_client_ready(self, message_id: str, conversation_id: str, user_id: int):
         """Clear client readiness state after processing is complete"""
+        if not message_id or not conversation_id:
+            logger.warning(f"[READINESS-DEBUG] Cannot clear client readiness - missing IDs")
+            return
+            
         ready_key = f"{message_id}:{conversation_id}:{user_id}"
+        
+        logger.info(f"[READINESS-DEBUG] Attempting to clear readiness state: key={ready_key[:30]}...")
         
         async with self._ready_lock:
             if ready_key in self.client_ready_state:
+                ready_time = self.client_ready_state[ready_key]
+                time_diff = time.time() - ready_time
                 del self.client_ready_state[ready_key]
-                logger.info(f"Cleared client readiness state: {ready_key}")
+                logger.info(f"[READINESS-DEBUG] CLEARED client readiness state: key={ready_key[:30]}... (was set {time_diff:.2f}s ago)")
+            else:
+                logger.warning(f"[READINESS-DEBUG] Key not found when clearing readiness state: key={ready_key[:30]}...")
+        
+        # Log current state size after clearing
+        logger.info(f"[READINESS-DEBUG] Readiness state size after clearing: {len(self.client_ready_state)} entries")
     
     async def send_section_update(
         self,

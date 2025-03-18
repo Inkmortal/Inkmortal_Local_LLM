@@ -270,18 +270,26 @@ async def stream_message(
             
             try:
                 # CRITICAL: Wait for client to signal readiness before processing
-                logger.info(f"Waiting for client readiness signal: message={assistant_message_id}, conversation={conversation_id}")
+                logger.info(f"[READINESS-DEBUG] **STREAM START** WebSocket: beginning readiness wait for msgId={assistant_message_id[:8]}, convId={conversation_id[:8]}")
+                
+                # First check if we have valid connection
+                connections = manager.active_connections.get(user.id, [])
+                logger.info(f"[READINESS-DEBUG] Active WebSocket connections for user {user.id}: {len(connections)}")
+                
+                # Wait for client readiness
+                wait_start = time.time()
                 client_ready = await manager.wait_for_client_ready(
                     message_id=assistant_message_id,
                     conversation_id=conversation_id,
                     user_id=user.id,
                     timeout=10.0  # Wait up to 10 seconds for client readiness
                 )
+                wait_duration = time.time() - wait_start
                 
                 if not client_ready:
-                    logger.warning(f"Client not ready, proceeding anyway for: message={assistant_message_id}")
+                    logger.warning(f"[READINESS-DEBUG] **WAIT FAILED** Client not ready after {wait_duration:.2f}s, proceeding anyway for: msgId={assistant_message_id[:8]}")
                 else:
-                    logger.info(f"Client ready, beginning streaming: message={assistant_message_id}")
+                    logger.info(f"[READINESS-DEBUG] **WAIT SUCCESS** Client ready after {wait_duration:.2f}s, beginning streaming: msgId={assistant_message_id[:8]}")
                 
                 # Initial update to show processing has started
                 await manager.send_update(user.id, {
@@ -541,18 +549,26 @@ async def stream_message(
             try:
                 # CRITICAL: Wait for client to signal readiness before processing
                 # Note: For SSE clients, we still wait for readiness signal via WebSocket
-                logger.info(f"Waiting for client readiness signal (SSE): message={assistant_message_id}, conversation={conversation_id}")
+                logger.info(f"[READINESS-DEBUG] **STREAM START** SSE: beginning readiness wait for msgId={assistant_message_id[:8]}, convId={conversation_id[:8]}")
+                
+                # First check if we have valid connection
+                connections = manager.active_connections.get(user.id, [])
+                logger.info(f"[READINESS-DEBUG] Active WebSocket connections for user {user.id}: {len(connections)}")
+                
+                # Wait for client readiness
+                wait_start = time.time()
                 client_ready = await manager.wait_for_client_ready(
                     message_id=assistant_message_id,
                     conversation_id=conversation_id,
                     user_id=user.id,
                     timeout=10.0  # Wait up to 10 seconds for client readiness
                 )
+                wait_duration = time.time() - wait_start
                 
                 if not client_ready:
-                    logger.warning(f"Client not ready (SSE), proceeding anyway for: message={assistant_message_id}")
+                    logger.warning(f"[READINESS-DEBUG] **WAIT FAILED** SSE client not ready after {wait_duration:.2f}s, proceeding anyway for: msgId={assistant_message_id[:8]}")
                 else:
-                    logger.info(f"Client ready (SSE), beginning streaming: message={assistant_message_id}")
+                    logger.info(f"[READINESS-DEBUG] **WAIT SUCCESS** SSE client ready after {wait_duration:.2f}s, beginning streaming: msgId={assistant_message_id[:8]}")
                 
                 # Process streaming chunks
                 logger.info(f"Starting SSE streaming for message {assistant_message_id}")

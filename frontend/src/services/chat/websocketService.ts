@@ -54,7 +54,7 @@ export function registerMessageId(frontendId: string, backendId: string, convers
  */
 export function signalClientReady(messageId: string, conversationId: string): boolean {
   if (!messageId || !conversationId) {
-    console.error('[websocketService] Cannot signal readiness - missing IDs');
+    console.error('[READINESS-DEBUG] Cannot signal readiness - missing IDs');
     return false;
   }
   
@@ -67,12 +67,21 @@ export function signalClientReady(messageId: string, conversationId: string): bo
       timestamp: Date.now()
     };
     
+    console.log(`[READINESS-DEBUG] ATTEMPTING TO SEND client_ready signal: msgId=${messageId.substring(0,8)}, convId=${conversationId.substring(0,8)}, connectionState=${getConnectionStatus()}`);
+    
     // Send over WebSocket
     const sent = sendWebSocketMessage(readySignal);
-    console.log(`[websocketService] Client readiness signal ${sent ? 'sent' : 'failed'} for message ${messageId}`);
+    
+    // Log success or failure with more details
+    if (sent) {
+      console.log(`[READINESS-DEBUG] SUCCESS: client_ready signal sent for message ${messageId.substring(0,8)}`);
+    } else {
+      console.error(`[READINESS-DEBUG] FAILED: Could not send client_ready signal for message ${messageId.substring(0,8)}, connection may be closed`);
+    }
+    
     return sent;
   } catch (error) {
-    console.error('[websocketService] Error signaling client readiness:', error);
+    console.error('[READINESS-DEBUG] ERROR: Exception when signaling client readiness:', error);
     return false;
   }
 }
@@ -81,17 +90,22 @@ export function signalClientReady(messageId: string, conversationId: string): bo
  * Wait for readiness confirmation from server
  */
 export function waitForReadinessConfirmation(messageId: string, timeout: number = 5000): Promise<boolean> {
+  console.log(`[READINESS-DEBUG] WAITING for readiness confirmation: msgId=${messageId.substring(0,8)}, timeout=${timeout}ms`);
+  
   return new Promise((resolve) => {
     // Set timeout for maximum wait time
     const timeoutId = setTimeout(() => {
-      console.warn(`[websocketService] Readiness confirmation timeout for ${messageId}`);
+      console.warn(`[READINESS-DEBUG] TIMEOUT: No readiness confirmation received for ${messageId.substring(0,8)} within ${timeout}ms`);
       eventEmitter.off('readiness_confirmed', handler);
       resolve(false);
     }, timeout);
     
     // Define handler that will resolve when readiness is confirmed
     const handler = (data: any) => {
+      console.log(`[READINESS-DEBUG] Received event type 'readiness_confirmed': receivedMsgId=${data.message_id?.substring(0,8)}, expectedMsgId=${messageId.substring(0,8)}, confirmed=${data.readiness_confirmed}`);
+      
       if (data.message_id === messageId && data.readiness_confirmed) {
+        console.log(`[READINESS-DEBUG] SUCCESS: Received valid readiness confirmation for ${messageId.substring(0,8)}`);
         clearTimeout(timeoutId);
         eventEmitter.off('readiness_confirmed', handler);
         resolve(true);

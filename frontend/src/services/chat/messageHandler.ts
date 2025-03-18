@@ -130,7 +130,7 @@ class MessageHandler {
   public registerMessageIdMapping(frontendId: string, backendId: string, conversationId: string): void {
     // Add validation to prevent empty IDs
     if (!frontendId || !backendId) {
-      console.error('Cannot register message ID mapping with empty IDs');
+      console.error('[READINESS-DEBUG] Cannot register message ID mapping with empty IDs');
       return;
     }
     
@@ -150,7 +150,10 @@ class MessageHandler {
     this.messageIdMappings.push(mapping);
     
     // More detailed logging for debugging
-    console.log(`[CRITICAL] Registered message ID mapping: frontend=${frontendId}, backend=${backendId}, conversation=${conversationId}`);
+    console.log(`[READINESS-DEBUG] Registered message ID mapping: frontend=${frontendId.substring(0,8)}, backend=${backendId.substring(0,8)}, conversation=${conversationId.substring(0,8)}`);
+    
+    // Log total active mappings
+    console.log(`[READINESS-DEBUG] Total active message ID mappings: ${this.messageIdMappings.length}`)
     
     // Initialize empty content to avoid undefined issues
     if (!this.messageContent.has(frontendId)) {
@@ -229,8 +232,18 @@ class MessageHandler {
     try {
       // Basic message validation
       if (!message.type) {
-        console.warn('Received WebSocket message without type:', message);
+        console.warn('[READINESS-DEBUG] Received WebSocket message without type:', message);
         return;
+      }
+      
+      // Special logging for readiness protocol messages
+      if (message.type === 'readiness_confirmed') {
+        console.log(`[READINESS-DEBUG] RECEIVED readiness_confirmed message:`, {
+          messageId: message.message_id?.substring(0, 8) || 'missing',
+          conversationId: message.conversation_id?.substring(0, 8) || 'missing',
+          timestamp: message.timestamp || 'missing',
+          confirmed: message.readiness_confirmed
+        });
       }
       
       // Enhanced logging for all incoming messages

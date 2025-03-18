@@ -156,24 +156,31 @@ export async function processMessage(
       
       // NEW: If using WebSocket, send readiness signal to backend
       if (useWebSocket) {
-        console.log('[messageService] Sending client readiness signal');
+        console.log('[READINESS-DEBUG] Starting client readiness protocol for message flow');
+        console.log('[READINESS-DEBUG] Message details: ' + 
+                   `msgId=${sessionData.assistantMessageId.substring(0,8)}, ` + 
+                   `convId=${sessionData.conversationId.substring(0,8)}`);
+        
         const readySignalSent = signalClientReady(
           sessionData.assistantMessageId,
           sessionData.conversationId
         );
         
         if (readySignalSent) {
-          console.log('[messageService] Client readiness signal sent, waiting for confirmation');
+          console.log('[READINESS-DEBUG] Now waiting for backend readiness confirmation');
           
           // Wait for backend to confirm readiness before proceeding
+          const waitStart = Date.now();
           const confirmed = await waitForReadinessConfirmation(sessionData.assistantMessageId, 3000);
+          const waitDuration = Date.now() - waitStart;
+          
           if (confirmed) {
-            console.log('[messageService] Client readiness confirmed by backend');
+            console.log(`[READINESS-DEBUG] SUCCESS: Client readiness confirmed by backend after ${waitDuration}ms`);
           } else {
-            console.warn('[messageService] No readiness confirmation from backend, proceeding anyway');
+            console.warn(`[READINESS-DEBUG] WARNING: No readiness confirmation from backend after ${waitDuration}ms, proceeding anyway`);
           }
         } else {
-          console.warn('[messageService] Failed to send readiness signal, proceeding anyway');
+          console.warn('[READINESS-DEBUG] ERROR: Failed to send readiness signal, proceeding anyway');
         }
       }
     } else {

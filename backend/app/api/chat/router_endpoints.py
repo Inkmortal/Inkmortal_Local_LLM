@@ -81,11 +81,16 @@ async def websocket_endpoint(
                 while True:
                     # Wait for any message from client
                     data = await websocket.receive_text()
+                    logger.info(f"[READINESS-DEBUG] WebSocket message received: length={len(data)}, first20={data[:20]}")
                     
                     # Try to parse as JSON for command messages
                     try:
+                        # Log raw data for debugging complex problems
+                        logger.info(f"[READINESS-DEBUG] RAW WS message received: data={data[:100]}...")
+                        
                         message = json.loads(data)
                         message_type = message.get("type")
+                        logger.info(f"[READINESS-DEBUG] Parsed message type: {message_type}")
                         
                         # Handle client_ready signals - critical for streaming sync
                         if message_type == "client_ready":
@@ -93,21 +98,25 @@ async def websocket_endpoint(
                             message_id = message.get("message_id")
                             conversation_id = message.get("conversation_id")
                             
+                            logger.info(f"[READINESS-DEBUG] Received client_ready signal: msgId={message_id[:8]}, convId={conversation_id[:8]}, userId={user.id}")
+                            
                             if message_id and conversation_id:
-                                logger.info(f"Received client_ready signal for message {message_id} in conversation {conversation_id}")
-                                
                                 # Store this readiness state in the connection manager
                                 # This will tell the stream_message function to begin streaming
-                                await manager.mark_client_ready(message_id, conversation_id, user.id)
+                                ready_result = await manager.mark_client_ready(message_id, conversation_id, user.id)
+                                logger.info(f"[READINESS-DEBUG] Mark ready result: {ready_result}")
                                 
                                 # Send confirmation back to client
-                                await websocket.send_json({
+                                conf_msg = {
                                     "type": "readiness_confirmed",
                                     "message_id": message_id,
                                     "conversation_id": conversation_id,
                                     "readiness_confirmed": True,
                                     "timestamp": time.time()
-                                })
+                                }
+                                logger.info(f"[READINESS-DEBUG] Sending confirmation: msgId={message_id[:8]}")
+                                await websocket.send_json(conf_msg)
+                                logger.info(f"[READINESS-DEBUG] Confirmation sent successfully")
                                 continue
                         
                         # For other message types or heartbeats, just acknowledge
