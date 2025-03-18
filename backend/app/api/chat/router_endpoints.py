@@ -79,10 +79,42 @@ async def websocket_endpoint(
             try:
                 # Keep connection alive and handle messages
                 while True:
-                    # Wait for any message from client (heartbeat)
+                    # Wait for any message from client
                     data = await websocket.receive_text()
-                    # Echo back a simple acknowledgment
-                    await websocket.send_json({"type": "ack"})
+                    
+                    # Try to parse as JSON for command messages
+                    try:
+                        message = json.loads(data)
+                        message_type = message.get("type")
+                        
+                        # Handle client_ready signals - critical for streaming sync
+                        if message_type == "client_ready":
+                            # Extract IDs from the message
+                            message_id = message.get("message_id")
+                            conversation_id = message.get("conversation_id")
+                            
+                            if message_id and conversation_id:
+                                logger.info(f"Received client_ready signal for message {message_id} in conversation {conversation_id}")
+                                
+                                # Store this readiness state in the connection manager
+                                # This will tell the stream_message function to begin streaming
+                                await manager.mark_client_ready(message_id, conversation_id, user.id)
+                                
+                                # Send confirmation back to client
+                                await websocket.send_json({
+                                    "type": "readiness_confirmed",
+                                    "message_id": message_id,
+                                    "conversation_id": conversation_id,
+                                    "readiness_confirmed": True,
+                                    "timestamp": time.time()
+                                })
+                                continue
+                        
+                        # For other message types or heartbeats, just acknowledge
+                        await websocket.send_json({"type": "ack"})
+                    except json.JSONDecodeError:
+                        # Not JSON, treat as heartbeat
+                        await websocket.send_json({"type": "ack"})
             except WebSocketDisconnect:
                 # Handle disconnection
                 manager.disconnect(websocket, user.id)

@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Any, Literal
 import logging
 import json
 import time
+import asyncio
 
 from ...auth.models import User
 
@@ -26,6 +27,10 @@ class ConnectionManager:
         self.request_tracking: Dict[str, int] = {}
         # Connection timestamps for monitoring
         self.connection_times: Dict[WebSocket, float] = {}
+        # Client readiness tracking - message ID to timestamp of readiness signal
+        self.client_ready_state: Dict[str, float] = {}
+        # Lock for synchronized access to the client_ready_state
+        self._ready_lock = asyncio.Lock()
     
     async def connect(self, websocket: WebSocket, user_id: int):
         """Add a new websocket connection for a user"""
@@ -158,6 +163,56 @@ class ConnectionManager:
         """Remove a request from tracking when complete"""
         if request_id in self.request_tracking:
             del self.request_tracking[request_id]
+    
+    async def mark_client_ready(self, message_id: str, conversation_id: str, user_id: int):
+        """Mark a client as ready to receive updates for a specific message"""
+        if not message_id or not conversation_id:
+            logger.warning(f"Cannot mark client ready - missing IDs: message_id={message_id}, conversation_id={conversation_id}")
+            return False
+        
+        # Use composite key of message_id + conversation_id to ensure uniqueness
+        ready_key = f"{message_id}:{conversation_id}:{user_id}"
+        
+        async with self._ready_lock:
+            self.client_ready_state[ready_key] = time.time()
+            logger.info(f"Client marked ready for updates: {ready_key}")
+        return True
+    
+    async def wait_for_client_ready(self, message_id: str, conversation_id: str, user_id: int, timeout: float = 5.0):
+        """Wait for client to signal readiness before sending updates"""
+        if not message_id or not conversation_id:
+            logger.warning(f"Cannot wait for client readiness - missing IDs")
+            return False
+            
+        ready_key = f"{message_id}:{conversation_id}:{user_id}"
+        start_time = time.time()
+        
+        # Check if client is already ready
+        async with self._ready_lock:
+            if ready_key in self.client_ready_state:
+                logger.info(f"Client already ready for: {ready_key}")
+                return True
+        
+        # Wait for readiness signal
+        while time.time() - start_time < timeout:
+            async with self._ready_lock:
+                if ready_key in self.client_ready_state:
+                    logger.info(f"Client became ready for: {ready_key}")
+                    return True
+            # Sleep shortly to avoid tight loop
+            await asyncio.sleep(0.1)
+        
+        logger.warning(f"Timeout waiting for client readiness: {ready_key}")
+        return False
+        
+    async def clear_client_ready(self, message_id: str, conversation_id: str, user_id: int):
+        """Clear client readiness state after processing is complete"""
+        ready_key = f"{message_id}:{conversation_id}:{user_id}"
+        
+        async with self._ready_lock:
+            if ready_key in self.client_ready_state:
+                del self.client_ready_state[ready_key]
+                logger.info(f"Cleared client readiness state: {ready_key}")
     
     async def send_section_update(
         self,

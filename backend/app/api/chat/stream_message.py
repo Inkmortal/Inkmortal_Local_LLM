@@ -269,6 +269,20 @@ async def stream_message(
             # Only update database once at the end, not during streaming
             
             try:
+                # CRITICAL: Wait for client to signal readiness before processing
+                logger.info(f"Waiting for client readiness signal: message={assistant_message_id}, conversation={conversation_id}")
+                client_ready = await manager.wait_for_client_ready(
+                    message_id=assistant_message_id,
+                    conversation_id=conversation_id,
+                    user_id=user.id,
+                    timeout=10.0  # Wait up to 10 seconds for client readiness
+                )
+                
+                if not client_ready:
+                    logger.warning(f"Client not ready, proceeding anyway for: message={assistant_message_id}")
+                else:
+                    logger.info(f"Client ready, beginning streaming: message={assistant_message_id}")
+                
                 # Initial update to show processing has started
                 await manager.send_update(user.id, {
                     "type": "message_update",
@@ -509,6 +523,13 @@ async def stream_message(
             finally:
                 # Cleanup
                 manager.untrack_request(request_obj.timestamp.timestamp())
+                
+                # Clear client readiness state
+                await manager.clear_client_ready(
+                    message_id=assistant_message_id,
+                    conversation_id=conversation_id,
+                    user_id=user.id
+                )
         
         # STEP 6: Define SSE streaming handler
         async def event_stream():
@@ -518,6 +539,21 @@ async def stream_message(
             # Only update database once at the end, not during streaming
             
             try:
+                # CRITICAL: Wait for client to signal readiness before processing
+                # Note: For SSE clients, we still wait for readiness signal via WebSocket
+                logger.info(f"Waiting for client readiness signal (SSE): message={assistant_message_id}, conversation={conversation_id}")
+                client_ready = await manager.wait_for_client_ready(
+                    message_id=assistant_message_id,
+                    conversation_id=conversation_id,
+                    user_id=user.id,
+                    timeout=10.0  # Wait up to 10 seconds for client readiness
+                )
+                
+                if not client_ready:
+                    logger.warning(f"Client not ready (SSE), proceeding anyway for: message={assistant_message_id}")
+                else:
+                    logger.info(f"Client ready (SSE), beginning streaming: message={assistant_message_id}")
+                
                 # Process streaming chunks
                 logger.info(f"Starting SSE streaming for message {assistant_message_id}")
                 
@@ -637,6 +673,13 @@ async def stream_message(
             finally:
                 # Cleanup
                 manager.untrack_request(request_obj.timestamp.timestamp())
+                
+                # Clear client readiness state
+                await manager.clear_client_ready(
+                    message_id=assistant_message_id,
+                    conversation_id=conversation_id,
+                    user_id=user.id
+                )
         
         # STEP 7: Return appropriate response based on transport mode
         if transport_mode == "websocket":
