@@ -140,25 +140,35 @@ export function useChatConversations(
       dispatch({ type: ChatActionType.ADD_CONVERSATION, payload: conversation });
       
       // Map API message format to our Message format with improved structure
-      const messages: Message[] = conversationData.messages.map((msg: any) => ({
-        id: msg.id,
-        conversationId: msg.conversation_id,
-        role: msg.role as MessageRole,
-        content: msg.content,
-        status: MessageStatus.COMPLETE, // Mark all as complete
-        timestamp: new Date(msg.created_at).getTime(),
-        // CRITICAL FIX: Ensure consistent message structure with sections
-        sections: {
-          response: { 
-            content: msg.role === MessageRole.ASSISTANT ? msg.content : '', 
-            visible: true 
-          },
-          thinking: { 
-            content: '', 
-            visible: true 
+      // Ensure all necessary fields exist even if backend doesn't provide them
+      const messages: Message[] = conversationData.messages.map((msg: any) => {
+        // Create base message with required fields
+        const message: Message = {
+          id: msg.id,
+          conversationId: msg.conversation_id || conversationId, // Use param if field missing
+          role: msg.role as MessageRole,
+          content: msg.content || '',
+          status: msg.status ? (msg.status as MessageStatus) : MessageStatus.COMPLETE, // Use status from API or default
+          timestamp: new Date(msg.created_at).getTime(),
+          
+          // Add sections with defaults for consistent rendering
+          sections: {
+            response: { 
+              content: msg.role === MessageRole.ASSISTANT ? msg.content || '' : '', 
+              visible: true 
+            },
+            thinking: { 
+              content: '', 
+              visible: false 
+            }
           }
-        }
-      }));
+        };
+        
+        // Log message mapping for debugging
+        console.log(`[useChatConversations] Mapped message: ${msg.id}, conversation: ${message.conversationId}, role: ${msg.role}`);
+        
+        return message;
+      });
       
       // CRITICAL FIX: Verify last message status
       if (messages.length > 0) {

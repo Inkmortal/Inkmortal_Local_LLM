@@ -269,7 +269,13 @@ export async function sendChatMessage(
         assistantMessageId: messageId
       };
       
-      return await processMessage(message, sessionData, file, handlers);
+      const response = await processMessage(message, sessionData, file, handlers);
+      console.log('[messageService] Process message response for existing conversation:', {
+        success: response.success,
+        conversation_id: response.conversation_id,
+        message_id: response.message_id,
+      });
+      return response;
     }
     
     // For new conversations, do the two-phase process
@@ -277,9 +283,19 @@ export async function sendChatMessage(
     
     // Phase 1: Prepare conversation and get ID
     const sessionData = await prepareConversation(message, messageId);
+    console.log('[messageService] Conversation prepared:', {
+      conversationId: sessionData.conversationId,
+      assistantMessageId: sessionData.assistantMessageId
+    });
     
     // Phase 2: Process message with confirmed conversation ID
-    return await processMessage(message, sessionData, file, handlers);
+    const response = await processMessage(message, sessionData, file, handlers);
+    console.log('[messageService] Process message response for new conversation:', {
+      success: response.success,
+      conversation_id: response.conversation_id,
+      message_id: response.message_id,
+    });
+    return response;
   } catch (error) {
     console.error('[messageService] Complete message flow failed:', error);
     handlers.onError?.(error instanceof Error ? error.message : 'Unknown error');

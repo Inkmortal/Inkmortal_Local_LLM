@@ -121,7 +121,7 @@ def get_conversation(
         Message.conversation_id == conversation_id
     ).order_by(Message.created_at).all()
     
-    # Convert to response format
+    # Convert to response format with enhanced fields for frontend
     return {
         "id": conversation.id,
         "title": conversation.title,
@@ -130,9 +130,12 @@ def get_conversation(
         "messages": [
             {
                 "id": message.id,
+                "conversation_id": message.conversation_id,  # Add conversation_id explicitly
                 "role": message.role,
                 "content": message.content,
-                "created_at": message.created_at
+                "created_at": message.created_at,
+                "status": message.status or "complete",  # Add status field with default
+                "model": message.model,  # Include model info if available
             }
             for message in messages
         ]

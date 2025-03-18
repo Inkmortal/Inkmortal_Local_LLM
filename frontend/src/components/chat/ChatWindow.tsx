@@ -168,46 +168,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     currentTheme.colors.bgPrimary
   ]);
   
-  // Empty state content - lightweight version for conversation-specific empty state
-  // This is different from the welcome page (EmptyConversationView)
-  const emptyStateContent = (
-    <div className="w-full h-full flex items-center justify-center py-12 animate-fade-in">
-      <div className="text-center max-w-md px-4">
-        <div
-          className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center"
-          style={{
-            background: `linear-gradient(135deg, ${currentTheme.colors.accentPrimary}15, ${currentTheme.colors.accentSecondary}15)`,
-            border: `1px solid ${currentTheme.colors.borderColor}30`,
-            boxShadow: `0 0 20px ${currentTheme.colors.accentPrimary}10`
-          }}
-        >
-          <svg 
-            className="w-8 h-8" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ color: currentTheme.colors.accentPrimary }}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-          </svg>
-        </div>
-        <h3 
-          className="text-lg font-medium mb-2"
-          style={{ color: currentTheme.colors.textPrimary }}
-        >
-          Conversation Created
-        </h3>
-        <p 
-          className="mb-4 text-sm"
-          style={{ color: currentTheme.colors.textSecondary }}
-        >
-          Type your first message below to start chatting.
-        </p>
-      </div>
-    </div>
-  );
   
+  // Log message rendering for debugging
+  useEffect(() => {
+    if (messages.length > 0) {
+      console.log(`[ChatWindow] Rendering ${messages.length} messages`);
+      messages.forEach(msg => {
+        console.log(`[ChatWindow] Message: id=${msg.id}, role=${msg.role}, conversation=${msg.conversationId}, content length=${msg.content?.length || 0}`);
+      });
+    } else {
+      console.log('[ChatWindow] No messages to render');
+    }
+  }, [messages.length]);
+
   return (
     <div 
       ref={containerRef}
@@ -233,6 +206,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               zIndex: 0
             }}
           />
+        )}
+        
+        {/* Empty state message when conversation exists but has no messages */}
+        {messages.length === 0 && (
+          <div className="w-full h-96 flex items-center justify-center">
+            <div className="text-center max-w-md px-4">
+              <h3 className="text-lg font-medium mb-2" style={{ color: currentTheme.colors.textPrimary }}>
+                New Conversation
+              </h3>
+              <p className="text-sm" style={{ color: currentTheme.colors.textSecondary }}>
+                Type your message below to begin chatting.
+              </p>
+            </div>
+          </div>
         )}
         
         {/* Message list */}

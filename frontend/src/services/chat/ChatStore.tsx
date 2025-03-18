@@ -210,11 +210,38 @@ export function ChatProvider({ children }: ChatProviderProps) {
       
       // Only proceed if we got a conversation back
       if (conversation) {
-        // If conversation has messages, add them to state
+        console.log(`[ChatStore] Received conversation with ${conversation.messages?.length || 0} messages`);
+        
+        // If conversation has messages, map them to our format and add them to state
         if (conversation.messages && conversation.messages.length > 0) {
-          conversation.messages.forEach(message => {
+          conversation.messages.forEach(msg => {
+            // Create properly formatted message with all required fields
+            const message: Message = {
+              id: msg.id,
+              conversationId: msg.conversation_id || id, // Use parameter if field missing
+              role: msg.role,
+              content: msg.content || '',
+              status: msg.status ? msg.status : MessageStatus.COMPLETE, // Use status or default
+              timestamp: new Date(msg.created_at).getTime(),
+              
+              // Include sections for rendering
+              sections: {
+                response: { 
+                  content: msg.role === MessageRole.ASSISTANT ? msg.content || '' : '', 
+                  visible: true 
+                },
+                thinking: { 
+                  content: '', 
+                  visible: false 
+                }
+              }
+            };
+            
+            console.log(`[ChatStore] Mapped message: id=${message.id}, role=${message.role}, conversation=${message.conversationId}`);
             dispatch({ type: ChatActionType.ADD_MESSAGE, payload: message });
           });
+        } else {
+          console.log(`[ChatStore] No messages found in conversation ${id}`);
         }
       }
     } catch (error) {
@@ -356,6 +383,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
               status: MessageStatus.ERROR
             }
           });
+        }
+        
+        // Handle URL navigation for newly created conversation
+        if (response && response.conversation_id && (!currentConversationId || currentConversationId !== response.conversation_id)) {
+          // Use window.location.href for reliable navigation across components
+          // This ensures sync between URL state and application state
+          window.location.href = `/chat/${response.conversation_id}`;
         }
         
         // Return response for router navigation

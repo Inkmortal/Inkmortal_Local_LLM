@@ -38,24 +38,9 @@ const ChatRouter: React.FC = () => {
     loadConversations();
   }, [loadConversations]);
   
-  // Listen for custom navigation events from useChat
-  useEffect(() => {
-    const handleConversationCreated = (event: CustomEvent) => {
-      const { conversationId } = event.detail;
-      console.log(`[ChatRouter] Received chat:conversation-created event for ID: ${conversationId}`);
-      
-      // Use React Router's navigate for proper routing
-      navigate(`/chat/${conversationId}`, { replace: true });
-    };
-    
-    // Add event listener
-    window.addEventListener('chat:conversation-created', handleConversationCreated as EventListener);
-    
-    // Clean up on unmount
-    return () => {
-      window.removeEventListener('chat:conversation-created', handleConversationCreated as EventListener);
-    };
-  }, [navigate]);
+  // No longer using custom events for navigation
+  // All navigation now happens directly via ChatStore with window.location
+  // This ensures a single source of truth for the active conversation ID
 
   // Handle conversationId parameter changes
   useEffect(() => {
@@ -188,27 +173,18 @@ const ChatRouter: React.FC = () => {
             <div className="w-full h-full flex flex-col relative">
               {/* Chat Window - Always show when we have an active conversation */}
               <div className="flex-grow overflow-hidden">
-                {/* If we have no messages but loading or generating is in progress, show a loading message */}
-                {conversationMessages.length === 0 && !isLoading && !isGenerating ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-center max-w-md px-4">
-                      <h3 className="text-lg font-medium mb-2">New Conversation</h3>
-                      <p className="text-sm opacity-80">Type your message below to begin chatting.</p>
-                    </div>
-                  </div>
-                ) : (
-                  <ChatWindow 
-                    messages={conversationMessages}
-                    isLoading={isLoading}
-                    isGenerating={isGenerating}
-                    onRegenerate={() => {
-                      console.log('[ChatRouter] Regenerate requested');
-                    }}
-                    onStopGeneration={() => {
-                      console.log('[ChatRouter] Stop generation requested');
-                    }}
-                  />
-                )}
+                {/* Always show ChatWindow when we have an active conversation */}
+                <ChatWindow 
+                  messages={conversationMessages}
+                  isLoading={isLoading}
+                  isGenerating={isGenerating}
+                  onRegenerate={() => {
+                    console.log('[ChatRouter] Regenerate requested');
+                  }}
+                  onStopGeneration={() => {
+                    console.log('[ChatRouter] Stop generation requested');
+                  }}
+                />
               </div>
               
               {/* Chat Input Area - Always present with active conversation */}
