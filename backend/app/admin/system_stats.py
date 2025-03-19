@@ -577,6 +577,15 @@ async def get_ollama_info(queue_manager: QueueManagerInterface) -> Dict[str, Any
             "requests": total_requests,
             "avgResponseTime": round(avg_response_time, 1) if avg_response_time else 0
         }
+    except Exception as e:
+        logger.error(f"Error getting Ollama info: {e}")
+        return {
+            "status": "Offline",
+            "model": settings.default_model,
+            "version": "Unknown",
+            "requests": 0,
+            "avgResponseTime": 0
+        }
 
 # Create a public endpoint for basic system info that doesn't require admin access
 @public_router.get("/model-info")
