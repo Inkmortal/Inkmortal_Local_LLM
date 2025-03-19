@@ -70,8 +70,8 @@ export const ChatConnectionProvider: React.FC<ChatConnectionProviderProps> = ({ 
   useEffect(() => {
     console.log('[ChatConnectionContext] Initializing persistent connection management');
     
-    // CRITICAL FIX: Use consistent token retrieval order (auth_token OR token)
-    tokenRef.current = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    // CRITICAL FIX: Use consistent token retrieval across the application
+    tokenRef.current = localStorage.getItem('authToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
     
     // Set up connection status listener
     const cleanup = connectionManager.addConnectionListener((connected: boolean) => {

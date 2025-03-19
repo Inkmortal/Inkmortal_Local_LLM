@@ -124,8 +124,8 @@ export async function processMessage(
 
   try {
     // Phase 2: Use ChatConnectionContext for WebSocket management
-    // CRITICAL FIX: Use consistent token retrieval (auth_token OR token)
-    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    // CRITICAL FIX: Use consistent token retrieval across the application
+    const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
     
     if (!token) {
       throw new Error('No authentication token available');
