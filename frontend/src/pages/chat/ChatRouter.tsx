@@ -42,8 +42,8 @@ const ChatRouter: React.FC = () => {
   useEffect(() => {
     console.log('[ChatRouter] Initializing chat environment');
     
-    // Get token from localStorage
-    tokenRef.current = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    // Get token from localStorage - CRITICAL FIX: Use consistent token retrieval
+    tokenRef.current = localStorage.getItem('authToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
     
     // Establish persistent WebSocket connection at chat UI load time
     if (tokenRef.current) {

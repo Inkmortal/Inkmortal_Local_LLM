@@ -18,6 +18,7 @@ export const API_PATHS = {
     USERS: '/auth/users',
     ACTIVITIES: '/auth/activities',
     MODELS: '/admin/system/models',
-    SET_MODEL: '/admin/system/model'
+    SET_MODEL: '/admin/system/model',
+    SUMMARIZATION_SETTINGS: '/admin/system/summarization-settings'
   }
 };

@@ -16,6 +16,7 @@
   - 05_web_interface.md - Chat interface implementation
   - 06_admin_panel.md - Administration interface
   - 07_monitoring.md - System monitoring and logging
+  - conversation_summarization.md - Conversation context management with summarization
 
 ## Document Dependencies
 ```mermaid

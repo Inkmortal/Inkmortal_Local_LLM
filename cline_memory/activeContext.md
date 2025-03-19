@@ -63,9 +63,10 @@ The implementation order prioritizes the chat interface and its core functionali
    - Add refresh controls for manual data updates.
 
 4. **Implement Conversation History and Context Windows:**
-   - Further enhance conversation history management.
-   - Develop a strategy for managing context windows (limiting the amount of past conversation sent to the LLM).
-   - Consider conversation summarization or backend RAG solution for important entities.
+   - ✅ Develop a strategy for managing context windows (summarization approach designed)
+   - Implement conversation summarization with tiktoken-based token counting
+   - Add admin controls for summarization model and context size configurations
+   - Consider backend RAG solution for important entities.
    - Implement ability to update notes on important entities.
 
 ## Web Interface Educational Focus
@@ -117,8 +118,8 @@ The web interface should emphasize educational assistant capabilities:
 
 ## Open Questions
 
-- What is the best data model for storing conversation history?
-- What is the most effective strategy for managing context windows?
+- What is the best data model for storing conversation history? ✅ (Answered with conversation_summary field)
+- What is the most effective strategy for managing context windows? ✅ (Answered with summarization approach)
 - What specific tools should be integrated with the LLM, and how should they be represented in the chat interface?
 - How to optimize file upload handling for different file types and sizes?
 - What improvements can be made to the admin dashboard for better monitoring?

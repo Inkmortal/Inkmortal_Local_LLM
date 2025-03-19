@@ -72,7 +72,10 @@ async def get_models(
         if not ollama_connected:
             return {
                 "models": [],
-                "active_model": settings.default_model
+                "active_model": settings.default_model,
+                "summarization_model": settings.summarization_model,
+                "max_context_tokens": settings.max_context_tokens,
+                "summarization_threshold": settings.summarization_threshold
             }
         
         # Get available models from Ollama
@@ -84,7 +87,10 @@ async def get_models(
                     logger.error(f"Failed to fetch models from Ollama: {response.status_code}")
                     return {
                         "models": [],
-                        "active_model": settings.default_model
+                        "active_model": settings.default_model,
+                        "summarization_model": settings.summarization_model,
+                        "max_context_tokens": settings.max_context_tokens,
+                        "summarization_threshold": settings.summarization_threshold
                     }
                 
                 ollama_models = response.json().get("models", [])
@@ -126,19 +132,28 @@ async def get_models(
                 
                 return {
                     "models": models,
-                    "active_model": settings.default_model
+                    "active_model": settings.default_model,
+                    "summarization_model": settings.summarization_model,
+                    "max_context_tokens": settings.max_context_tokens,
+                    "summarization_threshold": settings.summarization_threshold
                 }
         except Exception as e:
             logger.error(f"Error fetching models from Ollama: {e}")
             return {
                 "models": [],
-                "active_model": settings.default_model
+                "active_model": settings.default_model,
+                "summarization_model": settings.summarization_model,
+                "max_context_tokens": settings.max_context_tokens,
+                "summarization_threshold": settings.summarization_threshold
             }
     except Exception as e:
         logger.error(f"Error getting models: {e}")
         return {
             "models": [],
-            "active_model": settings.default_model
+            "active_model": settings.default_model,
+            "summarization_model": settings.summarization_model,
+            "max_context_tokens": settings.max_context_tokens,
+            "summarization_threshold": settings.summarization_threshold
         }
 
 @router.put("/model")
@@ -199,6 +214,139 @@ async def set_active_model(
             "success": False,
             "model": settings.default_model,
             "message": f"Failed to set active model: {str(e)}"
+        }
+
+@router.put("/summarization-settings")
+async def update_summarization_settings(
+    settings_data: Dict[str, Any],
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Update summarization settings"""
+    try:
+        # Ensure config table exists
+        ensure_config_table_exists(db)
+        
+        # Extract settings from request
+        summarization_model = settings_data.get("summarization_model")
+        max_context_tokens = settings_data.get("max_context_tokens")
+        summarization_threshold = settings_data.get("summarization_threshold")
+        
+        if not summarization_model and not max_context_tokens and not summarization_threshold:
+            return {
+                "success": False,
+                "message": "No settings provided to update"
+            }
+        
+        # Update settings in memory and database
+        updates_made = []
+        
+        # Update summarization model if provided
+        if summarization_model:
+            settings.summarization_model = summarization_model
+            
+            try:
+                cursor = db.execute(text("SELECT COUNT(*) FROM config WHERE key = 'summarization_model'"))
+                exists = cursor.scalar() > 0
+                
+                if exists:
+                    db.execute(
+                        text("UPDATE config SET value = :value WHERE key = 'summarization_model'"),
+                        {"value": summarization_model}
+                    )
+                else:
+                    db.execute(
+                        text("INSERT INTO config (key, value, description) VALUES (:key, :value, :description)"),
+                        {"key": "summarization_model", "value": summarization_model, 
+                         "description": "Model used for conversation summarization"}
+                    )
+                
+                updates_made.append("summarization_model")
+            except Exception as db_error:
+                logger.error(f"Error updating summarization_model in database: {db_error}")
+        
+        # Update max_context_tokens if provided
+        if max_context_tokens is not None:
+            try:
+                max_tokens = int(max_context_tokens)
+                settings.max_context_tokens = max_tokens
+                
+                cursor = db.execute(text("SELECT COUNT(*) FROM config WHERE key = 'max_context_tokens'"))
+                exists = cursor.scalar() > 0
+                
+                if exists:
+                    db.execute(
+                        text("UPDATE config SET value = :value WHERE key = 'max_context_tokens'"),
+                        {"value": str(max_tokens)}
+                    )
+                else:
+                    db.execute(
+                        text("INSERT INTO config (key, value, description) VALUES (:key, :value, :description)"),
+                        {"key": "max_context_tokens", "value": str(max_tokens), 
+                         "description": "Maximum context window size in tokens"}
+                    )
+                
+                updates_made.append("max_context_tokens")
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid max_context_tokens value: {e}")
+                return {
+                    "success": False,
+                    "message": f"Invalid max_context_tokens value: {max_context_tokens}"
+                }
+        
+        # Update summarization_threshold if provided
+        if summarization_threshold is not None:
+            try:
+                threshold = int(summarization_threshold)
+                if threshold < 1 or threshold > 100:
+                    return {
+                        "success": False,
+                        "message": "summarization_threshold must be between 1 and 100"
+                    }
+                
+                settings.summarization_threshold = threshold
+                
+                cursor = db.execute(text("SELECT COUNT(*) FROM config WHERE key = 'summarization_threshold'"))
+                exists = cursor.scalar() > 0
+                
+                if exists:
+                    db.execute(
+                        text("UPDATE config SET value = :value WHERE key = 'summarization_threshold'"),
+                        {"value": str(threshold)}
+                    )
+                else:
+                    db.execute(
+                        text("INSERT INTO config (key, value, description) VALUES (:key, :value, :description)"),
+                        {"key": "summarization_threshold", "value": str(threshold), 
+                         "description": "Percentage of max context at which to trigger summarization"}
+                    )
+                
+                updates_made.append("summarization_threshold")
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid summarization_threshold value: {e}")
+                return {
+                    "success": False,
+                    "message": f"Invalid summarization_threshold value: {summarization_threshold}"
+                }
+        
+        # Commit all changes
+        db.commit()
+        
+        return {
+            "success": True,
+            "updates": updates_made,
+            "message": f"Successfully updated summarization settings: {', '.join(updates_made)}",
+            "current_settings": {
+                "summarization_model": settings.summarization_model,
+                "max_context_tokens": settings.max_context_tokens,
+                "summarization_threshold": settings.summarization_threshold
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error updating summarization settings: {e}")
+        return {
+            "success": False,
+            "message": f"Failed to update summarization settings: {str(e)}"
         }
 
 @router.get("/stats")

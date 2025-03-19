@@ -43,6 +43,11 @@ class Settings:
         # Default model from environment variable, will be updated from DB if available
         self._default_model = os.getenv("DEFAULT_MODEL", "llama3.3:latest")
         
+        # Summarization settings with defaults from environment
+        self.max_context_tokens = int(os.getenv("MAX_CONTEXT_TOKENS", "120000"))
+        self.summarization_threshold = int(os.getenv("SUMMARIZATION_THRESHOLD", "70"))
+        self.summarization_model = os.getenv("SUMMARIZATION_MODEL", self._default_model)
+        
         # Try to load model settings from database if not in testing mode
         if env_name != "testing" and "pytest" not in os.getenv("PYTHONPATH", "") and not os.getenv("PYTEST_CURRENT_TEST"):
             try:
@@ -70,9 +75,27 @@ class Settings:
                         if row and row[0]:
                             self._default_model = row[0]
                             print(f"Loaded default model from database: {self._default_model}")
+                            
+                        # Get summarization settings
+                        config_keys = ['summarization_model', 'max_context_tokens', 'summarization_threshold']
+                        for key in config_keys:
+                            result = connection.execute(text(
+                                f"SELECT value FROM config WHERE key = '{key}'"
+                            ))
+                            row = result.fetchone()
+                            if row and row[0]:
+                                if key == 'summarization_model':
+                                    self.summarization_model = row[0]
+                                    print(f"Loaded {key} from database: {self.summarization_model}")
+                                elif key == 'max_context_tokens':
+                                    self.max_context_tokens = int(row[0])
+                                    print(f"Loaded {key} from database: {self.max_context_tokens}")
+                                elif key == 'summarization_threshold':
+                                    self.summarization_threshold = int(row[0])
+                                    print(f"Loaded {key} from database: {self.summarization_threshold}")
             except Exception as e:
-                print(f"Warning: Failed to load default model from database: {str(e)}")
-                print("Using default model from environment variable instead")
+                print(f"Warning: Failed to load settings from database: {str(e)}")
+                print("Using environment variable defaults instead")
         
         # Ollama API settings
         self.use_langchain = False  # Always use direct Ollama API

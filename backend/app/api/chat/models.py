@@ -19,6 +19,10 @@ class Conversation(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
+    # Context management fields
+    conversation_summary = Column(Text, nullable=True)
+    last_summarized_message_id = Column(String(36), nullable=True)
+    
     # Relationships
     user = relationship("User", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")

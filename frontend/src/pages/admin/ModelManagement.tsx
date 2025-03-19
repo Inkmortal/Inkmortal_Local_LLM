@@ -2,7 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import { fetchModels, setActiveModel, OllamaModel } from '../../services/admin';
+import { 
+  fetchModels, 
+  setActiveModel, 
+  updateSummarizationSettings,
+  OllamaModel, 
+  SummarizationSettings 
+} from '../../services/admin';
 
 // Format byte size to readable format
 const formatSize = (bytes: number): string => {
@@ -34,6 +40,12 @@ const ModelManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [changeInProgress, setChangeInProgress] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // Summarization settings state
+  const [summarizationModel, setSummarizationModel] = useState<string>('');
+  const [maxContextTokens, setMaxContextTokens] = useState<number>(120000);
+  const [summarizationThreshold, setSummarizationThreshold] = useState<number>(70);
+  const [summarizationSettingsChanged, setSummarizationSettingsChanged] = useState<boolean>(false);
 
   // Fetch models
   const fetchModelData = useCallback(async () => {
@@ -46,6 +58,9 @@ const ModelManagement: React.FC = () => {
       if (response) {
         setModels(response.models);
         setActiveModelState(response.active_model);
+        setSummarizationModel(response.summarization_model);
+        setMaxContextTokens(response.max_context_tokens);
+        setSummarizationThreshold(response.summarization_threshold);
       } else {
         setError('Failed to load models');
       }
@@ -85,6 +100,40 @@ const ModelManagement: React.FC = () => {
     } catch (err) {
       console.error('Error setting active model:', err);
       setError('An error occurred while changing the model');
+    } finally {
+      setChangeInProgress(false);
+    }
+  };
+  
+  // Handle summarization settings update
+  const handleSummarizationSettingsChange = () => {
+    setSummarizationSettingsChanged(true);
+  };
+  
+  // Save summarization settings
+  const saveSummarizationSettings = async () => {
+    try {
+      setChangeInProgress(true);
+      setSuccessMessage(null);
+      setError(null);
+      
+      const settings: SummarizationSettings = {
+        summarization_model: summarizationModel,
+        max_context_tokens: maxContextTokens,
+        summarization_threshold: summarizationThreshold
+      };
+      
+      const response = await updateSummarizationSettings(settings);
+      
+      if (response && response.success) {
+        setSuccessMessage(`Summarization settings updated successfully: ${response.message}`);
+        setSummarizationSettingsChanged(false);
+      } else {
+        setError('Failed to update summarization settings');
+      }
+    } catch (err) {
+      console.error('Error updating summarization settings:', err);
+      setError('An error occurred while updating summarization settings');
     } finally {
       setChangeInProgress(false);
     }
@@ -263,6 +312,126 @@ const ModelManagement: React.FC = () => {
               Refresh Models
             </Button>
           </div>
+          {/* Summarization Settings Card */}
+          <Card title="Conversation Summarization Settings" className="mt-6">
+            <p className="mb-4 text-sm" style={{ color: currentTheme.colors.textMuted }}>
+              Configure how conversations are summarized when they exceed context window limits.
+              These settings control when and how the AI summarizes long conversations to maintain context.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Summarization Model */}
+              <div>
+                <label 
+                  className="block mb-2 text-sm font-medium" 
+                  style={{ color: currentTheme.colors.textSecondary }}
+                >
+                  Summarization Model
+                </label>
+                <select
+                  className="w-full p-2 rounded-md border"
+                  style={{ 
+                    backgroundColor: currentTheme.colors.backgroundSecondary,
+                    color: currentTheme.colors.textPrimary,
+                    borderColor: currentTheme.colors.borderColor
+                  }}
+                  value={summarizationModel}
+                  onChange={(e) => {
+                    setSummarizationModel(e.target.value);
+                    handleSummarizationSettingsChange();
+                  }}
+                  disabled={isLoading || changeInProgress}
+                >
+                  {models.map((model) => (
+                    <option key={model.name} value={model.name}>
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                  The model used for creating conversation summaries
+                </p>
+              </div>
+              
+              {/* Max Context Tokens */}
+              <div>
+                <label 
+                  className="block mb-2 text-sm font-medium" 
+                  style={{ color: currentTheme.colors.textSecondary }}
+                >
+                  Max Context Tokens
+                </label>
+                <input
+                  type="number"
+                  className="w-full p-2 rounded-md border"
+                  style={{ 
+                    backgroundColor: currentTheme.colors.backgroundSecondary,
+                    color: currentTheme.colors.textPrimary,
+                    borderColor: currentTheme.colors.borderColor
+                  }}
+                  value={maxContextTokens}
+                  onChange={(e) => {
+                    setMaxContextTokens(parseInt(e.target.value));
+                    handleSummarizationSettingsChange();
+                  }}
+                  min={1000}
+                  max={200000}
+                  step={1000}
+                  disabled={isLoading || changeInProgress}
+                />
+                <p className="mt-1 text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                  Maximum tokens to send to LLM (128k recommended for most models)
+                </p>
+              </div>
+              
+              {/* Summarization Threshold */}
+              <div>
+                <label 
+                  className="block mb-2 text-sm font-medium" 
+                  style={{ color: currentTheme.colors.textSecondary }}
+                >
+                  Summarization Threshold (%)
+                </label>
+                <input
+                  type="range"
+                  className="w-full"
+                  min={10}
+                  max={95}
+                  step={5}
+                  value={summarizationThreshold}
+                  onChange={(e) => {
+                    setSummarizationThreshold(parseInt(e.target.value));
+                    handleSummarizationSettingsChange();
+                  }}
+                  disabled={isLoading || changeInProgress}
+                />
+                <div className="flex justify-between text-xs mt-1" style={{ color: currentTheme.colors.textMuted }}>
+                  <span>10%</span>
+                  <span>{summarizationThreshold}%</span>
+                  <span>95%</span>
+                </div>
+                <p className="mt-1 text-xs" style={{ color: currentTheme.colors.textMuted }}>
+                  Percentage of max context that triggers summarization
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+              <Button
+                variant="primary"
+                size="sm"
+                className="rounded-md"
+                onClick={saveSummarizationSettings}
+                disabled={isLoading || changeInProgress || !summarizationSettingsChanged}
+                style={{
+                  backgroundColor: summarizationSettingsChanged ? currentTheme.colors.accentPrimary : `${currentTheme.colors.accentPrimary}50`,
+                  color: summarizationSettingsChanged ? '#fff' : `${currentTheme.colors.textPrimary}50`
+                }}
+              >
+                {changeInProgress ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
+          </Card>
         </>
       )}
     </div>

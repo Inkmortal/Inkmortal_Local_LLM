@@ -17,6 +17,8 @@ from datetime import datetime
 from .websocket import manager, APPEND, REPLACE
 from .models import Conversation, Message
 from .utils import get_queue, generate_id, strip_editor_html
+from .token_service import count_messages_tokens
+from .summarization_service import SummarizationService
 from ...config import settings
 from ...db import SessionLocal
 from ...queue import QueuedRequest, RequestPriority
@@ -129,36 +131,35 @@ async def stream_message(
                       media_type="text/event-stream" if transport_mode == "sse" else "application/json")
             
         
-        # STEP 2: Prepare message context for LLM request
-        # Get previous conversation messages
-        previous_messages = db.query(Message).filter(
-            Message.conversation_id == conversation_id
-        ).order_by(Message.created_at).all()
+        # STEP 2: Prepare message context for LLM request with summarization
+        # Initialize summarization service
+        summarization_service = SummarizationService(db, user.id)
         
-        # Format messages for the context window
-        formatted_messages = [
-            # System message first
-            {
-                "role": "system", 
-                "content": "You are a helpful AI assistant that answers questions accurately and concisely. You have access to the complete conversation history for context."
-            }
-        ]
+        # Check if summarization is needed
+        needs_summarization, token_count = await summarization_service.check_context_size(conversation_id)
         
-        # Add conversation history (excluding the just-added messages)
-        for prev_msg in previous_messages:
-            if prev_msg.id not in [user_message_id, assistant_message_id]:
-                formatted_messages.append({
-                    "role": prev_msg.role,
-                    "content": strip_editor_html(prev_msg.content)
-                })
+        # Generate summary if needed
+        if needs_summarization:
+            logger.info(f"Conversation {conversation_id} needs summarization ({token_count} tokens), generating summary...")
+            success, summary_result = await summarization_service.generate_summary(conversation_id)
+            if success:
+                logger.info(f"Summary generated successfully: {len(summary_result)} chars")
+            else:
+                logger.warning(f"Summary generation failed: {summary_result}")
         
-        # Add the current user message
+        # Get optimized context with summary and recent messages
+        # Note: we set include_current_message=True because we'll add the current message next
+        formatted_messages = summarization_service.get_optimized_context(conversation_id, include_current_message=True)
+        
+        # Add the current user message (not yet stored in the database)
         formatted_messages.append({
             "role": "user",
             "content": strip_editor_html(message_text)
         })
         
-        logger.info(f"Including {len(formatted_messages)} messages in conversation context")
+        # Log context info
+        context_token_count = count_messages_tokens(formatted_messages, settings.default_model)
+        logger.info(f"Including {len(formatted_messages)} messages in conversation context ({context_token_count} tokens)")
         
         # STEP 3: Create request object for queue
         request_body = {

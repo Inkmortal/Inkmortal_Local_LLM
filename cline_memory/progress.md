@@ -109,7 +109,8 @@
 -   [x] Added conversation listing and selection in sidebar.
 -   [x] Implemented URL-based conversation tracking.
 -   [ ] Develop strategy for managing context windows:
-    -   [ ] Conversation summarization.
+    -   [x] Designed conversation summarization approach for managing long conversations.
+    -   [ ] Implement conversation summarization with tiktoken-based token counting.
     -   [ ] Backend RAG solution for important entities.
     -   [ ] Ability to update notes on important entities.
 -   [ ] Implement embeddings.
