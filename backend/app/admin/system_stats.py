@@ -19,7 +19,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 from ..db import get_db, Base
-from ..auth.utils import get_current_admin_user
+from ..auth.utils import get_current_admin_user, get_current_user
 from ..auth.models import User
 from ..queue import get_queue_manager, QueueManagerInterface
 from ..config import settings
@@ -35,8 +35,9 @@ class Config(Base):
     key = Column(String(100), primary_key=True)
     value = Column(String(255), nullable=True)
 
-# Create router
+# Create routers
 router = APIRouter(prefix="/admin/system", tags=["admin", "system"])
+public_router = APIRouter(prefix="/api/system", tags=["system"])
 
 # Helper function to ensure config table exists
 def ensure_config_table_exists(db: Session):
@@ -576,12 +577,27 @@ async def get_ollama_info(queue_manager: QueueManagerInterface) -> Dict[str, Any
             "requests": total_requests,
             "avgResponseTime": round(avg_response_time, 1) if avg_response_time else 0
         }
-    except Exception as e:
-        logger.error(f"Error getting Ollama info: {e}")
+
+# Create a public endpoint for basic system info that doesn't require admin access
+@public_router.get("/model-info")
+async def get_public_model_info(
+    queue_manager: QueueManagerInterface = Depends(get_queue_manager)
+) -> Dict[str, Any]:
+    """Get basic model information for chat interface"""
+    try:
+        # Get queue status
+        status = await queue_manager.get_status()
+        ollama_connected = status.get("ollama_connected", False)
+        
         return {
-            "status": "Offline",
+            "status": "online" if ollama_connected else "offline",
             "model": settings.default_model,
-            "version": "Unknown",
-            "requests": 0,
-            "avgResponseTime": 0
+            "online": ollama_connected
+        }
+    except Exception as e:
+        logger.error(f"Error getting public model info: {e}")
+        return {
+            "status": "offline",
+            "model": settings.default_model,
+            "online": False
         }

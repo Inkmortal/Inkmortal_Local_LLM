@@ -5,7 +5,7 @@ import { useAuth } from '../../../../context/AuthContext';
 import Button from '../../../../components/ui/Button';
 import ThemeSelector from '../../../../components/ui/ThemeSelector';
 import ROUTES from '../../../../routes.constants';
-import { fetchSystemStats } from '../../../../services/admin';
+import { fetchModelInfo } from '../../../../services/chat';
 
 interface ChatHeaderProps {
   showHistorySidebar: boolean;
@@ -46,35 +46,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     setNewTitle(conversationTitle);
   }, [conversationTitle]);
   
-  // Fetch current model name and system status from system stats
+  // Fetch current model name and system status using the public endpoint
   useEffect(() => {
     const getModelInfo = async () => {
       try {
-        const stats = await fetchSystemStats();
-        // Handle different potential data structures from backend
-        if (stats) {
+        const modelInfo = await fetchModelInfo();
+        if (modelInfo) {
           // Set system status
-          if (stats.ollama && 'online' in stats.ollama) {
-            setSystemStatus(stats.ollama.online ? 'online' : 'offline');
-          } else if (stats.status === 'online' || stats.status === 'offline') {
-            setSystemStatus(stats.status);
-          } else if (stats.ollama_status === 'online' || stats.ollama_status === 'offline') {
-            setSystemStatus(stats.ollama_status);
-          } else {
-            setSystemStatus('online'); // Default to online if we can fetch stats at all
-          }
-
-          // Determine model name from various possible structures
-          if (stats.ollama && stats.ollama.model) {
-            setModelName(stats.ollama.model);
-          } else if (stats.model) {
-            setModelName(stats.model);
-          } else if (stats.models && stats.models.default) {
-            setModelName(stats.models.default);
-          } else if (stats.default_model) {
-            setModelName(stats.default_model);
-          } else if (stats.config && stats.config.model) {
-            setModelName(stats.config.model);
+          setSystemStatus(modelInfo.status);
+          
+          // Set model name
+          if (modelInfo.model) {
+            setModelName(modelInfo.model);
           }
         }
       } catch (error) {

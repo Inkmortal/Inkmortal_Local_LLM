@@ -3,6 +3,26 @@
  * Centralizes exports from all chat service modules
  */
 
+import { fetchApi } from '../../config/api';
+
+// Public endpoint to get model information
+export const fetchModelInfo = async () => {
+  try {
+    const response = await fetchApi('/api/system/model-info');
+    if (!response.success) {
+      throw new Error(`Failed to fetch model info: ${response.error || response.status}`);
+    }
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching model info:', error);
+    return {
+      status: 'offline',
+      model: 'Unknown',
+      online: false
+    };
+  }
+};
+
 // Re-export types
 export { MessageStatus, ChatMode } from './types';
 export type { 

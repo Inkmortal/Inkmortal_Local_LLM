@@ -134,9 +134,10 @@ app.include_router(registration_tokens_router)
 app.include_router(api_keys_router)
 # Include new admin monitoring routers
 from .admin.queue_monitor import router as queue_monitor_router
-from .admin.system_stats import router as system_stats_router
+from .admin.system_stats import router as system_stats_router, public_router as public_system_router
 app.include_router(queue_monitor_router)
-app.include_router(system_stats_router)
+app.include_router(system_stats_router)
+app.include_router(public_system_router)  # Public system endpoints that don't require admin
 app.include_router(chat_router)
 app.include_router(artifacts_router)
 
