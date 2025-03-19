@@ -309,7 +309,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       
       try {
         // Register message ID with streaming context early, before sending
-        registerMessage(assistantMessageId, assistantMessageId, currentConversationId || 'pending');
+        registerMessageId(assistantMessageId, assistantMessageId, currentConversationId || 'pending');
         
         // Phase 2: Send to backend (using two-phase approach in messageService)
         console.log('[ChatStore] Sending message to backend', { currentConversationId });
