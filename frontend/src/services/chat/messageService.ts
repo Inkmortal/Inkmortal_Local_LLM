@@ -124,7 +124,8 @@ export async function processMessage(
 
   try {
     // Phase 2: Use ChatConnectionContext for WebSocket management
-    const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+    // CRITICAL FIX: Use consistent token retrieval (auth_token OR token)
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     
     if (!token) {
       throw new Error('No authentication token available');
@@ -134,19 +135,28 @@ export async function processMessage(
     onStart();
     onStatusUpdate(MessageStatus.PREPARING);
     
-    // Get the connection context - we'll use a direct approach since hooks can't be used in regular functions
-    // This requires changes to the overall architecture for proper integration
+    // Get the connection context from window global
     let useWebSocket = false;
-    let connectionManager;
+    let connectionManager = null;
     
     try {
-      // Access global window property as a workaround to get the singleton connection state
-      // This is a temporary solution until proper context integration is implemented
+      // CRITICAL FIX: Access global window property to avoid hooks inside function limitation
       if (window.__chatConnection && typeof window.__chatConnection.isConnected === 'function') {
         connectionManager = window.__chatConnection;
         useWebSocket = connectionManager.isConnected();
+        console.log('[messageService] Found existing ChatConnectionContext via global property');
       } else {
-        console.warn('[messageService] ChatConnectionContext not available, falling back to direct connection');
+        // Fallback: try to connect using window._currentWebSocketToken if available
+        if (window._currentWebSocketToken) {
+          console.log('[messageService] Attempting to use fallback connection mechanism');
+          
+          // We'll use the token we just retrieved since we know it's valid
+          window._currentWebSocketToken = token;
+          useWebSocket = true;
+        } else {
+          console.warn('[messageService] ChatConnectionContext not available, will use polling');
+          window._currentWebSocketToken = token; // Store for future use
+        }
       }
     } catch (e) {
       console.error('[messageService] Error accessing connection context:', e);
@@ -156,7 +166,7 @@ export async function processMessage(
     if (useWebSocket) {
       console.log('[messageService] Using existing persistent WebSocket connection');
     } else {
-      console.warn('[messageService] No active WebSocket connection, will use polling fallback');
+      console.warn('[messageService] No active WebSocket connection available, will use polling fallback');
     }
     
     // Register message ID mapping before sending request
@@ -180,44 +190,36 @@ export async function processMessage(
                    `msgId=${sessionData.assistantMessageId.substring(0,8)}, ` + 
                    `convId=${sessionData.conversationId.substring(0,8)}`);
         
-        // Ensure connection is valid before proceeding
-        if (!connectionManager.validateConnection()) {
-          console.warn('[READINESS-DEBUG] Connection validation failed - may not be active');
+        // Create readiness signal
+        const readySignal = {
+          type: 'client_ready',
+          message_id: sessionData.assistantMessageId,
+          conversation_id: sessionData.conversationId,
+          timestamp: Date.now()
+        };
+        
+        // Send using the persistent connection
+        const readySignalSent = connectionManager.sendMessage(readySignal);
+        
+        if (readySignalSent) {
+          console.log('[READINESS-DEBUG] Successfully sent client_ready signal using persistent connection');
+          
+          // Wait briefly for backend processing - no need to wait for explicit confirmation
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Verify connection is still active
+          if (!connectionManager.validateConnection()) {
+            console.error('[READINESS-DEBUG] Connection lost after sending readiness signal!');
+            useWebSocket = false;
+          } else {
+            console.log('[READINESS-DEBUG] Connection remains active after readiness signal');
+          }
+        } else {
+          console.warn('[READINESS-DEBUG] Failed to send readiness signal, will use polling');
           useWebSocket = false;
         }
-        
-        // Only proceed with readiness protocol if connection is valid
-        if (useWebSocket) {
-          // Create readiness signal
-          const readySignal = {
-            type: 'client_ready',
-            message_id: sessionData.assistantMessageId,
-            conversation_id: sessionData.conversationId,
-            timestamp: Date.now()
-          };
-          
-          // Send directly using the persistent connection
-          const readySignalSent = connectionManager.sendMessage(readySignal);
-          
-          if (readySignalSent) {
-            console.log('[READINESS-DEBUG] Client ready signal sent successfully');
-            
-            // Wait a moment to allow readiness to be processed
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Verify connection is still active
-            if (!connectionManager.validateConnection()) {
-              console.error('[READINESS-DEBUG] WebSocket disconnected after sending readiness signal!');
-              console.error('[READINESS-DEBUG] This is the critical bug we are fixing');
-              useWebSocket = false;
-            } else {
-              console.log('[READINESS-DEBUG] WebSocket connection maintained after readiness signal');
-            }
-          } else {
-            console.warn('[READINESS-DEBUG] ERROR: Failed to send readiness signal, proceeding anyway');
-            useWebSocket = false;
-          }
-        }
+      } else {
+        console.log('[READINESS-DEBUG] No valid connection for client_ready protocol, skipping');
       }
     } else {
       console.error('[messageService] Cannot register message - missing IDs');

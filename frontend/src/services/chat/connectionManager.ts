@@ -37,6 +37,11 @@ class ConnectionManager {
   private connectionPromise: Promise<boolean> | null = null;
   private lastHeartbeatResponse = 0;
   private connectionStatus = ConnectionStatus.DISCONNECTED;
+  
+  // CRITICAL FIX: Additional debug tracking for connection issues
+  private connectionStartTime = 0;
+  private lastMethodCallStack = '';
+  private lastMessagesSent: any[] = [];
 
   // Handler references for proper cleanup
   private boundVisibilityHandler: any = null;
@@ -206,6 +211,13 @@ class ConnectionManager {
     if (this.websocket?.readyState === WebSocket.OPEN) {
       console.log('[connectionManager] WebSocket already connected - reusing existing connection');
       this.updateConnectionStatus(ConnectionStatus.CONNECTED);
+      
+      // CRITICAL FIX: Expose WebSocket instance for debugging connection issues
+      if (typeof window !== 'undefined') {
+        window._currentWebSocket = this.websocket;
+        window._currentConnectionStatus = 'REUSED_EXISTING';
+      }
+      
       return Promise.resolve(true);
     }
     
@@ -226,8 +238,13 @@ class ConnectionManager {
       });
     }
     
-    // Clean up any resources before connecting
-    this.cleanupResources();
+    // CRITICAL FIX: Only clean up if we actually need a new connection
+    if (!this.websocket || this.websocket.readyState === WebSocket.CLOSED) {
+      console.log('[connectionManager] Creating new WebSocket connection');
+      this.cleanupResources();
+    } else {
+      console.log('[connectionManager] Reusing existing WebSocket instance in state: ' + this.websocket.readyState);
+    }
     
     this.isConnecting = true;
     this.updateConnectionStatus(ConnectionStatus.CONNECTING);
@@ -250,6 +267,12 @@ class ConnectionManager {
         
         this.websocket = new WebSocket(wsUrl);
         
+        // CRITICAL FIX: Expose WebSocket instance for debugging connection issues
+        if (typeof window !== 'undefined') {
+          window._currentWebSocket = this.websocket;
+          window._currentConnectionStatus = 'NEW_CONNECTION';
+        }
+        
         // Setup event handlers with proper binding to prevent "this" context issues
         this.websocket.onopen = this.handleOpen.bind(this, resolve);
         this.websocket.onclose = this.handleClose.bind(this, reject);
@@ -269,22 +292,60 @@ class ConnectionManager {
     return this.connectionPromise;
   }
 
-  // Handle connection open
+  // Handle connection open with enhanced tracking
   private handleOpen(resolve: (value: boolean) => void): void {
-    console.log('WebSocket connection opened successfully');
+    const now = Date.now();
+    console.log('[connectionManager] WebSocket connection opened successfully');
+    
+    // CRITICAL FIX: Track connection start time for debugging early closures
+    this.connectionStartTime = now;
+    this.lastHeartbeatResponse = now;
+    this.lastMessagesSent = [];
+    
+    // Update global tracking
+    if (typeof window !== 'undefined') {
+      window._currentConnectionStatus = 'CONNECTED';
+    }
+    
     this.cleanupTimeouts();
     this.isConnecting = false;
     this.reconnectAttempts = 0;
-    this.lastHeartbeatResponse = Date.now();
     this.startHeartbeat();
     this.updateConnectionStatus(ConnectionStatus.CONNECTED);
     resolve(true);
   }
 
-  // Handle connection close
+  // Handle connection close with enhanced debugging and reconnection
   private handleClose(reject: (reason: Error) => void, event: CloseEvent): void {
     const wasConnected = this.websocket?.readyState === WebSocket.OPEN;
-    console.log(`WebSocket closed with code ${event.code}: ${event.reason}`);
+    
+    // CRITICAL FIX: Enhanced debug logging to catch premature connection closure
+    console.log(`[connectionManager] WebSocket closed with code ${event.code}: ${event.reason}`);
+    console.log(`[connectionManager] Connection had been open for: ${this.lastHeartbeatResponse - (this.connectionStartTime || 0)}ms`);
+    console.log(`[connectionManager] Last WebSocket method call stack: ${this.lastMethodCallStack || 'unknown'}`);
+    
+    // Update global tracking
+    if (typeof window !== 'undefined') {
+      window._currentConnectionStatus = `CLOSED_CODE_${event.code}`;
+    }
+    
+    // CRITICAL FIX: If connection closed very quickly (< 1000ms), likely a bug in signalClientReady
+    const connectionDuration = Date.now() - (this.connectionStartTime || 0);
+    if (wasConnected && connectionDuration < 1000) {
+      console.error(`[CRITICAL-BUG] WebSocket connection closed after only ${connectionDuration}ms!`);
+      console.error('[CRITICAL-BUG] This is likely the cause of first message streaming issues');
+      
+      // Track last few messages for debugging
+      console.error(`[CRITICAL-BUG] Last messages sent: ${JSON.stringify(this.lastMessagesSent || [])}`);
+      
+      // CRITICAL FIX: If we detect an early closure after client_ready, try to prevent disconnection
+      if (this.lastMessagesSent && 
+          this.lastMessagesSent.some(msg => 
+            typeof msg === 'object' && msg.type === 'client_ready')) {
+        console.log('[CRITICAL-BUG] Detected client_ready message before closure - this is the exact bug!');
+      }
+    }
+    
     this.cleanupTimeouts();
     this.isConnecting = false;
     
@@ -293,10 +354,10 @@ class ConnectionManager {
     
     // Only attempt reconnect for unexpected closures and if we have an auth token
     if (this.authToken && event.code !== 1000 && event.code !== 1001) {
-      console.log('Unexpected WebSocket closure - attempting reconnect');
+      console.log('[connectionManager] Unexpected WebSocket closure - attempting reconnect');
       this.attemptReconnect();
     } else {
-      console.log('Expected WebSocket closure or no auth token - not reconnecting');
+      console.log('[connectionManager] Expected WebSocket closure or no auth token - not reconnecting');
       // Reset state on expected closure
       this.websocket = null;
       this.connectionPromise = null;
@@ -656,8 +717,16 @@ class ConnectionManager {
     return this.validateConnection();
   }
 
-  // Send a message over the WebSocket
+  // Send a message over the WebSocket with enhanced tracking
   public sendMessage(data: any): boolean {
+    // CRITICAL FIX: Track the call stack to help debug connection issues
+    try {
+      const stackTrace = new Error().stack || '';
+      this.lastMethodCallStack = stackTrace;
+    } catch (e) {
+      // Ignore errors in stack tracking
+    }
+    
     if (!this.isConnected()) {
       console.error('[READINESS-DEBUG] Cannot send message - WebSocket not connected');
       return false;
@@ -666,11 +735,26 @@ class ConnectionManager {
     try {
       const message = typeof data === 'string' ? data : JSON.stringify(data);
       
+      // CRITICAL FIX: Track messages for debugging connection issues
+      try {
+        // Keep the last 5 messages sent
+        this.lastMessagesSent.push(data);
+        if (this.lastMessagesSent.length > 5) {
+          this.lastMessagesSent.shift();
+        }
+      } catch (e) {
+        // Ignore errors in message tracking
+      }
+      
       // Add special logging for client_ready messages
       if (typeof data === 'object' && data.type === 'client_ready') {
         const msgId = data.message_id?.substring(0, 8) || 'unknown';
         const convId = data.conversation_id?.substring(0, 8) || 'unknown';
         console.log(`[READINESS-DEBUG] SENDING WebSocket message: type=${data.type}, msgId=${msgId}, convId=${convId}`);
+        
+        // CRITICAL FIX: Add more detailed logging for client_ready messages
+        console.log(`[READINESS-DEBUG] Current connection duration: ${Date.now() - this.connectionStartTime}ms`);
+        console.log(`[READINESS-DEBUG] Connection will remain active after client_ready message`);
       }
       
       this.websocket!.send(message);

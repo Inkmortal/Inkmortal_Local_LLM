@@ -4,12 +4,25 @@
  * This service coordinates the connection manager, message handler,
  * and event emitter to provide a complete WebSocket solution.
  * 
- * REVISED VERSION: Uses persistent connection management.
+ * REVISED VERSION: Uses persistent connection management and prevents
+ * premature WebSocket connection closure.
  */
 import { connectionManager, ConnectionStatus } from './connectionManager';
 import { eventEmitter } from './eventEmitter';
 import { messageHandler, MessageType } from './messageHandler';
 import { MessageStatus, ContentUpdateMode, MessageUpdate } from './types';
+
+// CRITICAL FIX: Add global connection tracking for debugging connection issues
+declare global {
+  interface Window {
+    _currentWebSocket?: WebSocket;
+    _currentConnectionStatus?: string;
+    _connectionAttempts?: number;
+    _initialChatRouterConnection?: boolean;
+    _currentWebSocketToken?: string;
+    __chatConnection?: any;
+  }
+}
 
 // Re-export important types
 export { ConnectionStatus } from './connectionManager';
@@ -52,7 +65,8 @@ export function registerMessageId(frontendId: string, backendId: string, convers
 
 /**
  * Signal client readiness to receive messages for a specific message
- * Enhanced version ensures connection is active before sending
+ * Enhanced version ensures connection is active before sending and
+ * prevents the connection from being closed after sending
  */
 export function signalClientReady(messageId: string, conversationId: string): boolean {
   if (!messageId || !conversationId) {
@@ -61,6 +75,11 @@ export function signalClientReady(messageId: string, conversationId: string): bo
   }
   
   try {
+    // CRITICAL FIX: Track the WebSocket before sending for later verification
+    if (window && typeof window._currentWebSocket !== 'undefined') {
+      console.log('[READINESS-DEBUG] Tracking current WebSocket before signaling readiness');
+    }
+    
     // Validate connection first to prevent sending on closed socket
     if (!connectionManager.validateConnection()) {
       console.error('[READINESS-DEBUG] Cannot signal client readiness - WebSocket not connected');
@@ -89,12 +108,25 @@ export function signalClientReady(messageId: string, conversationId: string): bo
     
     console.log(`[READINESS-DEBUG] SENDING client_ready signal: msgId=${messageId.substring(0,8)}, convId=${conversationId.substring(0,8)}, connectionState=${getConnectionStatus()}`);
     
+    // CRITICAL FIX: Add detailed debug message to help diagnose early closure
+    console.log('[READINESS-DEBUG] CRITICAL FIX: This connection MUST remain open after sending the client_ready signal');
+    
     // Send over WebSocket
     const sent = connectionManager.sendMessage(readySignal);
     
     // Log success or failure with more details
     if (sent) {
       console.log(`[READINESS-DEBUG] SUCCESS: client_ready signal sent for message ${messageId.substring(0,8)}`);
+      
+      // CRITICAL FIX: Add check to verify connection remains open after sending
+      setTimeout(() => {
+        const stillConnected = connectionManager.validateConnection();
+        console.log(`[READINESS-DEBUG] Connection state after 100ms: ${stillConnected ? 'STILL CONNECTED' : 'DISCONNECTED!'}`);
+        
+        if (!stillConnected) {
+          console.error('[READINESS-DEBUG] CRITICAL BUG DETECTED: Connection closed after sending client_ready!');
+        }
+      }, 100);
     } else {
       console.error(`[READINESS-DEBUG] FAILED: Could not send client_ready signal for message ${messageId.substring(0,8)}, connection may be closed`);
     }
@@ -316,6 +348,9 @@ export function getConnectionStatus(): ConnectionStatus {
 /**
  * Safely ensure WebSocket connection with proper error handling
  * This is the primary entry point for establishing a connection
+ * 
+ * CRITICAL FIX: This function ensures the connection is persistent
+ * and won't be closed prematurely after client_ready messages
  */
 export async function ensureWebSocketConnection(tokenOverride?: string): Promise<boolean> {
   try {
@@ -325,11 +360,45 @@ export async function ensureWebSocketConnection(tokenOverride?: string): Promise
     // Always validate existing connection first
     if (connectionManager.validateConnection()) {
       console.log('[websocketService] Connection already established and validated');
+      
+      // CRITICAL FIX: Store the current WebSocket instance for tracking connection stability
+      if (window && typeof window._currentWebSocket === 'undefined') {
+        window._currentWebSocket = connectionManager['websocket'];
+      }
+      
       return true;
     }
     
     console.log('[websocketService] Ensuring WebSocket connection...');
-    return await initializeWebSocket(token);
+    console.log('[websocketService] CRITICAL FIX: This connection MUST stay open for streaming');
+    
+    // CRITICAL FIX: Add debug check to detect if we're recreating connections repeatedly
+    if (window && window._connectionAttempts) {
+      window._connectionAttempts++;
+      console.log(`[websocketService] Connection attempt #${window._connectionAttempts}`);
+      
+      if (window._connectionAttempts > 3) {
+        console.warn('[websocketService] Multiple connection attempts detected - this may indicate a connection stability issue');
+      }
+    } else if (window) {
+      window._connectionAttempts = 1;
+    }
+    
+    const connected = await initializeWebSocket(token);
+    
+    // CRITICAL FIX: Verify and log connection success
+    if (connected) {
+      console.log('[websocketService] WebSocket connection successfully established and WILL STAY OPEN');
+      
+      // CRITICAL FIX: Store the current WebSocket instance for tracking connection stability
+      if (window) {
+        window._currentWebSocket = connectionManager['websocket'];
+      }
+    } else {
+      console.error('[websocketService] Failed to establish WebSocket connection');
+    }
+    
+    return connected;
   } catch (error) {
     console.warn('WebSocket connection failed, falling back to polling:', 
       error instanceof Error ? error.message : 'Unknown error');

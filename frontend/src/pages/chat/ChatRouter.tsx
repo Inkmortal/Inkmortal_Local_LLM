@@ -45,11 +45,17 @@ const ChatRouter: React.FC = () => {
     // Get token from localStorage
     tokenRef.current = localStorage.getItem('auth_token') || localStorage.getItem('token');
     
-    // Ensure persistent WebSocket connection at chat UI load time using the central context
+    // Establish persistent WebSocket connection at chat UI load time
     if (tokenRef.current) {
       // Use setTimeout to ensure component mount is complete before attempting connection
       setTimeout(() => {
         console.log('[ChatRouter] Ensuring persistent WebSocket connection via ChatConnectionContext');
+        
+        // CRITICAL FIX: Make connection manager available globally for non-React contexts
+        if (window && !window.__chatConnection) {
+          window.__chatConnection = chatConnection;
+          console.log('[ChatRouter] Exposed chatConnection to window.__chatConnection for non-React contexts');
+        }
         
         // Check if already connected first
         if (chatConnection.isConnected) {
@@ -57,10 +63,15 @@ const ChatRouter: React.FC = () => {
           setIsConnected(true);
         } else {
           console.log('[ChatRouter] Establishing new connection via ChatConnectionContext');
-          chatConnection.connect(tokenRef.current!)
+          chatConnection.connect(tokenRef.current)
             .then(connected => {
               console.log(`[ChatRouter] WebSocket connection established: ${connected}`);
               setIsConnected(connected);
+              
+              // Store token for reconnection attempts
+              if (connected && window) {
+                window._currentWebSocketToken = tokenRef.current;
+              }
             })
             .catch(error => {
               console.error('[ChatRouter] WebSocket connection error:', error);

@@ -16,6 +16,7 @@ import { connectionManager } from './connectionManager';
 declare global {
   interface Window {
     __chatConnection?: any;
+    _currentWebSocketToken?: string;
   }
 }
 
@@ -69,8 +70,8 @@ export const ChatConnectionProvider: React.FC<ChatConnectionProviderProps> = ({ 
   useEffect(() => {
     console.log('[ChatConnectionContext] Initializing persistent connection management');
     
-    // Get token
-    tokenRef.current = localStorage.getItem('token') || localStorage.getItem('auth_token');
+    // CRITICAL FIX: Use consistent token retrieval order (auth_token OR token)
+    tokenRef.current = localStorage.getItem('auth_token') || localStorage.getItem('token');
     
     // Set up connection status listener
     const cleanup = connectionManager.addConnectionListener((connected: boolean) => {
@@ -106,6 +107,12 @@ export const ChatConnectionProvider: React.FC<ChatConnectionProviderProps> = ({ 
         sendMessage: (message: any) => connectionManager.sendMessage(message),
         connect: (token: string) => connectionManager.connect(token)
       };
+      
+      // CRITICAL FIX: Also store token for use by other non-React contexts
+      if (tokenRef.current) {
+        window._currentWebSocketToken = tokenRef.current;
+        console.log('[ChatConnectionContext] Stored auth token in window._currentWebSocketToken for reconnection');
+      }
     }
     
     // Cleanup on unmount
