@@ -4,6 +4,9 @@
  * Implements a robust two-phase message sending process:
  * 1. Prepare: Create conversation and get conversation ID
  * 2. Process: Set up WebSocket listeners and queue message for LLM processing
+ * 
+ * Uses the central ChatConnectionContext for WebSocket management
+ * to ensure a single persistent connection throughout the chat session.
  */
 import { fetchApi } from '../../config/api';
 import { 
@@ -15,12 +18,10 @@ import {
 } from './types';
 import { executeServiceCall, handleApiResponse } from './errorHandling';
 import { 
-  isWebSocketConnected, 
-  waitForWebSocketConnection, 
-  registerMessageId,
-  signalClientReady,
-  waitForReadinessConfirmation
+  registerMessageId
 } from './websocketService';
+// Import connection context functions directly
+import { useChatConnection } from './ChatConnectionContext';
 
 // Constants
 const WS_CONNECTION_TIMEOUT_MS = 3000; // Wait up to 3 seconds for WS connection
@@ -93,6 +94,7 @@ export async function prepareConversation(
 /**
  * Phase 2: Process message
  * Sends message to LLM for processing after conversation is created
+ * Uses the ChatConnectionContext for a single persistent WebSocket connection
  * 
  * @param message Full message content
  * @param sessionData Conversation session data from phase 1
@@ -121,8 +123,8 @@ export async function processMessage(
   } = handlers;
 
   try {
-    // Phase 2: Verify WebSocket connection is established and persistent
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    // Phase 2: Use ChatConnectionContext for WebSocket management
+    const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
     
     if (!token) {
       throw new Error('No authentication token available');
@@ -132,22 +134,29 @@ export async function processMessage(
     onStart();
     onStatusUpdate(MessageStatus.PREPARING);
     
-    // IMPROVED APPROACH: Validate existing connection first, then reconnect if needed
-    // Never create a temporary connection - ensure one persistent connection throughout
-    let useWebSocket = isWebSocketConnected();
+    // Get the connection context - we'll use a direct approach since hooks can't be used in regular functions
+    // This requires changes to the overall architecture for proper integration
+    let useWebSocket = false;
+    let connectionManager;
     
-    // Only attempt to connect if not already connected
-    if (!useWebSocket) {
-      console.log('[messageService] No active WebSocket connection, establishing persistent connection');
-      useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
-    } else {
-      console.log('[messageService] Using existing WebSocket connection');
+    try {
+      // Access global window property as a workaround to get the singleton connection state
+      // This is a temporary solution until proper context integration is implemented
+      if (window.__chatConnection && typeof window.__chatConnection.isConnected === 'function') {
+        connectionManager = window.__chatConnection;
+        useWebSocket = connectionManager.isConnected();
+      } else {
+        console.warn('[messageService] ChatConnectionContext not available, falling back to direct connection');
+      }
+    } catch (e) {
+      console.error('[messageService] Error accessing connection context:', e);
     }
     
+    // Log connection status
     if (useWebSocket) {
-      console.log('[messageService] WebSocket connected and validated - will use for streaming');
+      console.log('[messageService] Using existing persistent WebSocket connection');
     } else {
-      console.warn('[messageService] WebSocket connection failed, will use polling fallback');
+      console.warn('[messageService] No active WebSocket connection, will use polling fallback');
     }
     
     // Register message ID mapping before sending request
@@ -165,56 +174,48 @@ export async function processMessage(
       );
       
       // Only use WebSocket readiness protocol if the connection is established
-      if (useWebSocket) {
+      if (useWebSocket && connectionManager) {
         console.log('[READINESS-DEBUG] Starting client readiness protocol on PERSISTENT connection');
         console.log('[READINESS-DEBUG] Message details: ' + 
                    `msgId=${sessionData.assistantMessageId.substring(0,8)}, ` + 
                    `convId=${sessionData.conversationId.substring(0,8)}`);
         
-        // CRITICAL: Validate connection one last time before sending
-        if (!isWebSocketConnected()) {
-          console.warn('[READINESS-DEBUG] Connection lost - attempting to reconnect');
-          useWebSocket = await waitForWebSocketConnection(token, WS_CONNECTION_TIMEOUT_MS);
-          
-          if (!useWebSocket) {
-            console.error('[READINESS-DEBUG] Failed to reconnect - will proceed without readiness protocol');
-          }
+        // Ensure connection is valid before proceeding
+        if (!connectionManager.validateConnection()) {
+          console.warn('[READINESS-DEBUG] Connection validation failed - may not be active');
+          useWebSocket = false;
         }
         
         // Only proceed with readiness protocol if connection is valid
         if (useWebSocket) {
-          const readySignalSent = signalClientReady(
-            sessionData.assistantMessageId,
-            sessionData.conversationId
-          );
+          // Create readiness signal
+          const readySignal = {
+            type: 'client_ready',
+            message_id: sessionData.assistantMessageId,
+            conversation_id: sessionData.conversationId,
+            timestamp: Date.now()
+          };
+          
+          // Send directly using the persistent connection
+          const readySignalSent = connectionManager.sendMessage(readySignal);
           
           if (readySignalSent) {
-            console.log('[READINESS-DEBUG] Now waiting for backend readiness confirmation');
+            console.log('[READINESS-DEBUG] Client ready signal sent successfully');
             
-            // Wait for backend to confirm readiness before proceeding
-            const waitStart = Date.now();
-            const confirmed = await waitForReadinessConfirmation(sessionData.assistantMessageId, 3000);
-            const waitDuration = Date.now() - waitStart;
+            // Wait a moment to allow readiness to be processed
+            await new Promise(resolve => setTimeout(resolve, 500));
             
-            if (confirmed) {
-              console.log(`[READINESS-DEBUG] SUCCESS: Client readiness confirmed by backend after ${waitDuration}ms`);
+            // Verify connection is still active
+            if (!connectionManager.validateConnection()) {
+              console.error('[READINESS-DEBUG] WebSocket disconnected after sending readiness signal!');
+              console.error('[READINESS-DEBUG] This is the critical bug we are fixing');
+              useWebSocket = false;
             } else {
-              console.warn(`[READINESS-DEBUG] WARNING: No readiness confirmation from backend after ${waitDuration}ms, proceeding anyway`);
-              
-              // If confirmation failed, check connection state again
-              if (!isWebSocketConnected()) {
-                console.error('[READINESS-DEBUG] WebSocket disconnected during readiness confirmation');
-                useWebSocket = false;
-              }
+              console.log('[READINESS-DEBUG] WebSocket connection maintained after readiness signal');
             }
           } else {
             console.warn('[READINESS-DEBUG] ERROR: Failed to send readiness signal, proceeding anyway');
-            
-            // Check if connection is still active
-            if (!isWebSocketConnected()) {
-              console.error('[READINESS-DEBUG] WebSocket disconnected after failed readiness signal');
-              useWebSocket = false;
-            }
+            useWebSocket = false;
           }
         }
       }

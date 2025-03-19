@@ -3,10 +3,21 @@
  * 
  * Centralized connection management for chat WebSocket connections.
  * This manages a single, persistent WebSocket connection for the entire chat experience.
+ * 
+ * IMPORTANT: This context is the SINGLE SOURCE OF TRUTH for WebSocket connections.
+ * All components should use this context via useChatConnection() hook instead of
+ * directly accessing connectionManager or websocketService.
  */
 import React, { createContext, useContext, useEffect, useCallback, useState, useRef } from 'react';
 import { ConnectionStatus } from './websocketService';
 import { connectionManager } from './connectionManager';
+
+// Define a global type for accessing the connection manager outside React context
+declare global {
+  interface Window {
+    __chatConnection?: any;
+  }
+}
 
 // Define the context interface
 interface ChatConnectionContextValue {
@@ -43,31 +54,70 @@ interface ChatConnectionProviderProps {
 
 /**
  * Provider component for chat connection management
+ * - Creates and maintains a single persistent WebSocket connection
+ * - Exposes connection methods via React context
+ * - Also makes connection available globally for non-React contexts
  */
 export const ChatConnectionProvider: React.FC<ChatConnectionProviderProps> = ({ children }) => {
   // Track connection state
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const tokenRef = useRef<string | null>(null);
   const listenerCleanupRef = useRef<(() => void) | null>(null);
+  const contextValueRef = useRef<ChatConnectionContextValue | null>(null);
   
-  // Get token from localStorage on mount
+  // Get token from localStorage on mount and establish early connection
   useEffect(() => {
+    console.log('[ChatConnectionContext] Initializing persistent connection management');
+    
+    // Get token
     tokenRef.current = localStorage.getItem('token') || localStorage.getItem('auth_token');
     
     // Set up connection status listener
     const cleanup = connectionManager.addConnectionListener((connected: boolean) => {
+      console.log(`[ChatConnectionContext] Connection status changed: ${connected ? 'CONNECTED' : 'DISCONNECTED'}`);
       setIsConnected(connected);
     });
     
     listenerCleanupRef.current = cleanup;
     
     // Get initial connection status
-    setIsConnected(connectionManager.isConnected());
+    const initialStatus = connectionManager.isConnected();
+    setIsConnected(initialStatus);
+    console.log(`[ChatConnectionContext] Initial connection status: ${initialStatus ? 'CONNECTED' : 'DISCONNECTED'}`);
+    
+    // Immediately try to establish connection if we have a token
+    if (tokenRef.current && !initialStatus) {
+      console.log('[ChatConnectionContext] Auto-establishing persistent connection on provider mount');
+      connectionManager.connect(tokenRef.current)
+        .then(success => {
+          console.log(`[ChatConnectionContext] Initial connection ${success ? 'SUCCEEDED' : 'FAILED'}`);
+        })
+        .catch(err => {
+          console.error('[ChatConnectionContext] Error establishing initial connection:', err);
+        });
+    }
+    
+    // Make connection manager methods available to non-React contexts via global
+    if (typeof window !== 'undefined') {
+      console.log('[ChatConnectionContext] Exposing connection manager to global scope for non-React contexts');
+      window.__chatConnection = {
+        isConnected: () => connectionManager.isConnected(),
+        validateConnection: () => connectionManager.validateConnection(),
+        sendMessage: (message: any) => connectionManager.sendMessage(message),
+        connect: (token: string) => connectionManager.connect(token)
+      };
+    }
     
     // Cleanup on unmount
     return () => {
+      console.log('[ChatConnectionContext] Provider unmounting, cleaning up resources');
       if (listenerCleanupRef.current) {
         listenerCleanupRef.current();
+      }
+      
+      // Remove global reference on unmount
+      if (typeof window !== 'undefined' && window.__chatConnection) {
+        delete window.__chatConnection;
       }
     };
   }, []);

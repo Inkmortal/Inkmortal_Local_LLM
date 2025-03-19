@@ -2,13 +2,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../services/chat/ChatStore';
 import { useTheme } from '../../context/ThemeContext';
-import { ensureWebSocketConnection } from '../../services/chat/websocketService';
 import ChatHistorySidebar from '../../components/chat/ChatHistorySidebar';
 import ChatHeader from './components/layout/ChatHeader';
 import ChatBackgroundEffects from './components/layout/ChatBackgroundEffects';
 import ChatWindow from '../../components/chat/ChatWindow';
 import TipTapAdapterWithStop from '../../components/chat/TipTapAdapterWithStop';
 import EmptyConversationView from './components/EmptyConversationView';
+import { useChatConnection } from '../../services/chat/ChatConnectionContext';
 
 /**
  * Router component for the chat feature
@@ -35,6 +35,9 @@ const ChatRouter: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const tokenRef = useRef<string | null>(null);
 
+  // Access the centralized connection context
+  const chatConnection = useChatConnection();
+  
   // On mount, establish WebSocket connection and load conversation list
   useEffect(() => {
     console.log('[ChatRouter] Initializing chat environment');
@@ -42,27 +45,47 @@ const ChatRouter: React.FC = () => {
     // Get token from localStorage
     tokenRef.current = localStorage.getItem('auth_token') || localStorage.getItem('token');
     
-    // Establish persistent WebSocket connection at chat UI load time
+    // Ensure persistent WebSocket connection at chat UI load time using the central context
     if (tokenRef.current) {
       // Use setTimeout to ensure component mount is complete before attempting connection
       setTimeout(() => {
-        console.log('[ChatRouter] Establishing persistent WebSocket connection');
-        ensureWebSocketConnection(tokenRef.current)
-          .then(connected => {
-            console.log(`[ChatRouter] WebSocket connection established: ${connected}`);
-            setIsConnected(connected);
-          })
-          .catch(error => {
-            console.error('[ChatRouter] WebSocket connection error:', error);
-            setIsConnected(false);
-          });
-      }, 500);
+        console.log('[ChatRouter] Ensuring persistent WebSocket connection via ChatConnectionContext');
+        
+        // Check if already connected first
+        if (chatConnection.isConnected) {
+          console.log('[ChatRouter] WebSocket already connected via ChatConnectionContext');
+          setIsConnected(true);
+        } else {
+          console.log('[ChatRouter] Establishing new connection via ChatConnectionContext');
+          chatConnection.connect(tokenRef.current!)
+            .then(connected => {
+              console.log(`[ChatRouter] WebSocket connection established: ${connected}`);
+              setIsConnected(connected);
+            })
+            .catch(error => {
+              console.error('[ChatRouter] WebSocket connection error:', error);
+              setIsConnected(false);
+            });
+        }
+      }, 1000); // Increased timeout to ensure provider is fully mounted
     }
+    
+    // Set up a connection status listener
+    const unsubscribe = chatConnection.addConnectionListener((connected) => {
+      console.log(`[ChatRouter] WebSocket connection status changed: ${connected ? 'CONNECTED' : 'DISCONNECTED'}`);
+      setIsConnected(connected);
+    });
     
     // Load conversation list
     console.log('[ChatRouter] Loading conversation list');
     loadConversations();
-  }, [loadConversations]);
+    
+    // Clean up on unmount
+    return () => {
+      unsubscribe();
+      // Don't close the connection on component unmount - it should persist for the entire application lifecycle
+    };
+  }, [loadConversations, chatConnection]);
   
   // No longer using custom events for navigation
   // All navigation now happens directly via ChatStore with window.location
