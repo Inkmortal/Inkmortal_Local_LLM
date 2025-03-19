@@ -35,9 +35,9 @@ export type {
 
 // Re-export message services
 export { 
-  sendMessage,
-  sendMessagePolling,
-  sendMessageStreaming
+  sendChatMessage as sendMessage,
+  pollForMessageUpdates as sendMessagePolling,
+  processMessage as sendMessageStreaming
 } from './messageService';
 
 // Re-export WebSocket service
@@ -70,7 +70,7 @@ export {
 } from './errorHandling';
 
 // Import for the singleton chat service
-import { sendMessage, sendMessageStreaming } from './messageService';
+import { sendChatMessage, processMessage } from './messageService';
 import { createConversation, getConversation, listConversations, deleteConversation, updateConversationTitle } from './conversationService';
 import { initializeWebSocket, closeWebSocket, isWebSocketConnected } from './websocketService';
 import { ChatMode } from './types';
@@ -80,8 +80,8 @@ import { ChatMode } from './types';
  */
 export const chatService = {
   // Message operations
-  sendMessage,
-  sendMessageStreaming,
+  sendMessage: sendChatMessage,
+  sendMessageStreaming: processMessage,
   
   // Conversation operations
   createConversation,
