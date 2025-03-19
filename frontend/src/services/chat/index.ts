@@ -36,7 +36,6 @@ export type {
 // Re-export message services
 export { 
   sendChatMessage as sendMessage,
-  pollForMessageUpdates as sendMessagePolling,
   processMessage as sendMessageStreaming
 } from './messageService';
 
