@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: Inkmortal_Local_LLM
+created: 2025-03-25T12:37:19-07:00
