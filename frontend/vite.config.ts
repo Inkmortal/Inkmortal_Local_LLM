@@ -10,16 +10,43 @@ export default defineConfig({
     strictPort: true, // Fail if port is already in use
     open: true,
     proxy: {
+      // API routes
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
-        ws: true, // Enable WebSocket proxy support for all /api paths
-        rewrite: (path) => path,
+        ws: true,
+      },
+      // Auth routes
+      '/auth': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Admin routes
+      '/admin': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Health check
+      '/health': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Protected routes
+      '/protected': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
       }
-      // Removed redundant '/api/chat/ws' proxy as it's covered by the '/api' proxy
-      // The main '/api' proxy handles WebSockets with ws: true
-    }
+    },
+    allowedHosts: [
+      'seadragoninkmortal.com',
+      'api.seadragoninkmortal.com',
+      'localhost'
+    ]
   },
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx']
