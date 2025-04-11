@@ -20,14 +20,14 @@ interface WindowEnv {
 const getApiBaseUrl = (): string => {
   // Check for environment variables (injected during build or runtime)
   if (typeof window !== 'undefined') {
-    const windowWithEnv = window as WindowEnv;
+    const windowWithEnv = window as unknown as WindowEnv;
     if (windowWithEnv.__ENV?.API_BASE_URL) {
       return windowWithEnv.__ENV.API_BASE_URL;
     }
   }
   
-  // Use hardcoded default as fallback - ensure it matches your backend
-  return 'http://127.0.0.1:8000';
+  // Use relative URL as default - this works both locally and through Cloudflare
+  return '';
 };
 
 // Base URL for all API requests
@@ -318,7 +318,7 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
     if (error instanceof DOMException && error.name === 'AbortError') {
       errorMessage = "Request timed out. The server is taking too long to respond.";
     } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-      errorMessage = "Cannot connect to the backend server. Please check if the server is running at " + API_BASE_URL;
+      errorMessage = "Cannot connect to the backend server. Please check if the server is running.";
     } else {
       errorMessage = `Network error: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -416,7 +416,7 @@ export const fetchAdminSetup = async <T = any>(endpoint: string, options: Reques
       success: false,
       status: 0,
       data: null,
-      error: `Cannot connect to backend server at ${API_BASE_URL}`
+      error: `Cannot connect to backend server`
     };
   }
 };
