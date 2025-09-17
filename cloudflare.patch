@@ -1,0 +1,93 @@
+diff --git a/frontend/src/config/api.ts b/frontend/src/config/api.ts
+index 7b40829..0dc5f2e 100644
+--- a/frontend/src/config/api.ts
++++ b/frontend/src/config/api.ts
+@@ -20,14 +20,14 @@ interface WindowEnv {
+ const getApiBaseUrl = (): string => {
+   // Check for environment variables (injected during build or runtime)
+   if (typeof window !== 'undefined') {
+-    const windowWithEnv = window as WindowEnv;
++    const windowWithEnv = window as unknown as WindowEnv;
+     if (windowWithEnv.__ENV?.API_BASE_URL) {
+       return windowWithEnv.__ENV.API_BASE_URL;
+     }
+   }
+   
+-  // Use hardcoded default as fallback - ensure it matches your backend
+-  return 'http://127.0.0.1:8000';
++  // Use relative URL as default - this works both locally and through Cloudflare
++  return '';
+ };
+ 
+ // Base URL for all API requests
+@@ -318,7 +318,7 @@ export const fetchApi = async <T = any>(endpoint: string, options: RequestInit =
+     if (error instanceof DOMException && error.name === 'AbortError') {
+       errorMessage = "Request timed out. The server is taking too long to respond.";
+     } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+-      errorMessage = "Cannot connect to the backend server. Please check if the server is running at " + API_BASE_URL;
++      errorMessage = "Cannot connect to the backend server. Please check if the server is running.";
+     } else {
+       errorMessage = `Network error: ${error instanceof Error ? error.message : String(error)}`;
+     }
+@@ -416,7 +416,7 @@ export const fetchAdminSetup = async <T = any>(endpoint: string, options: Reques
+       success: false,
+       status: 0,
+       data: null,
+-      error: `Cannot connect to backend server at ${API_BASE_URL}`
++      error: `Cannot connect to backend server`
+     };
+   }
+ };
+diff --git a/frontend/vite.config.ts b/frontend/vite.config.ts
+index af243fb..ca3b1ca 100644
+--- a/frontend/vite.config.ts
++++ b/frontend/vite.config.ts
+@@ -10,16 +10,43 @@ export default defineConfig({
+     strictPort: true, // Fail if port is already in use
+     open: true,
+     proxy: {
++      // API routes
+       '/api': {
+         target: 'http://localhost:8000',
+         changeOrigin: true,
+         secure: false,
+-        ws: true, // Enable WebSocket proxy support for all /api paths
+-        rewrite: (path) => path,
++        ws: true,
++      },
++      // Auth routes
++      '/auth': {
++        target: 'http://localhost:8000',
++        changeOrigin: true,
++        secure: false,
++      },
++      // Admin routes
++      '/admin': {
++        target: 'http://localhost:8000',
++        changeOrigin: true,
++        secure: false,
++      },
++      // Health check
++      '/health': {
++        target: 'http://localhost:8000',
++        changeOrigin: true,
++        secure: false,
++      },
++      // Protected routes
++      '/protected': {
++        target: 'http://localhost:8000',
++        changeOrigin: true,
++        secure: false,
+       }
+-      // Removed redundant '/api/chat/ws' proxy as it's covered by the '/api' proxy
+-      // The main '/api' proxy handles WebSockets with ws: true
+-    }
++    },
++    allowedHosts: [
++      'seadragoninkmortal.com',
++      'api.seadragoninkmortal.com',
++      'localhost'
++    ]
+   },
+   resolve: {
+     extensions: ['.js', '.jsx', '.ts', '.tsx']

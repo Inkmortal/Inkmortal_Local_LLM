@@ -72,6 +72,3 @@ models
 *.msm
 *.msp
 *.lnk
-
-// Git directory
-.git

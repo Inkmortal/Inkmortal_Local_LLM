@@ -35,7 +35,7 @@ httpx>=0.24.0  # Also used for TestClient
 # Image and PDF processing
 pdf2image>=1.16.0  # PDF to image conversion
 Pillow>=9.4.0      # Python Imaging Library
-katex>=0.6.0      # Python KaTeX renderer
+# katex>=0.6.0      # Python KaTeX renderer (commented out - incompatible version)
 
 # LangChain for LLM integration
 langchain>=0.1.0   # LangChain core
