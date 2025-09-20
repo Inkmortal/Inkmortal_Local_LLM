@@ -9,13 +9,31 @@ export default defineConfig({
     host: true, // Listen on all addresses
     strictPort: true, // Fail if port is already in use
     open: true,
+    hmr: {
+      protocol: 'wss',
+      host: 'seadragoninkmortal.com',
+      clientPort: 443 // Required for Cloudflare Tunnel
+    },
     proxy: {
-      // API routes
+      // WebSocket endpoint - MUST come before general /api rule
+      '/api/chat/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('WebSocket proxy error:', err);
+          });
+          proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
+            console.log('WebSocket connection attempt to:', req.url);
+          });
+        }
+      },
+      // API routes (general)
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        secure: false,
-        ws: true,
+        secure: false
       },
       // Auth routes
       '/auth': {
@@ -50,6 +68,6 @@ export default defineConfig({
   },
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx']
-  },
-  base: './', // Use relative paths for better compatibility
+  }
+  // Removed base config - causes issues with Cloudflare Tunnel in dev mode
 })
