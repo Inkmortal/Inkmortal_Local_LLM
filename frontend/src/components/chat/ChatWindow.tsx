@@ -43,44 +43,46 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   // Smooth scroll to bottom with animation frame for performance
   const scrollToBottom = useCallback((smooth = true) => {
     if (!messagesEndRef.current || !containerRef.current) return;
-    
-    // If already at bottom, no need to scroll
-    if (isAtBottom() && !showScrollButton) return;
-    
+
     // Use requestAnimationFrame for better performance
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'auto',
-        block: 'end',
-      });
-      
+      if (containerRef.current) {
+        const { scrollHeight } = containerRef.current;
+        containerRef.current.scrollTo({
+          top: scrollHeight,
+          behavior: smooth ? 'smooth' : 'auto'
+        });
+      }
+
       // Hide scroll button after scrolling to bottom
       setShowScrollButton(false);
       setAtBottom(true);
-      
+
       // Reset user scroll state after returning to bottom
       setTimeout(() => {
         userHasScrolledRef.current = false;
       }, 100);
     });
-  }, [isAtBottom, showScrollButton]);
+  }, []);
   
   // Handle scroll events
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
-    
+
     // Get current scroll position
     const { scrollTop } = containerRef.current;
-    const scrollingUp = scrollTop < lastScrollPositionRef.current;
+    const prevScrollTop = lastScrollPositionRef.current;
+    const scrollingUp = scrollTop < prevScrollTop;
+
+    // If the user has scrolled manually (more than 10px difference)
+    if (Math.abs(scrollTop - prevScrollTop) > 10) {
+      userHasScrolledRef.current = scrollingUp; // Only set to true if scrolling up
+    }
+
     lastScrollPositionRef.current = scrollTop;
-    
+
     // Check if we're at the bottom
     const bottom = isAtBottom();
-    
-    // If the user has scrolled manually
-    if (Math.abs(scrollTop - lastScrollPositionRef.current) > 10) {
-      userHasScrolledRef.current = true;
-    }
     
     // Update state only if there's a change to reduce renders
     if (bottom !== atBottom) {
@@ -103,41 +105,42 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     // If no messages, don't scroll
     if (messages.length === 0) return;
-    
-    // If user has scrolled up and we have a new message, show the button
-    if (messages.length > 0 && !atBottom && !userHasScrolledRef.current) {
-      setShowScrollButton(true);
-      return;
-    }
-    
-    // Auto-scroll on new messages or if we're at the bottom
-    if (atBottom || !userHasScrolledRef.current) {
+
+    // Auto-scroll on new messages if:
+    // 1. User is at the bottom
+    // 2. User hasn't manually scrolled up
+    // 3. It's the first message (always scroll for first message)
+    const shouldAutoScroll = atBottom || !userHasScrolledRef.current || messages.length === 1;
+
+    if (shouldAutoScroll) {
       // Small delay to ensure DOM is updated
       const timeoutId = setTimeout(() => {
         scrollToBottom(true);
       }, 50);
       return () => clearTimeout(timeoutId);
+    } else {
+      // User has scrolled up, show the scroll button
+      setShowScrollButton(true);
     }
   }, [messages, atBottom, scrollToBottom]);
   
-  // Auto-scroll during message generation
+  // Auto-scroll during message generation, synchronized with content updates
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const lastMessageContent = lastMessage?.content || '';
+  const lastMessageSections = lastMessage?.sections;
+
   useEffect(() => {
     if (!isGenerating) return;
-    
+
     // Don't auto-scroll if user has manually scrolled up
     if (userHasScrolledRef.current && !atBottom) {
       return;
     }
-    
-    // Create a debounced interval to smooth out scrolling during generation
-    const intervalId = setInterval(() => {
-      if (isGenerating && atBottom) {
-        scrollToBottom(false); // Use non-smooth scrolling for better performance during streaming
-      }
-    }, 300);
-    
-    return () => clearInterval(intervalId);
-  }, [isGenerating, atBottom, scrollToBottom]);
+
+    // Scroll immediately when content changes during generation
+    // Use non-smooth scrolling for better performance during streaming
+    scrollToBottom(false);
+  }, [isGenerating, atBottom, scrollToBottom, lastMessageContent, lastMessageSections]);
   
   // Clean up timeouts on unmount
   useEffect(() => {
@@ -182,10 +185,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [messages.length]);
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className="flex-grow overflow-y-auto p-4 modern-scrollbar relative"
-      style={{ 
+      className="flex-1 min-h-0 overflow-y-auto p-4 modern-scrollbar relative"
+      style={{
         backgroundColor: currentTheme.colors.bgPrimary,
         ...backgroundGradients()
       }}

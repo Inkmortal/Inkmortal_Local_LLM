@@ -212,8 +212,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
     };
   }, [showSidebar]);
   
-  // Don't render if sidebar is hidden
-  if (!showSidebar) return null;
+  // Note: We no longer conditionally render to allow for smooth animations
   
   // Define features for the features list
   const features = [
@@ -454,8 +453,13 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
   };
   
   return (
-    <aside 
-      className="flex-shrink-0 h-full transition-all w-72 relative flex flex-col"
+    <aside
+      className={`
+        fixed inset-y-0 left-0 z-30 w-72 flex flex-col h-full
+        transform transition-transform duration-300 ease-in-out
+        md:relative md:z-auto md:translate-x-0 md:flex-shrink-0
+        ${showSidebar ? 'translate-x-0' : '-translate-x-full md:-translate-x-full'}
+      `}
       style={{ 
         background: `linear-gradient(165deg, ${currentTheme.colors.bgSecondary}95, ${currentTheme.colors.bgTertiary}95)`,
         backdropFilter: 'blur(10px)',

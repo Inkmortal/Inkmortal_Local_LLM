@@ -95,8 +95,8 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
     <div className="flex flex-col items-center w-full h-full max-w-chat mx-auto px-4 py-6">
       {/* Hero Section */}
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold mb-2">Inkmortal LLM</h1>
-        <p className="text-base opacity-80 max-w-2xl">
+        <h1 className="text-xl md:text-2xl font-bold mb-2">Inkmortal LLM</h1>
+        <p className="text-sm md:text-base opacity-80 max-w-2xl">
           Your personal AI assistant for education, programming, and more. Ask anything or try one of the suggestions below.
         </p>
       </div>
@@ -121,7 +121,7 @@ const EmptyConversationView: React.FC<EmptyConversationViewProps> = ({ onSendMes
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <h3 className="font-medium mb-2">Inkmortal LLM can:</h3>
+            <h3 className="font-medium mb-2 text-sm md:text-base">Inkmortal LLM can:</h3>
             <ul className="space-y-1 list-disc pl-5 text-sm">
               <li>Answer questions about any knowledge domain</li>
               <li>Remember your earlier messages in the conversation</li>

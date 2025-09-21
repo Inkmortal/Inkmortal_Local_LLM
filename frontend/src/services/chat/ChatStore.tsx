@@ -275,23 +275,24 @@ export function ChatProvider({ children }: ChatProviderProps) {
       // Phase 1: Show messages immediately with pending state
       console.log('[ChatStore] Adding messages to UI with status pending');
       
-      // Create user message
+      // Create user message with current timestamp
+      const userTimestamp = Date.now();
       const userMessage: Message = {
         id: userMessageId,
         conversationId: currentConversationId || 'pending',
         role: MessageRole.USER,
         content,
-        timestamp: Date.now(),
+        timestamp: userTimestamp,
         status: MessageStatus.COMPLETE
       };
 
-      // Create placeholder assistant message (pending state)
+      // Create placeholder assistant message with slightly later timestamp to ensure proper ordering
       const assistantMessage: Message = {
         id: assistantMessageId,
         conversationId: currentConversationId || 'pending',
         role: MessageRole.ASSISTANT,
         content: '',
-        timestamp: Date.now(),
+        timestamp: userTimestamp + 1, // Add 1ms to ensure it comes after user message
         status: MessageStatus.PREPARING,
         // Add sections to ensure consistent rendering
         sections: {

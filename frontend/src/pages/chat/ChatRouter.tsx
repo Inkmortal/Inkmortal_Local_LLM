@@ -31,7 +31,10 @@ const ChatRouter: React.FC = () => {
   } = useChatStore();
 
   // UI state
-  const [showHistorySidebar, setShowHistorySidebar] = useState(true);
+  // Start with sidebar closed on mobile, open on desktop
+  const [showHistorySidebar, setShowHistorySidebar] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
   const [isConnected, setIsConnected] = useState(false);
   const tokenRef = useRef<string | null>(null);
 
@@ -179,10 +182,24 @@ const ChatRouter: React.FC = () => {
     setShowHistorySidebar(!showHistorySidebar);
   };
 
-  // Get sorted messages for current conversation
+  // Get sorted messages for current conversation with deterministic ordering
   const conversationMessages = Object.values(messages)
     .filter(msg => msg.conversationId === activeConversationId)
-    .sort((a, b) => a.timestamp - b.timestamp);
+    .sort((a, b) => {
+      // Primary sort by timestamp
+      if (a.timestamp !== b.timestamp) {
+        return a.timestamp - b.timestamp;
+      }
+      // Secondary sort for identical timestamps: user messages always come before assistant
+      if (a.role === 'user' && b.role === 'assistant') {
+        return -1;
+      }
+      if (a.role === 'assistant' && b.role === 'user') {
+        return 1;
+      }
+      // Tertiary sort by message ID for completely identical cases
+      return a.id.localeCompare(b.id);
+    });
     
   // Check if any message is currently being generated
   const isGenerating = conversationMessages.some(msg => 
@@ -196,7 +213,16 @@ const ChatRouter: React.FC = () => {
   
   // Create consistent layout with conditional content
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
+    <div className="flex h-screen overflow-hidden relative" style={{ backgroundColor: currentTheme.colors.bgPrimary }}>
+      {/* Mobile backdrop overlay */}
+      {showHistorySidebar && (
+        <div
+          className="fixed inset-0 z-20 bg-black bg-opacity-40 transition-opacity md:hidden"
+          onClick={toggleHistorySidebar}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Left Sidebar - Conversation History (always present) */}
       <ChatHistorySidebar 
         showSidebar={showHistorySidebar}
@@ -210,7 +236,10 @@ const ChatRouter: React.FC = () => {
       />
 
       {/* Main Content Area (always present) */}
-      <div className="flex flex-col flex-grow overflow-hidden relative">
+      <div className={`
+        flex flex-col flex-grow overflow-hidden relative transition-all duration-300
+        ${showHistorySidebar ? 'md:ml-0' : 'md:-ml-72'}
+      `}>
         {/* Header (always present) */}
         <ChatHeader 
           showHistorySidebar={showHistorySidebar}
@@ -223,32 +252,29 @@ const ChatRouter: React.FC = () => {
         />
         
         {/* Main Content */}
-        <div className="flex flex-grow overflow-hidden relative">
+        <div className="flex-grow flex flex-col overflow-hidden relative">
           {/* Background effects */}
           <ChatBackgroundEffects />
-          
+
           {/* Conditional content based on conversation state */}
           {activeConversationId ? (
-            // Content container for active conversation (with messages or empty state)
-            <div className="w-full h-full flex flex-col relative">
-              {/* Chat Window - Always show when we have an active conversation */}
-              <div className="flex-grow overflow-hidden">
-                {/* Always show ChatWindow when we have an active conversation */}
-                <ChatWindow 
-                  messages={conversationMessages}
-                  isLoading={isLoading}
-                  isGenerating={isGenerating}
-                  onRegenerate={() => {
-                    console.log('[ChatRouter] Regenerate requested');
-                  }}
-                  onStopGeneration={() => {
-                    console.log('[ChatRouter] Stop generation requested');
-                  }}
-                />
-              </div>
+            // Content container for active conversation
+            <div className="w-full h-full flex flex-col relative z-10">
+              {/* Chat Window - handles its own scrolling */}
+              <ChatWindow
+                messages={conversationMessages}
+                isLoading={isLoading}
+                isGenerating={isGenerating}
+                onRegenerate={() => {
+                  console.log('[ChatRouter] Regenerate requested');
+                }}
+                onStopGeneration={() => {
+                  console.log('[ChatRouter] Stop generation requested');
+                }}
+              />
               
               {/* Chat Input Area - Always present with active conversation */}
-              <div className="px-4 py-2 relative">
+              <div className="flex-shrink-0 px-4 py-2 relative">
                 <TipTapAdapterWithStop
                   onSendMessage={sendMessage}
                   onStopGeneration={() => {
@@ -260,8 +286,10 @@ const ChatRouter: React.FC = () => {
               </div>
             </div>
           ) : (
-            // Welcome screen - Only show when there's no active conversation
-            <EmptyConversationView onSendMessage={handleNewConversation} />
+            // Welcome screen with its own scrolling
+            <div className="w-full h-full overflow-y-auto modern-scrollbar relative z-10">
+              <EmptyConversationView onSendMessage={handleNewConversation} />
+            </div>
           )}
         </div>
       </div>
