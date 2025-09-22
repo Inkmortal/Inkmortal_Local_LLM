@@ -144,19 +144,36 @@ const ChatRouter: React.FC = () => {
       // 1. First phase: Send message, let backend create conversation if needed
       // 2. Second phase: WebSocket receives updates, UI updates with streaming content
       const response = await sendMessage(content, file);
-      
+
+      console.log('[ChatRouter] sendMessage response:', response);
+      console.log('[ChatRouter] response type:', typeof response);
+      console.log('[ChatRouter] response keys:', response ? Object.keys(response) : 'null');
+      console.log('[ChatRouter] response JSON:', JSON.stringify(response, null, 2));
+
       // The URL change will now be handled by our event listener
       // This avoids direct manipulation of window.history and uses React Router properly
-      
-      // Check if we got a valid response with conversation ID (for logging/debugging)
+
+      // Check if we got a valid response with conversation ID
       if (response && response.conversation_id) {
         const newConversationId = response.conversation_id;
         console.log(`[ChatRouter] Backend confirmed new conversation: ${newConversationId}`);
-        
-        // The URL will be updated via the custom event handler we added
-        // No need to call navigate() here - this prevents duplicate navigation
+        console.log(`[ChatRouter] Current URL conversationId: ${conversationId}`);
+        console.log(`[ChatRouter] Current activeConversationId: ${activeConversationId}`);
+
+        // FIXED: Check URL param instead of activeConversationId which may already be updated
+        if (!conversationId || conversationId !== newConversationId) {
+          console.log(`[ChatRouter] URL needs update, navigating to /chat/${newConversationId}`);
+
+          // Use React Router for smooth client-side navigation
+          navigate(`/chat/${newConversationId}`, { replace: false });
+
+          console.log(`[ChatRouter] Navigation called`);
+        } else {
+          console.log(`[ChatRouter] URL already correct, no navigation needed`);
+        }
       } else {
         console.error('[ChatRouter] No valid conversation ID received from backend');
+        console.error('[ChatRouter] Response was:', JSON.stringify(response, null, 2));
         // Show user-friendly error - message state already updated by ChatStore
       }
     } catch (error) {

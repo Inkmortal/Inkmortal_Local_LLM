@@ -95,8 +95,14 @@ function parseAsHTML(content: string): ReactNode {
   const parseOptions = {
     replace: (domNode: HTMLElement | TextNode) => {
       if (domNode.type !== 'tag') return undefined;
-      
+
       const element = domNode as HTMLElement;
+
+      // Safely handle think tags - don't try to render them as HTML
+      if (element.name === 'think') {
+        // Return empty fragment for think tags to avoid browser warnings
+        return <></>;
+      }
       
       // Handle math blocks
       if (element.name === 'div' && 
@@ -141,6 +147,9 @@ function parseAsHTML(content: string): ReactNode {
 
 // Parse markdown-like syntax in plain text with streaming support
 function parseAsPlainText(text: string, isStreaming = false, previousText = ""): ReactNode[] {
+  // During streaming, we'll handle think tags specially but NOT hide them
+  // This allows users to see the thinking content in real-time
+
   const elements: ReactNode[] = [];
   let currentIndex = 0;
   let key = 0;

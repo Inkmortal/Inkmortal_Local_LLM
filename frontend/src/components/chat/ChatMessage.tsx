@@ -70,15 +70,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                  message.status === MessageStatus.PROCESSING ||
                  message.status === MessageStatus.STREAMING;
                  
-  const hasThinking = isAssistant && 
-                      message.sections?.thinking && 
-                      message.sections.thinking.content.trim().length > 0;
-  
+  // Check if we have thinking content - during streaming or after completion
   // Determine if this message is currently streaming
   // Use the streaming context data if available, otherwise fall back to message status
-  const isStreaming = streamingInfo ? 
-    streamingInfo.isStreaming : 
+  // MOVED BEFORE hasStreamingThinking to fix hoisting issue
+  const isStreaming = streamingInfo ?
+    streamingInfo.isStreaming :
     message.status === MessageStatus.STREAMING;
+
+  const hasThinking = isAssistant &&
+                      message.sections?.thinking &&
+                      message.sections.thinking.content.trim().length > 0;
+
+  // During streaming, also check if content contains think tags
+  const hasStreamingThinking = isStreaming && isAssistant &&
+                               message.content &&
+                               message.content.includes('<think>');
   
   // Get message content using a clear, consistent approach
   const getMessageContent = (msg: ChatMessageProps['message']) => {
@@ -147,21 +154,30 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           )}
         </div>
         
-        {/* Thinking section */}
-        {hasThinking && (
+        {/* Thinking section - show during streaming or after completion */}
+        {(hasThinking || hasStreamingThinking) && (
           <div className="mt-2">
-            <div 
+            <div
               className="cursor-pointer flex items-center text-xs opacity-70 hover:opacity-100 mb-1"
               onClick={toggleThinking}
             >
               <span className="mr-1">{thinkingVisible ? '▼' : '▶'}</span>
-              <span>Model thinking</span>
+              <span>Model thinking {hasStreamingThinking ? '(streaming...)' : ''}</span>
             </div>
-            
+
             {thinkingVisible && (
               <div className="thinking-section">
                 <pre className="thinking-content overflow-auto">
-                  {message.sections?.thinking?.content.replace(/<think>|<\/think>/g, '')}
+                  {hasStreamingThinking ?
+                    // Extract thinking content from raw message during streaming
+                    (() => {
+                      const thinkRegex = /<think>([\s\S]*?)(<\/think>|$)/gi;
+                      const matches = [...(message.content || '').matchAll(thinkRegex)];
+                      return matches.map(m => m[1]).join('').trim() || 'Thinking...';
+                    })() :
+                    // Use sections after streaming completes
+                    message.sections?.thinking?.content.replace(/<think>|<\/think>/g, '')
+                  }
                 </pre>
               </div>
             )}

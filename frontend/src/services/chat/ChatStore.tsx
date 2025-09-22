@@ -107,7 +107,7 @@ function chatReducer(state: ChatState, action: Action): ChatState {
       };
 
     case ChatActionType.UPDATE_MESSAGE: {
-      const { messageId, content, status, isComplete, contentUpdateMode, conversationId } = action.payload;
+      const { messageId, content, status, isComplete, contentUpdateMode, conversationId, sections } = action.payload;
       const message = state.messages[messageId];
 
       if (!message) {
@@ -123,6 +123,11 @@ function chatReducer(state: ChatState, action: Action): ChatState {
         } else {
           updatedMessage.content = (updatedMessage.content || '') + content;
         }
+      }
+
+      // Handle sections update
+      if (sections !== undefined) {
+        updatedMessage.sections = sections;
       }
 
       if (status !== undefined) {
@@ -263,7 +268,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
     if (!content.trim() && !file) return;
 
     console.log('[ChatStore] Starting message send process');
-    
+
+    // Declare response outside try block so it's accessible in the return statement
+    let response;
+
     try {
       // Generate message IDs
       const userMessageId = uuidv4();
@@ -329,7 +337,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
         };
         
         // Send the message - note this uses the two-phase approach internally for new conversations
-        const response = await sendChatMessage(
+        response = await sendChatMessage(
           content,
           currentConversationId, // Will be null for new conversations
           file,
@@ -393,20 +401,15 @@ export function ChatProvider({ children }: ChatProviderProps) {
             }
           });
         }
-        
-        // Handle URL navigation for newly created conversation
-        if (response && response.conversation_id && (!currentConversationId || currentConversationId !== response.conversation_id)) {
-          // Use window.location.href for reliable navigation across components
-          // This ensures sync between URL state and application state
-          window.location.href = `/chat/${response.conversation_id}`;
-        }
-        
-        // Return response for router navigation
-        return response;
       } finally {
         // Always clear preparing state
         dispatch({ type: ChatActionType.SET_PREPARING_CONVERSATION, payload: false });
       }
+
+      // Return response for router navigation AFTER finally block
+      // Let ChatRouter handle the navigation with React Router
+      console.log('[ChatStore] Returning response to ChatRouter:', response);
+      return response;
     } catch (error) {
       console.error('[ChatStore] Error sending message:', error);
       
@@ -432,7 +435,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
           content: update.content,
           status: update.status,
           isComplete: update.isComplete,
-          contentUpdateMode: update.contentUpdateMode
+          contentUpdateMode: update.contentUpdateMode,
+          sections: update.sections  // Pass through sections if available
         }
       });
     });

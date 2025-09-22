@@ -184,6 +184,10 @@ export interface MessageUpdate {
   content: string;
   status: MessageStatus;
   section?: MessageSection;
+  sections?: {
+    response: MessageSection;
+    thinking?: MessageSection;
+  };
   contentUpdateMode?: ContentUpdateMode;
   isComplete?: boolean;
   error?: string;

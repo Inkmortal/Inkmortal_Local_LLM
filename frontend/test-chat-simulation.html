@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Simulation - Testing Navigation Issue</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #0f1626;
+            padding: 20px;
+            border-right: 1px solid #2a3f5f;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 20px;
+            color: #4a7c7e;
+        }
+
+        .conversation-list {
+            list-style: none;
+        }
+
+        .conversation-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #1a2332;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .conversation-item:hover {
+            background: #253445;
+        }
+
+        .conversation-item.active {
+            background: #4a7c7e;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 20px;
+            background: #16213e;
+            border-bottom: 1px solid #2a3f5f;
+        }
+
+        .chat-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 20px;
+            color: #4a7c7e;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 70%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background: #2a4d6e;
+            align-self: flex-end;
+        }
+
+        .assistant-message {
+            background: #1a2332;
+            align-self: flex-start;
+        }
+
+        .thinking-section {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(138, 43, 226, 0.1);
+            border-left: 3px solid #8a2be2;
+            border-radius: 4px;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: #16213e;
+            border-top: 1px solid #2a3f5f;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            background: #0f1626;
+            border: 1px solid #2a3f5f;
+            color: #eee;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #4a7c7e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #5a8c8e;
+        }
+
+        .status {
+            padding: 10px;
+            background: #2a1626;
+            border-radius: 6px;
+            margin: 10px 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .streaming-indicator {
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h3>Conversations</h3>
+        <ul class="conversation-list" id="conversationList">
+            <!-- Conversations will be added here -->
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h2 id="conversationTitle">New Chat</h2>
+            <small id="urlDisplay">URL: /chat</small>
+        </div>
+
+        <div class="status" id="status">
+            Simulating chat behavior - Enter a message below
+        </div>
+
+        <div class="chat-area" id="chatArea">
+            <div class="empty-state" id="emptyState">
+                <h2>Start a New Conversation</h2>
+                <p>Type a message below to begin</p>
+            </div>
+            <div id="messages" style="display: none; width: 100%;"></div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="Type your message..."
+                       onkeypress="if(event.key === 'Enter') sendMessage()">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentConversationId = null;
+        const conversations = {};
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function updateURL(url) {
+            document.getElementById('urlDisplay').textContent = `URL: ${url}`;
+            // Simulate URL change
+            history.pushState({}, '', url);
+        }
+
+        function generateId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            if (!content) return;
+
+            const messagesDiv = document.getElementById('messages');
+            const emptyState = document.getElementById('emptyState');
+
+            // Hide empty state, show messages
+            emptyState.style.display = 'none';
+            messagesDiv.style.display = 'block';
+
+            // Clear input
+            input.value = '';
+
+            // Add user message immediately
+            const userMessageId = generateId();
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user-message';
+            userMessage.textContent = content;
+            messagesDiv.appendChild(userMessage);
+
+            // Add assistant message placeholder
+            const assistantMessageId = generateId();
+            const assistantMessage = document.createElement('div');
+            assistantMessage.className = 'message assistant-message';
+            assistantMessage.innerHTML = '<span class="streaming-indicator">...</span>';
+            messagesDiv.appendChild(assistantMessage);
+
+            if (!currentConversationId) {
+                // SIMULATE NEW CONVERSATION CREATION
+                updateStatus('🔄 Phase 1: Creating new conversation...');
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Generate new conversation ID
+                currentConversationId = generateId();
+                updateStatus(`✅ Phase 1 Complete: Conversation created with ID: ${currentConversationId.slice(0, 8)}...`);
+
+                // Add to conversation list
+                const convItem = document.createElement('li');
+                convItem.className = 'conversation-item active';
+                convItem.textContent = content.slice(0, 30) + '...';
+                convItem.onclick = () => selectConversation(currentConversationId);
+                document.getElementById('conversationList').appendChild(convItem);
+
+                // Store conversation
+                conversations[currentConversationId] = {
+                    title: content.slice(0, 30) + '...',
+                    messages: []
+                };
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // CRITICAL: Navigate to new conversation URL
+                updateStatus(`🔄 Phase 2: Navigating to /chat/${currentConversationId.slice(0, 8)}...`);
+                updateURL(`/chat/${currentConversationId}`);
+                document.getElementById('conversationTitle').textContent = content.slice(0, 30) + '...';
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+                updateStatus('✅ Phase 2 Complete: Navigation successful');
+            }
+
+            // Simulate streaming response
+            await new Promise(resolve => setTimeout(resolve, 500));
+            updateStatus('🔄 Phase 3: Streaming response...');
+
+            // Simulate response with thinking
+            const fullResponse = `<think>
+Let me analyze your message: "${content}"
+This appears to be a greeting or question.
+I should provide a helpful response.
+</think>
+
+I'm doing well, thank you for asking! I'm here to help you with any questions or tasks you might have. How can I assist you today?`;
+
+            let currentContent = '';
+            let charIndex = 0;
+
+            const streamInterval = setInterval(() => {
+                if (charIndex < fullResponse.length) {
+                    currentContent += fullResponse[charIndex];
+                    charIndex++;
+
+                    // Parse thinking
+                    const thinkRegex = /<think>([\s\S]*?)(<\/think>|$)/gi;
+                    const hasThinking = thinkRegex.test(currentContent);
+
+                    if (hasThinking) {
+                        const matches = [...currentContent.matchAll(/<think>([\s\S]*?)(<\/think>|$)/gi)];
+                        const thinkingContent = matches[0] ? matches[0][1] : '';
+                        const responseContent = currentContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+                        assistantMessage.innerHTML = `
+                            ${responseContent || '<span class="streaming-indicator">...</span>'}
+                            ${thinkingContent ? `
+                                <div class="thinking-section">
+                                    <strong>Thinking (streaming):</strong><br>
+                                    ${thinkingContent.replace(/\n/g, '<br>')}
+                                </div>
+                            ` : ''}
+                        `;
+                    } else {
+                        assistantMessage.innerHTML = currentContent + '<span class="streaming-indicator">...</span>';
+                    }
+                } else {
+                    clearInterval(streamInterval);
+
+                    // Final content
+                    const finalResponse = fullResponse.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+                    const thinkingMatch = fullResponse.match(/<think>([\s\S]*?)<\/think>/i);
+                    const finalThinking = thinkingMatch ? thinkingMatch[1] : '';
+
+                    assistantMessage.innerHTML = `
+                        ${finalResponse}
+                        ${finalThinking ? `
+                            <div class="thinking-section">
+                                <strong>Model thinking:</strong><br>
+                                ${finalThinking.replace(/\n/g, '<br>')}
+                            </div>
+                        ` : ''}
+                    `;
+
+                    updateStatus('✅ Message sent and response received successfully!');
+                }
+            }, 30); // Stream character by character
+        }
+
+        function selectConversation(id) {
+            currentConversationId = id;
+            updateURL(`/chat/${id}`);
+            // Update UI to show selected conversation
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

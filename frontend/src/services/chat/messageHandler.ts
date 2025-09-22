@@ -6,6 +6,7 @@
  */
 import { eventEmitter } from './eventEmitter';
 import { MessageStatus, ContentUpdateMode, MessageSection, MessageUpdate } from './types';
+import { separateThinkingContent, extractCompleteThinking } from './contentSeparator';
 
 // Message types we can receive from the backend
 export enum MessageType {
@@ -488,16 +489,65 @@ class MessageHandler {
       prevTotalLength: currentContent.length
     });
     
-    const newContent = contentUpdateMode === ContentUpdateMode.REPLACE ? 
+    const newContent = contentUpdateMode === ContentUpdateMode.REPLACE ?
       content : currentContent + content;
-      
+
     this.storeMessageContent(frontendMessageId, newContent);
-    
+
+    // Handle content separation differently based on streaming status
+    let finalContent = newContent;
+    let sections = undefined;
+
+    if (isComplete) {
+      // Message is complete, do full separation
+      const separated = separateThinkingContent(newContent);
+      finalContent = separated.response;
+      sections = {
+        response: { content: separated.response, visible: true },
+        thinking: separated.thinking ? { content: separated.thinking, visible: false } : undefined
+      };
+    } else if (status === MessageStatus.STREAMING) {
+      // During streaming, check for incomplete think tags
+      const { complete, incomplete } = extractCompleteThinking(newContent);
+
+      // If we have incomplete content, show it as raw content for now
+      if (incomplete) {
+        // Show everything as response during streaming, including partial think tags
+        finalContent = newContent;
+        sections = {
+          response: { content: newContent, visible: true },
+          thinking: undefined
+        };
+      } else if (complete.thinking) {
+        // We have complete think tags, separate them
+        finalContent = complete.response;
+        sections = {
+          response: { content: complete.response, visible: true },
+          thinking: { content: complete.thinking, visible: false }
+        };
+      } else {
+        // No think tags at all
+        finalContent = newContent;
+        sections = {
+          response: { content: newContent, visible: true },
+          thinking: undefined
+        };
+      }
+    } else {
+      // Not streaming and not complete, just show raw content
+      finalContent = newContent;
+      sections = {
+        response: { content: newContent, visible: true },
+        thinking: undefined
+      };
+    }
+
     // Create normalized update object with proper separation of concerns
     const update: MessageUpdate = {
       messageId: frontendMessageId,
       conversationId: message.conversation_id || '',
-      content: content,               // Only the new content, not accumulated
+      content: finalContent,
+      sections: sections,
       status: isComplete ? MessageStatus.COMPLETE : status,
       contentUpdateMode: contentUpdateMode,
       isComplete: isComplete,

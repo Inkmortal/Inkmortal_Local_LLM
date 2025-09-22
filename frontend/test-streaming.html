@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Streaming with Think Tags</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        #output {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 200px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            margin: 20px 0;
+        }
+
+        button {
+            background: #4a7c7e;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #5a8c8e;
+        }
+
+        .response-content {
+            background: #0f1626;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+
+        .thinking-content {
+            background: #2a1626;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            opacity: 0.8;
+            font-style: italic;
+        }
+
+        .streaming-indicator {
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Streaming with Think Tags</h1>
+
+    <div>
+        <button onclick="startStreaming()">Start Streaming Test</button>
+        <button onclick="clearOutput()">Clear</button>
+    </div>
+
+    <div id="output">Click "Start Streaming Test" to begin...</div>
+
+    <div id="parsed-output">
+        <h3>Parsed Content:</h3>
+        <div id="response-section" class="response-content">Response will appear here...</div>
+        <div id="thinking-section" class="thinking-content">Thinking will appear here...</div>
+    </div>
+
+    <script>
+        // Simulate the content separator function
+        function separateThinkingContent(content) {
+            const thinkRegex = /<think>([\s\S]*?)<\/think>/gi;
+            let thinking = '';
+            let response = content;
+
+            // Extract all thinking sections
+            const matches = content.matchAll(thinkRegex);
+            for (const match of matches) {
+                thinking += match[1];
+                response = response.replace(match[0], '');
+            }
+
+            return {
+                response: response.trim(),
+                thinking: thinking.trim()
+            };
+        }
+
+        // Check if content has incomplete think tags
+        function hasIncompleteThinkTags(content) {
+            const openCount = (content.match(/<think>/gi) || []).length;
+            const closeCount = (content.match(/<\/think>/gi) || []).length;
+
+            // Check for incomplete opening tag
+            if (content.includes('<thin') && !content.includes('<think>')) {
+                return true;
+            }
+
+            // Check for incomplete closing tag
+            if (content.includes('</thi') && !content.includes('</think>')) {
+                return true;
+            }
+
+            return openCount > closeCount;
+        }
+
+        // Simulate MessageParser behavior during streaming
+        function parseStreamingContent(content, isStreaming) {
+            let displayContent = content;
+
+            // During streaming, replace visible think tags with placeholder
+            if (isStreaming && content.includes('<think>')) {
+                displayContent = content.replace(/<think>/gi, '[thinking...]').replace(/<\/think>/gi, '');
+            }
+
+            return displayContent;
+        }
+
+        async function startStreaming() {
+            const output = document.getElementById('output');
+            const responseSection = document.getElementById('response-section');
+            const thinkingSection = document.getElementById('thinking-section');
+
+            // Simulate a thinking model response
+            const fullMessage = `<think>
+Let me think about this step by step.
+
+First, I need to understand what 2+2 means.
+This is basic addition where we combine two groups of 2.
+
+2 + 2 = 4
+
+So the answer is 4.
+</think>
+
+The answer to 2+2 is 4.
+
+This is because when you add two items to another two items, you get a total of four items.`;
+
+            // Simulate streaming character by character
+            let currentContent = '';
+            let charIndex = 0;
+
+            const streamInterval = setInterval(() => {
+                if (charIndex < fullMessage.length) {
+                    // Add 1-3 characters at a time to simulate variable streaming speed
+                    const charsToAdd = Math.min(Math.floor(Math.random() * 3) + 1, fullMessage.length - charIndex);
+                    currentContent += fullMessage.slice(charIndex, charIndex + charsToAdd);
+                    charIndex += charsToAdd;
+
+                    // Check if we have incomplete think tags
+                    const incomplete = hasIncompleteThinkTags(currentContent);
+
+                    // Display raw content
+                    output.textContent = `Raw content (${charIndex}/${fullMessage.length}):\n${currentContent}`;
+
+                    if (incomplete) {
+                        // During streaming with incomplete tags, extract partial thinking
+                        const partialThinkRegex = /<think>([\s\S]*?)$/gi;
+                        const partialMatch = partialThinkRegex.exec(currentContent);
+                        const partialThinking = partialMatch ? partialMatch[1] : '';
+
+                        // Show the raw content without think tags in response
+                        const beforeThink = currentContent.split('<think>')[0];
+                        responseSection.innerHTML = beforeThink + '<span class="streaming-indicator">...</span>';
+
+                        // Show partial thinking content
+                        thinkingSection.innerHTML = '<em>Thinking (streaming):</em><br>' + (partialThinking || 'Starting to think...');
+                    } else {
+                        // Complete tags - separate content properly
+                        const separated = separateThinkingContent(currentContent);
+                        responseSection.innerHTML = separated.response || '(Waiting for response...)';
+                        if (charIndex < fullMessage.length) {
+                            responseSection.innerHTML += '<span class="streaming-indicator">...</span>';
+                        }
+                        thinkingSection.textContent = separated.thinking || '(No thinking content)';
+                    }
+                } else {
+                    // Streaming complete
+                    clearInterval(streamInterval);
+                    output.textContent = `Streaming complete!\n\nFinal content:\n${currentContent}`;
+
+                    const separated = separateThinkingContent(currentContent);
+                    responseSection.textContent = separated.response;
+                    thinkingSection.textContent = separated.thinking;
+                }
+            }, 50); // Stream every 50ms
+        }
+
+        function clearOutput() {
+            document.getElementById('output').textContent = 'Click "Start Streaming Test" to begin...';
+            document.getElementById('response-section').textContent = 'Response will appear here...';
+            document.getElementById('thinking-section').textContent = 'Thinking will appear here...';
+        }
+    </script>
+</body>
+</html>
